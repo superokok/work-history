@@ -1,0 +1,25 @@
+[project]
+name = "workhistory"
+version = "0.1.0"
+description = "Local-first personal work history built on ActivityWatch data"
+requires-python = ">=3.11"
+dependencies = [
+    "dulwich>=1.2",  # pure-Python Git for folder snapshots, used under Apache-2.0
+]
+
+[project.optional-dependencies]
+claude = ["mcp>=2.2"]        # MCP server for Claude Code (MIT): "AI에게 묻기" and Claude Code access
+desktop = ["pywebview>=5"]  # optional native window (BSD-3-Clause)
+
+[project.scripts]
+workhistory = "workhistory.__main__:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["workhistory*"]
+
+[tool.setuptools.package-data]
+workhistory = ["static/*"]
