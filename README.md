@@ -1,4 +1,4 @@
-# 작업 기록 (Personal Work History)
+# 작업 기록 (WorkHistory)
 
 Local-first work history for developers on Windows. It reads app/window/idle
 activity from [ActivityWatch](https://activitywatch.net) and turns it into a
@@ -8,37 +8,59 @@ computer.
 Docs: [PRODUCT](docs/PRODUCT.md) · [ARCHITECTURE](docs/ARCHITECTURE.md) ·
 [PRIVACY](docs/PRIVACY.md) · [IMPLEMENTATION_PLAN](docs/IMPLEMENTATION_PLAN.md)
 
-## Requirements
+## Install
 
-- Windows 10/11, macOS or Linux (verified on Windows 11 and in a Linux
-  container; the demo targets Windows)
-- Python 3.11+ with a project virtual environment:
+**Windows (portable, no Python needed).** Unzip
+`WorkHistory-<version>-windows-x64.zip` to a short path (e.g. your Documents
+folder) and double-click **작업 기록.cmd**. The zip carries its own Python
+runtime and packages; nothing is installed system-wide. The app runs in a
+minimized "WorkHistory" window (close it to stop the app) and opens
+`http://127.0.0.1:5730/`. To update, stop the app and replace the folder;
+the data stays in `%LOCALAPPDATA%\WorkHistory`.
 
-  ```bash
-  uv venv .venv --python 3.12
-  uv pip install --python .venv/Scripts/python.exe -e .[claude]   # Windows
-  uv pip install --python .venv/bin/python -e .[claude]           # macOS / Linux
-  ```
+**macOS / Linux.** With Python 3.11+ installed, run `sh install.sh` once in
+the source folder, then `./start-workhistory.sh`.
 
-  Runtime packages (all permit commercial use): `dulwich` (folder snapshots,
-  Apache-2.0) and, for AI and Claude Code access, `mcp` (MIT).
-- Optional, for AI: Claude Code installed and signed in
+**Then, inside the app** (개인정보 tab): **실행** switches on start with the
+computer and creates a desktop (Windows) or app-menu (Linux) shortcut;
+**AI 설정** turns on the AI features. No terminal step is needed.
+
+Optional companions, installed separately:
+
+- Claude Code, signed in, for AI reports and questions
   (https://docs.claude.com/en/docs/claude-code). No API key is needed.
-- Optional: ActivityWatch for window activity
-  (https://github.com/ActivityWatch/activitywatch/releases). Folder snapshots,
-  AI reports and the rest of the app work without it.
+- ActivityWatch for window activity
+  (https://github.com/ActivityWatch/activitywatch/releases). Folder
+  snapshots, AI reports and the rest of the app work without it; when it is
+  installed, the launchers start it.
 
-## Run
+## Development
 
-| OS | Start |
-|---|---|
-| Windows | double-click `start-workhistory.cmd` (or a desktop shortcut to it) |
-| macOS / Linux | `sh start-workhistory.sh` |
+```bash
+uv venv .venv --python 3.12
+uv pip install --python .venv/Scripts/python.exe -e .[claude]   # Windows
+uv pip install --python .venv/bin/python -e .[claude]           # macOS / Linux
+```
 
-The launcher starts ActivityWatch if it is installed and not running, then
-the app, and opens `http://127.0.0.1:5730/`. Launching again while the app
-runs just reopens the browser. Equivalent manual command:
-`python -m workhistory` from the venv.
+Run from source with `start-workhistory.cmd` / `./start-workhistory.sh` (they
+prefer `.venv`), or `python -m workhistory` from the venv. Runtime packages
+(all permit commercial use): `dulwich` (folder snapshots, Apache-2.0) and
+`mcp` (MIT) with its dependencies; see
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+**Build the Windows portable zip** (copies the venv's Python and packages,
+downloads nothing; also refreshes THIRD_PARTY_NOTICES.md):
+
+```bash
+python tools/build_portable.py
+```
+
+Output: `dist/WorkHistory-<version>-windows-x64.zip`. The build imports the
+app with the bundled Python, isolated from the build machine, before zipping.
+
+### Command-line options
+
+The launchers pass their arguments on to the app.
 
 | Option | Meaning |
 |---|---|
@@ -55,9 +77,9 @@ Data folder: Windows `%LOCALAPPDATA%\WorkHistory`, macOS
 `~/Library/Application Support/WorkHistory`, Linux
 `$XDG_DATA_HOME/WorkHistory` (default `~/.local/share/WorkHistory`).
 
-Autostart (optional): Windows: a shortcut to ActivityWatch in
-`shell:startup`; macOS: ActivityWatch → Login Items; Linux: your desktop's
-autostart settings.
+Autostart: the app's own switch (개인정보 → 실행) starts the app at logon.
+ActivityWatch has its own autostart (Windows: a shortcut in `shell:startup`;
+macOS: Login Items; Linux: your desktop's autostart settings).
 
 ## Using it
 
@@ -156,6 +178,8 @@ the real API's range-overlap, trimming and heartbeat behaviour.
 | Yellow warning that idle data is missing | That day has no AFK data, so all window time counts as active and may be overstated. |
 | "포트 5730를 다른 프로그램이 쓰고 있습니다" | Another program holds the port (a running copy of this app is detected and simply reopened). Use `--port`. |
 | Windows from admin (elevated) apps show as `unknown` | ActivityWatch's watcher can't read elevated windows unless AW itself runs elevated. |
+| Unzipping fails with "path too long" | Unzip to a shorter folder (e.g. Documents); the package is fine up to ~130 characters of folder path. |
+| Windows warns before running "작업 기록.cmd" (downloaded file) | Right-click the zip → Properties → Unblock before unzipping, or choose "Run anyway". |
 | Data from before you installed this app is missing | Only `--backfill-days` (default 30) are imported on the first sync. To import more, start with a fresh `--db` and a larger value. |
 
 ## Limitations
@@ -163,3 +187,9 @@ the real API's range-overlap, trimming and heartbeat behaviour.
 See [ARCHITECTURE §9](docs/ARCHITECTURE.md) and [PRIVACY](docs/PRIVACY.md).
 Most importantly: pause, exclusions and deletion apply to this app's database
 only. ActivityWatch keeps its own copy until you remove it there.
+
+## License
+
+Proprietary, all rights reserved; see [LICENSE](LICENSE). Bundled
+open-source components and their licenses:
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

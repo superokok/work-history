@@ -18,6 +18,8 @@ from urllib.parse import parse_qs, urlparse
 from . import ai_agent, ai_service, service, sessionstore, snapshots
 from .ai_client import AIError
 from .awclient import AWError
+from .autostart import Launch
+from .autostart import default as default_launch
 from .claude_link import ClaudeLink
 from .db import Database
 from .store import load_tracking
@@ -56,8 +58,9 @@ class App:
     def __init__(self, db: Database, syncer: Optional[Syncer], demo: bool = False,
                  ai_factory: ai_service.ModelFactory = ai_service.default_factory,
                  snapshotter: Optional[Snapshotter] = None, repos_dir: Optional[Path] = None,
-                 claude_link: Optional[ClaudeLink] = None):
+                 claude_link: Optional[ClaudeLink] = None, launch: Optional[Launch] = None):
         self.db = db
+        self.launch = launch or default_launch()
         self.claude_link = claude_link or ClaudeLink(demo=demo)
         self.syncer = syncer
         self.snapshotter = snapshotter
@@ -231,6 +234,24 @@ class App:
         @r("POST", "/api/ai/check")
         def check_ai(conn, query, body):
             return ai_service.check_connection(conn, self.demo, self.ai_factory)
+
+        @r("GET", "/api/launch")
+        def get_launch(conn, query, body):
+            return {**self.launch.status(), "demo": self.demo}
+
+        @r("POST", "/api/launch")
+        def set_launch(conn, query, body):
+            if self.demo:
+                raise ApiError(409, "데모 모드에서는 자동 실행을 바꾸지 않습니다")
+            if not isinstance(body.get("autostart"), bool):
+                raise ApiError(400, "autostart는 true/false입니다")
+            return {**self.launch.set_autostart(body["autostart"]), "demo": self.demo}
+
+        @r("POST", "/api/launch/shortcut")
+        def create_shortcut(conn, query, body):
+            if self.demo:
+                raise ApiError(409, "데모 모드에서는 바로가기를 만들지 않습니다")
+            return {**self.launch.create_shortcut(), "demo": self.demo}
 
         @r("GET", "/api/mcp")
         def get_mcp(conn, query, body):

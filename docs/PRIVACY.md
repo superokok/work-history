@@ -85,6 +85,14 @@ removes the app's registration from Claude Code. The app changes Claude Code's
 user configuration only through this switch, only for its own server name, and
 never edits Claude Code's files directly.
 
+## Start at logon and shortcuts
+
+Off by default. 개인정보 → 실행 creates or removes only files with the app's
+own name: Windows `Startup\작업 기록.lnk` and `Desktop\작업 기록.lnk`, macOS
+`~/Library/LaunchAgents/com.workhistory.app.plist`, Linux
+`~/.config/autostart/workhistory.desktop` and
+`~/.local/share/applications/workhistory.desktop`. Not available in demo mode.
+
 ## Optional AI
 
 Off until the user picks a Claude Code model in 개인정보 → AI 설정 (the app

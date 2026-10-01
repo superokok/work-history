@@ -4,6 +4,8 @@ rem Close this window to stop the app; ActivityWatch keeps running in the tray.
 setlocal
 title WorkHistory
 cd /d "%~dp0"
+rem Lets the app point autostart / shortcuts at this launcher.
+set "WORKHISTORY_LAUNCHER=%~f0"
 
 set "AW=%LOCALAPPDATA%\ActivityWatch\activitywatch\aw-qt.exe"
 tasklist /FI "IMAGENAME eq aw-qt.exe" 2>nul | find /I "aw-qt.exe" >nul

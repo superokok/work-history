@@ -2,6 +2,8 @@
 # Starts ActivityWatch (if installed and not running) and the work-history app (macOS / Linux).
 # Stop the app with Ctrl+C; ActivityWatch keeps running in the background.
 cd "$(dirname "$0")" || exit 1
+# Lets the app point autostart / shortcuts at this launcher.
+WORKHISTORY_LAUNCHER="$(pwd)/$(basename "$0")"; export WORKHISTORY_LAUNCHER
 
 if ! pgrep -x aw-qt >/dev/null 2>&1 && ! pgrep -x aw-server >/dev/null 2>&1; then
   if [ -d "/Applications/ActivityWatch.app" ]; then

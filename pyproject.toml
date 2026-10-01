@@ -3,6 +3,11 @@ name = "workhistory"
 version = "0.1.0"
 description = "Local-first personal work history built on ActivityWatch data"
 requires-python = ">=3.11"
+license = { text = "Proprietary" }
+classifiers = [
+    "License :: Other/Proprietary License",
+    "Private :: Do Not Upload",  # PyPI refuses this package: it is not open source
+]
 dependencies = [
     "dulwich>=1.2",  # pure-Python Git for folder snapshots, used under Apache-2.0
 ]

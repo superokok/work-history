@@ -1,0 +1,15 @@
+작업 기록 (WorkHistory)
+Copyright (c) 2026 작업 기록(WorkHistory) 저작권자. All rights reserved.
+
+이 소프트웨어는 비공개 상용 소프트웨어입니다. 저작권자와 별도로 서면 계약을
+맺지 않은 한, 이 소프트웨어의 전부 또는 일부를 복제, 수정, 배포, 재허락,
+판매할 수 있는 권리는 부여되지 않습니다.
+
+This software is proprietary. Except under a separate written agreement with
+the copyright holder, no right is granted to copy, modify, distribute,
+sublicense or sell this software or any part of it.
+
+이 소프트웨어에 포함된 제3자 구성요소(Python 런타임, dulwich, mcp 등)는 각자의
+라이선스를 따릅니다. 목록과 라이선스 전문은 THIRD_PARTY_NOTICES.md를 보세요.
+Third-party components included with this software are licensed under their
+own terms; see THIRD_PARTY_NOTICES.md.

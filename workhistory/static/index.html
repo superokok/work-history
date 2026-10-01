@@ -192,6 +192,14 @@
     <!-- Privacy -->
     <section id="tab-privacy" class="tab-panel" hidden>
       <div class="card">
+        <h2>실행</h2>
+        <label class="row"><input type="checkbox" id="launch-autostart"> 컴퓨터를 켤 때 자동 실행 (브라우저는 열지 않고 기록만 시작)</label>
+        <div class="row">
+          <button type="button" id="launch-shortcut" class="small">바로가기 만들기</button>
+          <span id="launch-status" class="muted small-text"></span>
+        </div>
+      </div>
+      <div class="card">
         <h2>AI 설정</h2>
         <div id="ai-status" class="row small-text"></div>
         <div class="row">

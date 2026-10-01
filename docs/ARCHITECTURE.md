@@ -47,6 +47,7 @@ ai_claude.py  – that protocol over headless Claude Code (`claude -p`, locked d
 ai_agent.py   – "AI에게 묻기": read-only history tools + citation check
 mcp_server.py – the history tools over MCP (Claude Code), consent-checked
 claude_link.py – registers the MCP server with Claude Code from the app
+autostart.py  – start-at-logon and shortcut files, switched from the app
 ai_context.py – the exact payload for the AI with verifiable references (C/S/N/P)
 ai_report.py  – report schema, prompt, reference verification, rendering
 ai_service.py – settings, consent, run log, saved reports

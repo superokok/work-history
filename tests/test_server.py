@@ -4,9 +4,11 @@ import json
 import threading
 import unittest
 from datetime import date, timedelta
+from pathlib import Path
 from urllib.parse import quote
 
 from workhistory.awclient import AWClient
+from workhistory.autostart import Launch
 from workhistory.claude_link import ClaudeLink
 from workhistory.server import App, create_server, find_running_instance
 from workhistory.sync import Syncer
@@ -23,7 +25,11 @@ class ServerTests(unittest.TestCase):
         self.aw.add_bucket("aw-watcher-window_devbox", "currentwindow")
         self.claude = FakeClaude()  # never the real Claude Code CLI
         link = ClaudeLink(cli="claude", runner=self.claude, python="/opt/app/python")
-        self.server = create_server(App(self.db, Syncer(self.db, AWClient(self.aw.url)), claude_link=link), 0)
+        # Never the real Startup folder / desktop either.
+        self.home = Path(self.db.path).parent / "home"
+        launch = Launch("Linux", self.home, ["/opt/app/start-workhistory.sh"])
+        self.server = create_server(App(self.db, Syncer(self.db, AWClient(self.aw.url)), claude_link=link,
+                                        launch=launch), 0)
         self.port = self.server.server_address[1]
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
 
@@ -135,6 +141,16 @@ class ServerTests(unittest.TestCase):
         status, body, _ = self.request("POST", "/api/mcp", {"enabled": False})
         self.assertEqual((status, body["enabled"]), (200, False))
         self.assertEqual(self.claude.servers, {})
+
+    def test_launch_settings(self):
+        status, body, _ = self.request("GET", "/api/launch")
+        self.assertEqual((status, body["autostart"]["enabled"]), (200, False))
+        status, body, _ = self.request("POST", "/api/launch", {"autostart": True})
+        self.assertEqual((status, body["autostart"]["enabled"]), (200, True))
+        self.assertTrue((self.home / ".config" / "autostart" / "workhistory.desktop").exists())
+        self.assertEqual(self.request("POST", "/api/launch", {"autostart": "yes"})[0], 400)
+        status, body, _ = self.request("POST", "/api/launch/shortcut", {})
+        self.assertEqual((status, body["shortcut"]["exists"]), (200, True))
 
     def test_errors_are_json(self):
         self.assertEqual(self.request("GET", "/api/nope")[0], 404)

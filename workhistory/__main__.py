@@ -15,7 +15,7 @@ except ImportError:
         "필요한 패키지(dulwich)가 없습니다. 프로젝트 폴더에서 다음을 실행하세요:",
         "  uv venv .venv --python 3.12",
         "  uv pip install --python " + (".venv/Scripts/python.exe" if _windows else ".venv/bin/python")
-        + " -e .[ai]",
+        + " -e .[claude]",
         "그다음 " + ("start-workhistory.cmd" if _windows else "./start-workhistory.sh") + " 로 실행하세요.",
     ]))
 
@@ -80,6 +80,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     url = f"http://127.0.0.1:{server.server_address[1]}/"
     print(f"작업 기록: {url}  (DB: {db_path})")
+    print("이 창을 닫으면 작업 기록이 종료됩니다. (기록은 저장되어 있습니다)")
 
     if syncer:
         syncer.start()

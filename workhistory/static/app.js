@@ -110,7 +110,7 @@ function showTab(name) {
   if (name === "report") loadReport();
   if (name === "resume") loadResume();
   if (name === "projects") { renderProjects(); loadFolders(); }
-  if (name === "privacy") { loadAISettings(); loadMCP(); loadTracking(); loadExclusions(); }
+  if (name === "privacy") { loadLaunch(); loadAISettings(); loadMCP(); loadTracking(); loadExclusions(); }
 }
 
 // ------------------------------------------------------------------ status
@@ -717,6 +717,39 @@ async function loadAISettings() {
     ? `지금까지 ${s.stats.runs}회 호출 (성공 ${s.stats.ok}) · 입력 ${s.stats.input_tokens.toLocaleString()} / 출력 ${(s.stats.output_tokens + s.stats.thinking_tokens).toLocaleString()} 토큰 · 평균 ${(s.stats.avg_ms / 1000).toFixed(1)}초`
     : "아직 AI를 호출한 적이 없습니다.";
 }
+
+// ------------------------------------------------------------------ launch (autostart, shortcut)
+function renderLaunch(l) {
+  $("launch-autostart").checked = l.autostart.enabled;
+  $("launch-autostart").disabled = l.demo || !l.autostart.supported;
+  $("launch-shortcut").hidden = !l.shortcut.supported;
+  $("launch-shortcut").disabled = l.demo;
+  $("launch-shortcut").textContent = `${l.shortcut.where} 바로가기 ${l.shortcut.exists ? "다시 만들기" : "만들기"}`;
+  $("launch-status").textContent = l.demo ? "데모 모드에서는 바꿀 수 없습니다."
+    : l.shortcut.exists ? `${l.shortcut.where}에 바로가기가 있습니다.` : "";
+}
+
+async function loadLaunch() {
+  const l = await guarded(() => api("GET", "/api/launch"));
+  if (l) renderLaunch(l);
+}
+
+$("launch-autostart").addEventListener("change", (e) => guarded(async () => {
+  try {
+    const l = await api("POST", "/api/launch", { autostart: e.target.checked });
+    renderLaunch(l);
+    toast(l.autostart.enabled ? "컴퓨터를 켜면 작업 기록이 자동으로 시작됩니다." : "자동 실행을 껐습니다.");
+  } catch (err) {
+    loadLaunch();
+    throw err;
+  }
+}));
+
+$("launch-shortcut").addEventListener("click", () => guarded(async () => {
+  const l = await api("POST", "/api/launch/shortcut", {});
+  renderLaunch(l);
+  toast(`${l.shortcut.where}에 바로가기를 만들었습니다.`);
+}));
 
 // ------------------------------------------------------------------ Claude Code (MCP)
 const quoteArg = (s) => (/[\s"]/.test(s) ? `"${s.replace(/"/g, '\\"')}"` : s);
