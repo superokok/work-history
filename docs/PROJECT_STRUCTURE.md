@@ -1,0 +1,108 @@
+# 프로젝트 구조 한눈에 보기
+
+새 세션에서 가장 먼저 읽는 문서. 상세 설계는 [ARCHITECTURE.md](ARCHITECTURE.md),
+작업 흐름은 [history/](history/)를 본다. 구조가 바뀌면 이 문서를 함께 고친다.
+
+_마지막 갱신: 2026-10-14_
+
+## 무엇인가
+
+**작업 기록 (WorkHistory)**: 개발자용 로컬 전용 업무 기록 앱.
+
+- 주 기록 = **결과물**: 등록한 작업 폴더의 파일 변경을 5분마다 숨김 Git 저장소(dulwich)에 스냅샷.
+- 보조 기록 = **창 활동**: ActivityWatch의 앱/창 제목/AFK 데이터를 가져와 작업 세션으로 묶음.
+- 그 위에 타임라인, 일일 리뷰, 이어서 하기, 검색, 프로젝트, 개인정보 설정,
+  AI 보고서·"AI에게 묻기"(Claude Code 헤드리스), Claude Code용 읽기 전용 MCP 서버.
+- 스택: Python 3.11+ (표준 라이브러리 위주) + 바닐라 HTML/JS, SQLite. 빌드 단계 없음.
+- 저장소: https://github.com/superokok/work-history (private), 브랜치 `main`.
+- 라이선스: 자체 코드는 PROPRIETARY. 의존성은 상업적 판매 가능한 것만.
+
+## 디렉터리
+
+```
+work-history/
+├─ CLAUDE.md               Claude 작업 지침 (세션 시작/종료 규칙)
+├─ README.md               설치·사용법·명령행 옵션
+├─ pyproject.toml          패키지 정의 (dulwich 필수; extras: claude=mcp, desktop=pywebview)
+├─ start-workhistory.cmd   Windows 실행기 (.venv 우선)
+├─ start-workhistory.sh    macOS/Linux 실행기
+├─ install.sh              macOS/Linux 최초 설치
+├─ workhistory/            앱 패키지 (아래 모듈 지도)
+│  └─ static/              UI: index.html, app.js, style.css (한국어)
+├─ tests/                  unittest (helpers.py 공용 픽스처)
+├─ evals/report_eval.py    데모 시나리오로 AI 보고서 품질 실측 (실제 데이터 미사용)
+├─ tools/build_portable.py Windows 포터블 zip 빌드 → dist/ (git 제외)
+└─ docs/
+   ├─ PROJECT_STRUCTURE.md 이 문서
+   ├─ history/             작업 히스토리 (작업 1건 = 파일 1개)
+   └─ ARCHITECTURE / PRODUCT / IMPLEMENTATION_PLAN / AI / PRIVACY / RESULTS_TRACKING / VALIDATION
+```
+
+## 모듈 지도 (workhistory/)
+
+데이터 흐름 순서. 상세는 [ARCHITECTURE §3](ARCHITECTURE.md).
+
+| 계층 | 모듈 | 역할 |
+|---|---|---|
+| 진입 | `__main__.py` | 명령행 옵션, 단일 인스턴스, 서버·동기화 시작 |
+| 설정 | `config.py` | 상수 (세션 묶기 기준 등), 데이터 폴더 경로 |
+| 수집 | `awclient.py` | ActivityWatch REST 클라이언트 |
+| | `sync.py` | 증분 가져오기, 중복 제거, 수집 시 개인정보 필터 |
+| | `snapshots.py` | 작업 폴더 스냅샷 (dulwich), 변경 기록 |
+| | `extract.py` | 코드/텍스트, HWP, DOCX/XLSX/PPTX 텍스트 추출 |
+| 저장 | `db.py` | SQLite 스키마 + 마이그레이션 (`PRAGMA user_version`, 현재 v5) |
+| | `store.py` | 공용 로더, 하루 경계, 세션 재계산 표시 |
+| 처리 (순수 함수) | `normalize.py` | 창 − AFK − 차단 구간 − 제외, 하루 단위 자르기 |
+| | `classify.py` | 수동 지정 > 키워드 규칙 > 없음 |
+| | `sessions.py` | 결정적 세션 묶기 + 자동 제목 |
+| | `review.py` | 일일 리뷰 템플릿, 후속 작업 추출 |
+| | `redact.py` | 비밀값·개인 식별자 마스킹 |
+| 세션 저장 | `sessionstore.py` | 재묶기, 편집, 병합, 분할 |
+| AI | `ai_client.py` | 공급자 중립 `Model` 프로토콜 |
+| | `ai_claude.py` | Claude Code 헤드리스(`claude -p`) 구현, 도구 잠금 |
+| | `ai_context.py` | AI에 보낼 정확한 자료 + 검증 가능한 참조(C/S/N/P) |
+| | `ai_report.py` | 보고서 스키마, 프롬프트, 참조 검증, 렌더링 |
+| | `ai_agent.py` | "AI에게 묻기": 읽기 전용 기록 도구 + 인용 확인 |
+| | `ai_service.py` | AI 설정, 동의, 실행 로그, 저장된 보고서 |
+| 외부 연동 | `mcp_server.py` | Claude Code용 읽기 전용 MCP 서버 (동의 확인) |
+| | `claude_link.py` | 앱에서 `claude mcp add/remove --scope user` 등록 |
+| | `autostart.py` | 로그온 시 시작, 바로가기 생성 |
+| 서비스 | `service.py` | 타임라인, 검색, 메모, 프로젝트, 리뷰, 이어서 하기 쿼리 |
+| | `server.py` | JSON API + 정적 UI, 127.0.0.1 전용 |
+| 기타 | `stats.py` | 실사용 보정률 통계 (`python -m workhistory.stats`) |
+| | `demo.py`, `demo_files.py` | `--demo`용 가상 2주 시나리오 (별도 demo.db) |
+
+## 자주 쓰는 명령
+
+```bash
+# 개발 환경
+uv venv .venv --python 3.12
+uv pip install --python .venv/Scripts/python.exe -e .[claude]
+
+# 실행 (기본 http://127.0.0.1:5730/)
+.venv/Scripts/python.exe -m workhistory            # 또는 start-workhistory.cmd
+.venv/Scripts/python.exe -m workhistory --demo     # 데모 데이터
+
+# 테스트 (2026-10-14 기준 197개 통과)
+.venv/Scripts/python.exe -m unittest discover -s tests -t .
+
+# AI 보고서 품질 평가 (Claude Code 로그인 필요)
+.venv/Scripts/python.exe -m evals.report_eval
+
+# Windows 포터블 zip
+python tools/build_portable.py
+```
+
+데이터 폴더: Windows `%LOCALAPPDATA%\WorkHistory`, macOS `~/Library/Application Support/WorkHistory`,
+Linux `~/.local/share/WorkHistory`. ActivityWatch(개발 PC)는 포터블 설치
+`%LOCALAPPDATA%\ActivityWatch\activitywatch\aw-qt.exe`.
+
+## 주요 결정 (바꾸기 전에 사용자에게 확인)
+
+- 스택: Python 표준 라이브러리 + 바닐라 JS, 프레임워크 없음.
+- 주 기록은 창 시간이 아니라 **파일 변경(결과물)**.
+- 스냅샷은 dulwich(Apache-2.0)로, git.exe·GPL 의존 금지.
+- AI는 전부 사용자 PC의 Claude Code(헤드리스). 다른 공급자는 `ai_client.Model`로 교체 가능하게만 유지.
+  모델을 고르기 전(=동의 전)에는 AI 꺼짐.
+- Claude Code 연결(MCP 등록)은 앱 안의 스위치로만, 터미널 단계 없음.
+- OS 독립, 로컬 전용, 배포는 Windows 포터블 zip + macOS/Linux `install.sh`.

@@ -5,8 +5,9 @@ activity from [ActivityWatch](https://activitywatch.net) and turns it into a
 searchable, editable timeline with projects and notes. Nothing leaves your
 computer.
 
-Docs: [PRODUCT](docs/PRODUCT.md) · [ARCHITECTURE](docs/ARCHITECTURE.md) ·
-[PRIVACY](docs/PRIVACY.md) · [IMPLEMENTATION_PLAN](docs/IMPLEMENTATION_PLAN.md)
+Docs: [PROJECT_STRUCTURE](docs/PROJECT_STRUCTURE.md) · [PRODUCT](docs/PRODUCT.md) ·
+[ARCHITECTURE](docs/ARCHITECTURE.md) · [PRIVACY](docs/PRIVACY.md) ·
+[IMPLEMENTATION_PLAN](docs/IMPLEMENTATION_PLAN.md) · [work history](docs/history/)
 
 ## Install
 
