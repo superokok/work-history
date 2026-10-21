@@ -1,41 +1,39 @@
 # 작업 기록 (WorkHistory)
 
-Local-first work history for developers on Windows. It reads app/window/idle
-activity from [ActivityWatch](https://activitywatch.net) and turns it into a
-searchable, editable timeline with projects and notes. Nothing leaves your
-computer.
+개발자를 위한 로컬 전용 업무 기록 앱입니다. [ActivityWatch](https://activitywatch.net)가
+기록한 앱/창/유휴 활동과 작업 폴더의 파일 변경을 모아, 검색하고 고칠 수 있는
+타임라인으로 만들어 줍니다. 프로젝트와 메모도 함께 관리합니다. 데이터는 컴퓨터 밖으로
+나가지 않습니다.
 
-Docs: [PROJECT_STRUCTURE](docs/PROJECT_STRUCTURE.md) · [PRODUCT](docs/PRODUCT.md) ·
-[ARCHITECTURE](docs/ARCHITECTURE.md) · [PRIVACY](docs/PRIVACY.md) ·
-[IMPLEMENTATION_PLAN](docs/IMPLEMENTATION_PLAN.md) · [work history](docs/history/)
+문서: [프로젝트 구조](docs/PROJECT_STRUCTURE.md) · [제품](docs/PRODUCT.md) ·
+[아키텍처](docs/ARCHITECTURE.md) · [개인정보](docs/PRIVACY.md) ·
+[구현 계획](docs/IMPLEMENTATION_PLAN.md) · [작업 히스토리](docs/history/)
 
-## Install
+## 설치
 
-**Windows (portable, no Python needed).** Unzip
-`WorkHistory-<version>-windows-x64.zip` to a short path (e.g. your Documents
-folder) and double-click **작업 기록.cmd**. The zip carries its own Python
-runtime and packages; nothing is installed system-wide. The app runs in a
-minimized "WorkHistory" window (close it to stop the app) and opens
-`http://127.0.0.1:5730/`. To update, stop the app and replace the folder;
-the data stays in `%LOCALAPPDATA%\WorkHistory`.
+**Windows (포터블, Python 설치 불필요).** `WorkHistory-<버전>-windows-x64.zip`을
+짧은 경로(예: 문서 폴더)에 압축 해제하고 **작업 기록.cmd**를 더블클릭합니다. zip 안에
+Python 런타임과 패키지가 들어 있어 시스템에 아무것도 설치하지 않습니다. 앱은 최소화된
+"WorkHistory" 창으로 실행되고(이 창을 닫으면 앱이 종료됩니다)
+`http://127.0.0.1:5730/`을 엽니다. 업데이트할 때는 앱을 끄고 폴더를 교체하면 됩니다.
+데이터는 `%LOCALAPPDATA%\WorkHistory`에 그대로 남습니다.
 
-**macOS / Linux.** With Python 3.11+ installed, run `sh install.sh` once in
-the source folder, then `./start-workhistory.sh`.
+**macOS / Linux.** Python 3.11 이상이 설치된 상태에서 소스 폴더에서 `sh install.sh`를
+한 번 실행한 뒤 `./start-workhistory.sh`로 실행합니다.
 
-**Then, inside the app** (개인정보 tab): **실행** switches on start with the
-computer and creates a desktop (Windows) or app-menu (Linux) shortcut;
-**AI 설정** turns on the AI features. No terminal step is needed.
+**그다음은 앱 안에서** (개인정보 탭): **실행**에서 컴퓨터를 켤 때 자동 시작을 켜고
+바탕화면(Windows) 또는 앱 메뉴(Linux) 바로가기를 만듭니다. **AI 설정**에서 AI 기능을
+켭니다. 터미널 작업은 필요 없습니다.
 
-Optional companions, installed separately:
+함께 쓰면 좋은 프로그램 (별도 설치):
 
-- Claude Code, signed in, for AI reports and questions
-  (https://docs.claude.com/en/docs/claude-code). No API key is needed.
-- ActivityWatch for window activity
-  (https://github.com/ActivityWatch/activitywatch/releases). Folder
-  snapshots, AI reports and the rest of the app work without it; when it is
-  installed, the launchers start it.
+- Claude Code (로그인 필요): AI 보고서와 질문에 사용합니다
+  (https://docs.claude.com/en/docs/claude-code). API 키는 필요 없습니다.
+- ActivityWatch: 창 활동 기록에 사용합니다
+  (https://github.com/ActivityWatch/activitywatch/releases). 폴더 스냅샷, AI 보고서 등
+  나머지 기능은 없어도 동작하며, 설치되어 있으면 실행기가 함께 시작합니다.
 
-## Development
+## 개발
 
 ```bash
 uv venv .venv --python 3.12
@@ -43,154 +41,139 @@ uv pip install --python .venv/Scripts/python.exe -e .[claude]   # Windows
 uv pip install --python .venv/bin/python -e .[claude]           # macOS / Linux
 ```
 
-Run from source with `start-workhistory.cmd` / `./start-workhistory.sh` (they
-prefer `.venv`), or `python -m workhistory` from the venv. Runtime packages
-(all permit commercial use): `dulwich` (folder snapshots, Apache-2.0) and
-`mcp` (MIT) with its dependencies; see
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+소스에서 실행할 때는 `start-workhistory.cmd` / `./start-workhistory.sh`(`.venv`를
+우선 사용) 또는 venv에서 `python -m workhistory`를 씁니다. 런타임 패키지(모두 상업적
+사용 가능): `dulwich`(폴더 스냅샷, Apache-2.0), `mcp`(MIT)와 그 의존성.
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)를 참고하세요.
 
-**Build the Windows portable zip** (copies the venv's Python and packages,
-downloads nothing; also refreshes THIRD_PARTY_NOTICES.md):
+**Windows 포터블 zip 빌드** (venv의 Python과 패키지를 복사하며 아무것도 내려받지
+않습니다. THIRD_PARTY_NOTICES.md도 갱신합니다):
 
 ```bash
 python tools/build_portable.py
 ```
 
-Output: `dist/WorkHistory-<version>-windows-x64.zip`. The build imports the
-app with the bundled Python, isolated from the build machine, before zipping.
+결과물: `dist/WorkHistory-<버전>-windows-x64.zip`. 빌드는 압축하기 전에 번들 Python으로
+빌드 PC와 격리된 상태에서 앱을 import해 확인합니다.
 
-### Command-line options
+### 명령행 옵션
 
-The launchers pass their arguments on to the app.
+실행기는 받은 인수를 앱에 그대로 넘깁니다.
 
-| Option | Meaning |
+| 옵션 | 의미 |
 |---|---|
-| `--port N` | HTTP port (default 5730, always bound to 127.0.0.1) |
-| `--db PATH` | Database file (default: per-user data folder, below) |
-| `--aw-url URL` | ActivityWatch address (default `http://127.0.0.1:5600`) |
-| `--backfill-days N` | Days of ActivityWatch history imported on the first sync (default 30) |
-| `--demo` | Separate `demo.db` with a fictional two-week developer scenario (clearly labeled); no syncing |
-| `--window` | Native window if `pywebview` is installed; otherwise the browser. Not yet tested. |
-| `--no-browser` | Don't open a browser |
-| `--verbose` | Debug logging |
+| `--port N` | HTTP 포트 (기본 5730, 항상 127.0.0.1에만 바인딩) |
+| `--db PATH` | 데이터베이스 파일 (기본: 아래의 사용자별 데이터 폴더) |
+| `--aw-url URL` | ActivityWatch 주소 (기본 `http://127.0.0.1:5600`) |
+| `--backfill-days N` | 첫 동기화 때 가져올 ActivityWatch 기록 일수 (기본 30) |
+| `--demo` | 가상의 2주 개발자 시나리오가 담긴 별도 `demo.db` (데모로 표시됨), 동기화 안 함 |
+| `--window` | `pywebview`가 설치되어 있으면 자체 창, 없으면 브라우저. 아직 검증 안 됨. |
+| `--no-browser` | 브라우저를 열지 않음 |
+| `--verbose` | 디버그 로그 |
 
-Data folder: Windows `%LOCALAPPDATA%\WorkHistory`, macOS
+데이터 폴더: Windows `%LOCALAPPDATA%\WorkHistory`, macOS
 `~/Library/Application Support/WorkHistory`, Linux
-`$XDG_DATA_HOME/WorkHistory` (default `~/.local/share/WorkHistory`).
+`$XDG_DATA_HOME/WorkHistory` (기본 `~/.local/share/WorkHistory`).
 
-Autostart: the app's own switch (개인정보 → 실행) starts the app at logon.
-ActivityWatch has its own autostart (Windows: a shortcut in `shell:startup`;
-macOS: Login Items; Linux: your desktop's autostart settings).
+자동 시작: 앱 안의 스위치(개인정보 → 실행)로 로그온 시 앱이 시작됩니다.
+ActivityWatch는 자체 자동 시작을 씁니다 (Windows: `shell:startup`의 바로가기,
+macOS: 로그인 항목, Linux: 데스크톱 환경의 자동 시작 설정).
 
-## Using it
+## 사용법
 
-- **타임라인**: the day as **work sessions** inferred from window activity.
-  Idle (AFK) and lock-screen time are excluded. Per session you can rename it
-  (leave blank to return to the auto title), set its project, add a note,
-  exclude it from totals, merge it with the next session, or open its window
-  rows and split at any row. A renamed or annotated session keeps growing
-  while you keep working. Day notes go on the right.
-- **리뷰**: an editable daily review draft generated from sessions and notes
-  (no AI). Sections are labelled [자동 집계] / [자동 추정] / [직접 작성]. Edit
-  it, then save; saved reviews are searchable.
-- **이어서 하기**: projects ordered by most recent work. For each: your next
-  action, the last session and the last window seen in it, recent sessions,
-  and previous notes.
-- **검색**: substring search over sessions, window titles, app names, notes,
-  reviews and projects, with date and project filters.
-- **프로젝트**: **작업 폴더** (results recording: register source/document
-  folders; every 5 minutes changed files are snapshotted into a hidden local
-  Git repository, never touching the folder or its own .git; secrets and build
-  outputs are skipped), plus projects and keyword rules (app name or window
-  title contains a keyword, case-insensitive; the longest keyword wins).
-  File changes appear in the timeline (click a file to see its diff), in
-  search, and as evidence in AI reports.
-- **개인정보**: what to record (all apps, or **only work apps**: everything
-  else is kept as anonymous "업무 외" time with no app name or title; pick apps
-  from the last 7 days and re-apply rules to the last 30 days), exclusion
-  list, pause/resume, and deletion by date range or all.
+- **타임라인**: 창 활동에서 추정한 **작업 세션**으로 하루를 보여 줍니다. 유휴(AFK)와
+  화면 잠금 시간은 빠집니다. 세션마다 이름 바꾸기(비우면 자동 제목으로 돌아감),
+  프로젝트 지정, 메모, 합계에서 제외, 다음 세션과 병합, 창 기록을 펼쳐 원하는 줄에서
+  분할을 할 수 있습니다. 이름을 바꾸거나 메모를 단 세션도 계속 작업하면 이어서
+  늘어납니다. 하루 메모는 오른쪽에 적습니다.
+- **리뷰**: 세션과 메모로 만든 일일 리뷰 초안을 고쳐 쓸 수 있습니다 (AI 아님). 섹션은
+  [자동 집계] / [자동 추정] / [직접 작성]으로 표시됩니다. 고친 뒤 저장하면 검색됩니다.
+- **이어서 하기**: 최근 작업 순으로 프로젝트를 보여 줍니다. 프로젝트마다 다음 할 일,
+  마지막 세션과 거기서 본 마지막 창, 최근 세션, 이전 메모가 나옵니다.
+- **검색**: 세션, 창 제목, 앱 이름, 메모, 리뷰, 프로젝트를 부분 문자열로 검색하며
+  날짜와 프로젝트로 거를 수 있습니다.
+- **프로젝트**: **작업 폴더**(결과물 기록: 소스/문서 폴더를 등록하면 5분마다 바뀐
+  파일을 숨김 로컬 Git 저장소에 스냅샷합니다. 원래 폴더나 그 안의 .git은 건드리지
+  않고, 비밀값과 빌드 결과물은 건너뜁니다), 프로젝트, 키워드 규칙(앱 이름이나 창
+  제목에 키워드가 들어 있으면 해당 프로젝트로, 대소문자 무시, 가장 긴 키워드 우선).
+  파일 변경은 타임라인(파일을 누르면 diff), 검색, AI 보고서의 근거로 나타납니다.
+- **개인정보**: 기록 범위(모든 앱, 또는 **업무 앱만**: 나머지는 앱 이름·제목 없이
+  익명 "업무 외" 시간으로만 남김. 최근 7일 동안 쓴 앱에서 고르고 최근 30일에 규칙
+  다시 적용), 제외 목록, 일시 정지/재개, 기간 또는 전체 삭제.
 
-Session grouping rules and their constants are described in
-[ARCHITECTURE §6](docs/ARCHITECTURE.md).
+세션 묶기 규칙과 기준값은 [ARCHITECTURE §6](docs/ARCHITECTURE.md)에 있습니다.
 
-## AI setup (optional)
+## AI 설정 (선택)
 
-Reports (보고서 tab) and "AI에게 묻기" use the Claude Code installed and
-signed in on this PC. In **개인정보 → AI 설정** pick a model (Sonnet is
-suggested) and confirm; until then AI is off and no real work data is sent
-(the demo database always works). The app runs Claude Code headless with
-every tool switched off except its own read-only history tools; usage counts
-against your Claude account. **연결 확인** checks install and login without
-sending work data, and "보낼 내용 보기" shows exactly what a report sends.
-Details: [docs/AI.md](docs/AI.md).
+보고서(보고서 탭)와 "AI에게 묻기"는 이 PC에 설치되어 로그인된 Claude Code를 씁니다.
+**개인정보 → AI 설정**에서 모델을 고르고(Sonnet 권장) 확인하세요. 그 전까지 AI는 꺼져
+있고 실제 업무 데이터는 보내지 않습니다 (데모 데이터베이스에서는 항상 동작). 앱은
+Claude Code를 헤드리스로 실행하며 자체 읽기 전용 기록 도구 외의 모든 도구를 끕니다.
+사용량은 본인 Claude 계정에 계산됩니다. **연결 확인**은 업무 데이터를 보내지 않고
+설치와 로그인만 확인하며, "보낼 내용 보기"는 보고서가 보내는 내용을 그대로 보여
+줍니다. 자세한 내용: [docs/AI.md](docs/AI.md).
 
 ## Claude Code (MCP)
 
-Developers can ask about their own history from inside Claude Code
-("지난주 GOV-1418 어디까지 했지?"). The app ships a read-only MCP server
-(`workhistory.mcp_server`, MCP Python SDK, MIT) with the tools
-`search_history`, `get_day`, `list_projects`, `get_project`, `get_change`
-and `get_report_data`.
+Claude Code 안에서 내 기록에 대해 물어볼 수 있습니다 ("지난주 GOV-1418 어디까지
+했지?"). 앱에는 읽기 전용 MCP 서버(`workhistory.mcp_server`, MCP Python SDK, MIT)가
+들어 있으며 도구는 `search_history`, `get_day`, `list_projects`, `get_project`,
+`get_change`, `get_report_data`입니다.
 
-1. Install the extra: `uv pip install --python <venv python> -e .[claude]`
-   (Claude Code itself must be installed and signed in).
-2. In the app: **개인정보 → Claude Code 연결**, turn on
-   "Claude Code에서 내 업무 기록 사용". The app registers its server with Claude
-   Code for you (`claude mcp add --scope user workhistory ...`, through Claude
-   Code's own CLI) and shows the state. Turning it off removes the
-   registration again. No terminal step is needed.
+1. extra 설치: `uv pip install --python <venv python> -e .[claude]`
+   (Claude Code가 설치되어 로그인되어 있어야 합니다).
+2. 앱에서 **개인정보 → Claude Code 연결**의 "Claude Code에서 내 업무 기록 사용"을
+   켭니다. 앱이 Claude Code 자체 CLI로 서버를 등록하고
+   (`claude mcp add --scope user workhistory ...`) 상태를 보여 줍니다. 끄면 등록도
+   지웁니다. 터미널 작업은 필요 없습니다.
 
-The app only ever adds or removes its own name (`workhistory`, or
-`workhistory-demo` with `--demo`) and refuses to touch a server of that name
-that points elsewhere. A manual command is still shown under "수동 설정"
-for unusual setups. Results reach the model provider of your Claude account;
-secrets are masked and recording rules apply.
+앱은 자기 이름(`workhistory`, `--demo`일 때는 `workhistory-demo`)만 추가·삭제하며,
+같은 이름이 다른 곳을 가리키면 건드리지 않습니다. 특수한 환경을 위해 "수동 설정"에
+직접 실행할 명령도 보여 줍니다. 결과는 Claude 계정의 모델 제공자에게 전달되며,
+비밀값은 가려지고 기록 규칙이 적용됩니다.
 
-Verified end to end with Claude Code 2.1.268 in headless mode on the demo
-data: it searched the history with the tools over 9 turns and answered with
-correct references.
+Claude Code 2.1.268 헤드리스 모드에서 데모 데이터로 처음부터 끝까지 확인했습니다:
+도구로 9턴에 걸쳐 기록을 찾아 올바른 참조와 함께 답했습니다.
 
-## Real-use validation
+## 실사용 검증
 
-See [docs/VALIDATION.md](docs/VALIDATION.md) for the one-week checklist.
-Correction rates per day (renamed / re-assigned / merged-split / excluded
-sessions, share of time classified):
+일주일 체크리스트는 [docs/VALIDATION.md](docs/VALIDATION.md)를 보세요. 날짜별 보정률
+(이름 변경 / 프로젝트 재지정 / 병합·분할 / 제외한 세션, 분류된 시간 비율):
 
 ```bash
 python -m workhistory.stats --days 7
 ```
 
-## Tests
+## 테스트
 
 ```bash
 .venv/Scripts/python.exe -m unittest discover -s tests -t .   # Windows
 .venv/bin/python -m unittest discover -s tests -t .           # macOS / Linux
 ```
 
-The tests use temporary databases and a fake ActivityWatch server that mimics
-the real API's range-overlap, trimming and heartbeat behaviour.
+테스트는 임시 데이터베이스와, 실제 API의 범위 겹침·잘라내기·하트비트 동작을 흉내 내는
+가짜 ActivityWatch 서버를 씁니다.
 
-## Troubleshooting
+## 문제 해결
 
-| Symptom | Fix |
+| 증상 | 해결 |
 |---|---|
-| "ActivityWatch 연결 안 됨" | Start `aw-qt.exe` and check that `http://127.0.0.1:5600` opens. Stored history stays visible meanwhile. |
-| "창 기록 없음" / "유휴 감지 없음" in the status chip | The `aw-watcher-window` / `aw-watcher-afk` watcher isn't running. Check the ActivityWatch tray menu → Modules. |
-| Yellow warning that idle data is missing | That day has no AFK data, so all window time counts as active and may be overstated. |
-| "포트 5730를 다른 프로그램이 쓰고 있습니다" | Another program holds the port (a running copy of this app is detected and simply reopened). Use `--port`. |
-| Windows from admin (elevated) apps show as `unknown` | ActivityWatch's watcher can't read elevated windows unless AW itself runs elevated. |
-| Unzipping fails with "path too long" | Unzip to a shorter folder (e.g. Documents); the package is fine up to ~130 characters of folder path. |
-| Windows warns before running "작업 기록.cmd" (downloaded file) | Right-click the zip → Properties → Unblock before unzipping, or choose "Run anyway". |
-| Data from before you installed this app is missing | Only `--backfill-days` (default 30) are imported on the first sync. To import more, start with a fresh `--db` and a larger value. |
+| "ActivityWatch 연결 안 됨" | `aw-qt.exe`를 실행하고 `http://127.0.0.1:5600`이 열리는지 확인하세요. 그동안 저장된 기록은 계속 보입니다. |
+| 상태 표시에 "창 기록 없음" / "유휴 감지 없음" | `aw-watcher-window` / `aw-watcher-afk` 감시기가 꺼져 있습니다. ActivityWatch 트레이 메뉴 → Modules를 확인하세요. |
+| 유휴 데이터가 없다는 노란 경고 | 그날 AFK 데이터가 없어 창 시간이 모두 활동 시간으로 잡혔고, 실제보다 많을 수 있습니다. |
+| "포트 5730를 다른 프로그램이 쓰고 있습니다" | 다른 프로그램이 포트를 쓰고 있습니다 (이 앱이 이미 실행 중이면 그 창을 다시 엽니다). `--port`를 쓰세요. |
+| 관리자 권한(상승된) 앱의 창이 `unknown`으로 나옴 | ActivityWatch 자체를 관리자 권한으로 실행하지 않으면 감시기가 그 창을 읽지 못합니다. |
+| 압축 해제 시 "경로가 너무 깁니다" | 더 짧은 폴더(예: 문서)에 풀어 주세요. 폴더 경로가 약 130자까지는 문제없습니다. |
+| "작업 기록.cmd" 실행 전에 Windows 경고 (내려받은 파일) | 압축 풀기 전에 zip을 오른쪽 클릭 → 속성 → 차단 해제하거나, "실행"을 고르세요. |
+| 앱 설치 이전 데이터가 없음 | 첫 동기화 때는 `--backfill-days`(기본 30)일만 가져옵니다. 더 가져오려면 새 `--db`와 더 큰 값으로 시작하세요. |
 
-## Limitations
+## 제한 사항
 
-See [ARCHITECTURE §9](docs/ARCHITECTURE.md) and [PRIVACY](docs/PRIVACY.md).
-Most importantly: pause, exclusions and deletion apply to this app's database
-only. ActivityWatch keeps its own copy until you remove it there.
+[ARCHITECTURE §10](docs/ARCHITECTURE.md)과 [개인정보](docs/PRIVACY.md)를 보세요.
+가장 중요한 점: 일시 정지, 제외, 삭제는 이 앱의 데이터베이스에만 적용됩니다.
+ActivityWatch는 거기서 직접 지우기 전까지 자체 사본을 갖고 있습니다.
 
-## License
+## 라이선스
 
-Proprietary, all rights reserved; see [LICENSE](LICENSE). Bundled
-open-source components and their licenses:
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+독점 소프트웨어, 모든 권리 보유. [LICENSE](LICENSE)를 보세요. 함께 배포되는 오픈소스
+구성 요소와 라이선스: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
