@@ -34,6 +34,7 @@
 |---|---|
 | [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md) | 한눈에 보는 구조, 모듈 지도, 명령, 주요 결정 |
 | [docs/history/](docs/history/) | 작업 히스토리 (작업 1건 = 파일 1개) |
+| [docs/SELF_REVIEW.md](docs/SELF_REVIEW.md) | 자기 평가, 개선 우선순위 |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 파이프라인, 데이터 모델(스키마), 세션 규칙, 보안 |
 | [docs/PRODUCT.md](docs/PRODUCT.md) | 제품 목표와 사용자 질문 |
 | [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) | 단계별 계획과 진행 상태 |
