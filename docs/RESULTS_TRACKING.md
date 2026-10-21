@@ -44,18 +44,24 @@ is Claude Code for now (assumed reachable), behind a provider interface so a
   `.venv`, `venv`.
 - **Never stored** (secrets): `.env*`, `*.pem`, `*.key`, `*.pfx`, `*.p12`,
   `*.jks`, `*.keystore`, `id_rsa*`, `id_ed25519*`, `*credentials*`,
-  `*secret*`.
+  `*secret*`, `*.kdbx`, `.netrc`, `.npmrc`, `.pypirc`, `.pgpass`,
+  `.htpasswd`, `*.ppk`, `*.ovpn`, `kubeconfig*`, `*.tfstate*`, `*.gpg`.
+- Symlinks and Windows directory junctions are not followed, so a link
+  inside a work folder cannot pull in files from elsewhere.
 - Skipped: files over 5 MB and binary build outputs (`*.exe`, `*.dll`,
   `*.class`, `*.jar`, `*.war`, `*.zip`, `*.7z`, `*.pyc`, ...).
 - Text files: line diffs. Documents (`.hwp`, `.docx`, `.xlsx`, `.pptx`):
   extracted text is diffed; extraction results are cached by blob id.
+  A document that would unpack to more than 50 MB is treated as binary
+  (decompression-bomb guard).
 
 ## Data protection
 
 - Snapshots are a local, versioned copy of the registered folders. Removing a
   folder from the list or "delete all" removes its snapshot repository.
 - Before anything is sent to an LLM, diff excerpts pass a secret-redaction
-  step (key/token/password patterns) and are size-limited.
+  step (key/token/password patterns) and are size-limited. Whole file texts
+  are redacted before diffing, so multi-line private keys are masked too.
 - The free-tier guard from AI.md applies unchanged.
 
 ## Limitations (to document honestly)

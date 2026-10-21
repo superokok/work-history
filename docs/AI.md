@@ -58,6 +58,11 @@ verified citations; `evals/report_eval.py` passed 4/4 with 0 dropped
 references, median 30 s per report, but one weekly case took 166-214 s in
 both runs (cause not yet known).
 
+Re-measured 2026-10-21 (Claude Code 2.1.293, claude-code:sonnet,
+`--runs 2`): **8/8 passed** (all required facts present, no over-claims, no
+other days' work in daily reports), 0 dropped references, 0 flags, 0 restored
+projects; median 7.4 s, max 11.3 s per report (the slow weekly case is gone).
+
 ## Replacing the model (e.g. a 폐쇄망 LLM)
 
 The AI code is written against `ai_client.Model`, not against Claude Code:

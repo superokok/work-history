@@ -61,6 +61,8 @@ def _excerpt(repo, path: str, old_blob: Optional[str], new_blob: Optional[str], 
     new = extract_text(path, repo[new_blob.encode()].data) if new_blob else ""
     if old is None or new is None:
         return []
+    # Whole texts first, so that multi-line secrets (PEM blocks) are masked before the diff splits them.
+    old, new = redact(old), redact(new)
     lines = []
     for line in difflib.unified_diff(old.splitlines(), new.splitlines(), n=0, lineterm=""):
         if line.startswith(("+++", "---", "@@")):
@@ -163,7 +165,7 @@ def build(conn: sqlite3.Connection, start: date, end: date, repos_dir: Optional[
                 "time": f"{_hm(s['start_ts'])}-{_hm(s['end_ts'])}",
                 "minutes": round(work_s / 60),
                 "project": project,
-                "title": s["title"],
+                "title": redact(s["title"]),
                 "title_by": "user" if s["title_edited"] else "auto",
                 "windows": [{"app": app, "title": redact(title), "minutes": round(sec / 60)}
                             for (app, title), sec in top if sec >= MIN_WINDOW_S],

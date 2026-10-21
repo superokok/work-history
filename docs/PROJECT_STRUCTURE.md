@@ -3,7 +3,7 @@
 새 세션에서 가장 먼저 읽는 문서. 상세 설계는 [ARCHITECTURE.md](ARCHITECTURE.md),
 작업 흐름은 [history/](history/)를 본다. 구조가 바뀌면 이 문서를 함께 고친다.
 
-_마지막 갱신: 2026-10-14_
+_마지막 갱신: 2026-10-21_
 
 ## 무엇인가
 
@@ -83,7 +83,7 @@ uv pip install --python .venv/Scripts/python.exe -e .[claude]
 .venv/Scripts/python.exe -m workhistory            # 또는 start-workhistory.cmd
 .venv/Scripts/python.exe -m workhistory --demo     # 데모 데이터
 
-# 테스트 (2026-10-14 기준 197개 통과)
+# 테스트 (2026-10-21 기준 203개 통과)
 .venv/Scripts/python.exe -m unittest discover -s tests -t .
 
 # AI 보고서 품질 평가 (Claude Code 로그인 필요)

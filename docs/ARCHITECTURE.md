@@ -230,7 +230,18 @@ in a Linux container (Python 3.11, with and without the AI SDK).
 - Mutating requests require `Content-Type: application/json` and an
   `X-Work-History: 1` header, which forces a CORS pre-flight that the server
   never approves → other websites cannot write to the API.
+- Requests to `/api/` that a browser marks as started by another site
+  (`Sec-Fetch-Site: cross-site|same-site`, or a foreign `Origin`) are refused,
+  GETs included: some GETs have side effects (session regrouping, the Claude
+  Code status check starts processes).
 - Logs contain counts and errors only, never titles or note text.
+- The MCP server's instructions tell Claude Code that window titles, paths and
+  diffs are untrusted text and never instructions (prompt-injection defence for
+  the user's interactive Claude Code; the app's own headless runs have no tools).
+- Known, accepted (local-only): no per-launch token against other accounts on
+  the same PC; `--trace`/`--demo --db` can bypass the MCP consent flag for a
+  local caller who could read the database anyway. See
+  docs/history/2026-10-21-02-eval-security-review.md.
 
 ## 9. Licensing
 

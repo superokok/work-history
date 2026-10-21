@@ -39,9 +39,10 @@ class ServerTests(unittest.TestCase):
         self.aw.close()
         self._tmp.__exit__(None, None, None)
 
-    def request(self, method, path, body=None, host=None, write_header=True, ctype="application/json"):
+    def request(self, method, path, body=None, host=None, write_header=True, ctype="application/json",
+                extra_headers=None):
         conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
-        headers = {"Host": host or f"127.0.0.1:{self.port}"}
+        headers = {"Host": host or f"127.0.0.1:{self.port}", **(extra_headers or {})}
         data = None
         if body is not None:
             data = json.dumps(body).encode()
@@ -72,6 +73,18 @@ class ServerTests(unittest.TestCase):
     def test_foreign_host_rejected(self):
         status, _, _ = self.request("GET", "/api/status", host="evil.example:80")
         self.assertEqual(status, 403)
+
+    def test_other_sites_cannot_call_the_api_even_with_get(self):
+        for headers in ({"Sec-Fetch-Site": "cross-site"}, {"Sec-Fetch-Site": "same-site"},
+                        {"Origin": "https://evil.example"}):
+            status, _, _ = self.request("GET", "/api/status", extra_headers=headers)
+            self.assertEqual(status, 403, headers)
+        for headers in ({"Sec-Fetch-Site": "same-origin"}, {"Sec-Fetch-Site": "none"},
+                        {"Origin": f"http://127.0.0.1:{self.port}", "Sec-Fetch-Site": "same-origin"}):
+            status, _, _ = self.request("GET", "/api/status", extra_headers=headers)
+            self.assertEqual(status, 200, headers)
+        status, _, _ = self.request("GET", "/", extra_headers={"Sec-Fetch-Site": "cross-site"})
+        self.assertEqual(status, 200)  # a link to the app itself still opens it
 
     def test_write_requires_custom_header_and_json(self):
         status, _, _ = self.request("POST", "/api/projects", {"name": "x"}, write_header=False)

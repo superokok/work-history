@@ -124,6 +124,28 @@ class ScanTests(SnapshotTestCase):
         self.assertEqual(git_config.stat().st_mtime_ns, before)
         self.assertEqual(git_config.read_text(), "[core]")
 
+    def test_more_credential_files_never_stored(self):
+        for name in (".netrc", ".npmrc", ".pypirc", ".pgpass", "deploy.ppk", "vpn.ovpn",
+                     "kubeconfig", "terraform.tfstate", "terraform.tfstate.backup", "notes.gpg"):
+            self.write(name, "x")
+        self.scan()
+        self.assertEqual(self.tree_paths(), ["README.md", "src/Main.java"])
+
+    @unittest.skipUnless(os.name == "nt", "Windows junctions")
+    def test_junction_outside_the_folder_is_not_followed(self):
+        import subprocess
+        outside = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, outside, True)
+        (outside / "private.txt").write_text("not part of the work folder")
+        link = self.work / "link"
+        subprocess.run(["cmd", "/c", "mklink", "/J", str(link), str(outside)], check=True, capture_output=True)
+        try:
+            self.scan()
+        finally:
+            os.rmdir(link)  # removes the junction only, before the work folder is deleted
+        self.assertEqual(self.tree_paths(), ["README.md", "src/Main.java"])
+        self.assertTrue((outside / "private.txt").exists())
+
     def test_locked_file_is_not_recorded_as_deleted(self):
         self.scan()
         self.write("src/Main.java", "changed\n", mtime_shift=2)
@@ -273,3 +295,14 @@ class IntegrationTests(SnapshotTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DecompressionBombTests(unittest.TestCase):
+    def test_document_that_unpacks_too_large_is_treated_as_binary(self):
+        from workhistory import extract
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+            z.writestr("word/document.xml", b"<w:document>" + b" " * (extract.MAX_UNPACKED_BYTES + 1))
+        self.assertLess(len(buf.getvalue()), 1024 * 1024)  # small on disk
+        self.assertIsNone(extract.extract_text("bomb.docx", buf.getvalue()))
+        self.assertEqual(extract.extract_text("ok.docx", docx(["안녕"])), "안녕")

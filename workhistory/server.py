@@ -361,6 +361,7 @@ def _day(value: Optional[str]) -> date:
 
 def make_handler(app: App, port: int):
     allowed_hosts = {f"127.0.0.1:{port}", f"localhost:{port}"}
+    allowed_origins = {f"http://{h}" for h in allowed_hosts}
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "WorkHistory"
@@ -379,6 +380,13 @@ def make_handler(app: App, port: int):
             self.end_headers()
             self.wfile.write(payload)
 
+        def _from_other_site(self) -> bool:
+            """A browser request started by another site (browsers set these headers; other clients don't)."""
+            origin = self.headers.get("Origin")
+            if origin is not None and origin not in allowed_origins:
+                return True
+            return self.headers.get("Sec-Fetch-Site") in ("cross-site", "same-site")
+
         def _json(self, status: int, data: Any) -> None:
             self._send(status, json.dumps(data, ensure_ascii=False).encode("utf-8"),
                        "application/json; charset=utf-8")
@@ -388,6 +396,11 @@ def make_handler(app: App, port: int):
                 self._json(403, {"error": "허용되지 않는 호스트입니다"})
                 return
             url = urlparse(self.path)
+            if url.path.startswith("/api/") and self._from_other_site():
+                # Even a GET can have side effects (session regrouping, the Claude Code status check
+                # starts processes), so no other web page may call the API, not even "blind".
+                self._json(403, {"error": "요청이 거부되었습니다"})
+                return
             if not url.path.startswith("/api/"):
                 if method == "GET":
                     self._static(url.path)

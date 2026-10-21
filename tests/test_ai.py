@@ -146,7 +146,7 @@ class ValidationTests(AIDataTestCase):
         self.assertIn("## Gov24 백엔드 (50분)", text)
         self.assertIn("[금주 실적]\n- 리프레시 토큰 처리 분석\n- 근거 없는 성과 (근거 없음 — 확인 필요)", text)
         self.assertIn("- AI가 지어낸 계획 (AI 제안 — 확인 필요)", text)
-        self.assertIn("(업무 외 30분는 보고서에서 제외)", text)
+        self.assertIn("(보고서에서 제외한 업무 외 시간: 30분)", text)
         self.assertNotIn("S" + str(self.first), text)  # references stay out of the pasted text
 
     def test_daily_labels(self):

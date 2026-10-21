@@ -43,15 +43,18 @@ document/file contents, browser URLs, network traffic, microphone or camera.
   folder (your account only). Nothing is uploaded.
 - Secret files are never copied: `.env*`, `*.pem`, `*.key`, `*.pfx`, `*.p12`,
   `*.jks`, `*.keystore`, `id_rsa*`, `id_ed25519*`, `*credential*`,
-  `*secret*`, `*.kdbx`. Build outputs, archives and files over 5 MB are
-  skipped. The folder and its own `.git` are only ever read.
+  `*secret*`, `*.kdbx`, `.netrc`, `.npmrc`, `.pypirc`, `.pgpass`,
+  `.htpasswd`, `*.ppk`, `*.ovpn`, `kubeconfig*`, `*.tfstate*`, `*.gpg`.
+  Build outputs, archives and files over 5 MB are skipped, and symlinks or
+  junctions are not followed. The folder and its own `.git` are only ever read.
 - Removing a folder deletes its change records and its snapshot repository.
   "Delete all" removes every snapshot repository. Deleting a date range
   removes the change records; the commits stay in the snapshot repository
   until the folder is removed (known limitation).
 - Before any text is sent to an AI model (diff excerpts, notes, window titles,
-  next actions) it is passed through `redact.py`, which masks private keys,
-  JWT/Bearer tokens, AWS keys, `password/token/secret/api_key = value` pairs,
+  session titles, next actions) it is passed through `redact.py`, which masks
+  private keys, JWT/Bearer tokens, AWS/Google/Slack/GitHub/`sk-` keys,
+  passwords in URLs and `.netrc` lines, `password/token/secret/api_key = value` pairs,
   Korean resident registration numbers, card numbers and long random tokens.
 
 ## Controls

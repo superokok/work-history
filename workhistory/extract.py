@@ -13,6 +13,8 @@ from typing import Optional
 from xml.etree import ElementTree
 
 MAX_TEXT_CHARS = 2_000_000
+# Unpacked size allowed per document: a small zip or HWP can expand to gigabytes (decompression bomb).
+MAX_UNPACKED_BYTES = 50 * 1024 * 1024
 _OLE_MAGIC = bytes.fromhex("d0cf11e0a1b11ae1")
 _ENDOFCHAIN, _FREESECT = 0xFFFFFFFE, 0xFFFFFFFF
 
@@ -53,13 +55,29 @@ def _local(tag: str) -> str:
     return tag.rsplit("}", 1)[-1]
 
 
+class _Parts:
+    """Reads zip members within one MAX_UNPACKED_BYTES budget for the whole document."""
+
+    def __init__(self, z: zipfile.ZipFile):
+        self.z, self.left = z, MAX_UNPACKED_BYTES
+
+    def read(self, name: str) -> bytes:
+        size = self.z.getinfo(name).file_size
+        if size > self.left:
+            raise ValueError("document too large when unpacked")
+        self.left -= size
+        with self.z.open(name) as f:
+            return f.read(size)  # never more than the declared (and budgeted) size
+
+
 def _ooxml_text(data: bytes, part_pattern: str, paragraph_tag: str) -> str:
     out = []
     with zipfile.ZipFile(io.BytesIO(data)) as z:
+        reader = _Parts(z)
         parts = sorted((n for n in z.namelist() if re.search(part_pattern, n)),
                        key=lambda n: [int(x) if x.isdigit() else x for x in re.split(r"(\d+)", n)])
         for part in parts:
-            root = ElementTree.fromstring(z.read(part))
+            root = ElementTree.fromstring(reader.read(part))
             for para in root.iter():
                 if _local(para.tag) != paragraph_tag:
                     continue
@@ -71,15 +89,16 @@ def _ooxml_text(data: bytes, part_pattern: str, paragraph_tag: str) -> str:
 
 def _xlsx_text(data: bytes) -> str:
     with zipfile.ZipFile(io.BytesIO(data)) as z:
+        reader = _Parts(z)
         shared = []
         if "xl/sharedStrings.xml" in z.namelist():
-            for si in ElementTree.fromstring(z.read("xl/sharedStrings.xml")):
+            for si in ElementTree.fromstring(reader.read("xl/sharedStrings.xml")):
                 shared.append("".join(t.text or "" for t in si.iter() if _local(t.tag) == "t"))
         out = []
         sheets = sorted(n for n in z.namelist() if re.match(r"xl/worksheets/sheet\d+\.xml$", n))
         for sheet in sheets:
             out.append(f"[{sheet.rsplit('/', 1)[-1][:-4]}]")
-            for row in ElementTree.fromstring(z.read(sheet)).iter():
+            for row in ElementTree.fromstring(reader.read(sheet)).iter():
                 if _local(row.tag) != "row":
                     continue
                 cells = []
@@ -210,7 +229,13 @@ def hwp_text(data: bytes) -> str:
     sections = sorted((p for p in streams if p.startswith("BodyText/Section")),
                       key=lambda p: int(p.rsplit("Section", 1)[1] or 0))
     lines: list[str] = []
+    left = MAX_UNPACKED_BYTES
     for p in sections:
         raw = streams[p]
-        lines += _hwp_paragraphs(zlib.decompress(raw, -15) if compressed else raw)
+        if compressed:
+            raw = zlib.decompressobj(-15).decompress(raw, left + 1)
+            if len(raw) > left:
+                raise ValueError("document too large when unpacked")
+        left -= len(raw)
+        lines += _hwp_paragraphs(raw)
     return "\n".join(lines)

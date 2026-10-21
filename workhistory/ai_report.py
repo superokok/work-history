@@ -168,7 +168,7 @@ def render_text(report: Report) -> str:
                 lines.append(f"- {it.text}{suffix}")
         lines.append("")
     if report.offwork_s >= 60:
-        lines += [f"(업무 외 {duration(report.offwork_s)}는 보고서에서 제외)", ""]
+        lines += [f"(보고서에서 제외한 업무 외 시간: {duration(report.offwork_s)})", ""]
     return "\n".join(lines).rstrip() + "\n"
 
 

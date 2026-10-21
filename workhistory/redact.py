@@ -26,8 +26,17 @@ _PATTERNS: list[tuple[re.Pattern, str]] = [
     # plain token ending at whitespace, a quote, a separator or the end, so that code such as
     # `password = req.getParameter(...)` (followed by "(") is left alone.
     (re.compile(r"""(?i)(\b[\w.-]*(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|"""
-                r"""client[_-]?secret)[\w.-]*\s*[:=]\s*)(?!["'])([^\s"'(){};,=]{3,})(?=[\s"',;)}]|$)"""),
+                r"""client[_-]?secret)[\w.-]*\s*[:=]\s*)(?!["'])([^\s"'(){};,=&#]{3,})(?=[\s"',;)}&#]|$)"""),
      r"\1" + MASK),
+    # Credentials in URLs: scheme://user:password@host
+    (re.compile(r"(\b[a-z][a-z0-9+.-]*://[^\s:/@]+:)[^\s/@]+@", re.I), r"\1" + MASK + "@"),
+    # .netrc / .pgpass style "password <value>" (a line of its own, or after machine/login)
+    (re.compile(r"(?im)(^\s*password\s+|\b(?:machine|login)\s+\S+.*?\bpassword\s+)\S+"), r"\1" + MASK),
+    # Well-known token formats: Google API keys, Slack tokens, OpenAI/Anthropic-style keys, GitHub tokens
+    (re.compile(r"\bAIza[0-9A-Za-z_-]{35}\b"), MASK),
+    (re.compile(r"\bxox[abposr]-[A-Za-z0-9-]{10,}"), MASK),
+    (re.compile(r"\bsk-[A-Za-z0-9_-]{20,}"), MASK),
+    (re.compile(r"\bgh[pousr]_[A-Za-z0-9]{30,}\b"), MASK),
     # Korean resident registration numbers
     (re.compile(r"\b\d{6}-?[1-4]\d{6}\b"), "******-*******"),
     # Card numbers (4 groups of 4 digits)

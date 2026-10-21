@@ -39,7 +39,9 @@ SKIP_DIRS = {".git", ".hg", ".svn", "node_modules", "build", "dist", "target", "
              ".pytest_cache", ".next", ".nuxt", "coverage"}
 # Never stored, not even in the local snapshot.
 SECRET_PATTERNS = (".env", ".env.*", "*.pem", "*.key", "*.pfx", "*.p12", "*.jks", "*.keystore",
-                   "id_rsa*", "id_ed25519*", "id_ecdsa*", "*credential*", "*secret*", "*.kdbx")
+                   "id_rsa*", "id_ed25519*", "id_ecdsa*", "*credential*", "*secret*", "*.kdbx",
+                   ".netrc", "_netrc", ".npmrc", ".pypirc", ".pgpass", ".htpasswd", "*.ppk", "*.ovpn",
+                   "kubeconfig*", "*.tfstate", "*.tfstate.*", "*.gpg")
 SKIP_PATTERNS = ("*.exe", "*.dll", "*.so", "*.dylib", "*.class", "*.jar", "*.war", "*.ear", "*.zip",
                  "*.7z", "*.rar", "*.tar", "*.gz", "*.pyc", "*.pyo", "*.o", "*.obj", "*.pdb", "*.iso",
                  "*.mp4", "*.mov", "*.avi", "*.log", "*.tmp", "~$*", "*.lock", "Thumbs.db", "desktop.ini", ".DS_Store")
@@ -84,6 +86,19 @@ def _open_repo(path: Path) -> Repo:
     return Repo.init_bare(str(path), mkdir=True)
 
 
+def _is_link(entry: os.DirEntry) -> bool:
+    """Symlinks and Windows junctions: they can lead outside the watched folder.
+
+    os.scandir does not count a junction as a symlink, so it gets its own check. Other
+    reparse points (e.g. OneDrive placeholder files) are ordinary files and stay included."""
+    if entry.is_symlink():
+        return True
+    tag = getattr(stat, "IO_REPARSE_TAG_MOUNT_POINT", None)
+    if tag is None:
+        return False  # not Windows
+    return getattr(os.lstat(entry.path), "st_reparse_tag", 0) == tag
+
+
 def _walk(root: Path) -> Iterator[tuple[str, os.DirEntry]]:
     """(posix relative path, entry) of every file that may be snapshotted."""
     stack = [(root, "")]
@@ -96,7 +111,7 @@ def _walk(root: Path) -> Iterator[tuple[str, os.DirEntry]]:
         for entry in entries:
             name = entry.name
             try:
-                if entry.is_symlink():
+                if _is_link(entry):
                     continue
                 if entry.is_dir(follow_symlinks=False):
                     if name.lower() not in SKIP_DIRS:
