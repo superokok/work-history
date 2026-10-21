@@ -925,8 +925,8 @@ $("ask-form").addEventListener("submit", (e) => {
       // Show the answer with each [ref] turned into a clickable chip.
       const parts = r.answer.split(/(\[[SCNPDR][0-9A-Za-z-]+\])/g).map((part) => {
         const m = part.match(/^\[([SCNPDR][0-9A-Za-z-]+)\]$/);
-        return m && sources[m[1]] ? citationChip(sources[m[1]]) : part;
-      });
+        return m && sources[m[1]] ? citationChip(sources[m[1]]) : inlineMarkdown(part);
+      }).flat();
       $("ask-result").replaceChildren(
         h("div", { class: "answer" }, ...parts),
         h("p", { class: "muted small-text" },
@@ -942,6 +942,14 @@ $("ask-form").addEventListener("submit", (e) => {
     }
   });
 });
+
+// **bold** and `code` from the model's answer, as elements (text stays text, never HTML).
+function inlineMarkdown(text) {
+  return text.split(/(\*\*[^*\n]+\*\*|`[^`\n]+`)/g).map((part) =>
+    /^\*\*[^*\n]+\*\*$/.test(part) ? h("b", {}, part.slice(2, -2))
+      : /^`[^`\n]+`$/.test(part) ? h("code", {}, part.slice(1, -1))
+      : part);
+}
 
 function citationChip(src) {
   const label = src.type === "session" ? `${src.day.slice(5)} ${hhmm(src.start)} 세션`
