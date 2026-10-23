@@ -13,3 +13,6 @@ ex/
 
 # Local LLM runtime and model files (GBs, downloaded separately)
 llm/
+
+# Draft decks generated during work (the presentation itself lives outside git)
+docs/presentation/
