@@ -6,12 +6,19 @@ Python runtime (copied from the interpreter the project venv was made with),
 the app, and its runtime dependencies (copied from the venv: dulwich, mcp and
 what they need). Nothing is downloaded.
 
+If the repository's `llm/` folder holds llama.cpp (`llm/bin`, see
+workhistory/ai_local.py), the zip also carries `llm/bin` (llama-server and its
+DLLs only) and an empty `llm/models` with instructions: model files are
+handed out separately and dropped in there. `--with-models` puts the
+`llm/models/*.gguf` files into the zip as well (a multi-GB zip).
+
 Also writes THIRD_PARTY_NOTICES.md (in the zip and, with --notices, in the
 repository) from the installed packages' own metadata and license files.
 
 Usage (needs `packaging`, or pip which vendors it):
     python tools/build_portable.py            # build the zip
     python tools/build_portable.py --notices  # only refresh THIRD_PARTY_NOTICES.md
+    python tools/build_portable.py --with-models  # also put the local AI models into the zip
 """
 
 import argparse
@@ -33,6 +40,18 @@ DIST = ROOT / "dist"
 APP_PACKAGE = ROOT / "workhistory"
 TOP_LEVEL = ["dulwich", "mcp"]          # pyproject: dependencies + the "claude" extra
 LAUNCHER = "작업 기록.cmd"
+LLM = ROOT / "llm"
+# llama-server and what it loads; the other llama.cpp tools stay out.
+LLM_FILES = re.compile(r"^(llama-server\.exe|llama-server-impl\.dll|llama\.dll|llama-common\.dll|mtmd\.dll|"
+                       r"libomp\.dll|ggml.*\.dll|LICENSE.*)$", re.I)
+LLM_LICENSES = ("LICENSE-llama.cpp.txt", "LICENSE-Qwen3.5.txt")
+MODELS_README = """로컬 AI 모델 넣는 곳
+
+여기에 .gguf 모델 파일을 넣으면 앱의 개인정보 → AI 설정에 "내 PC · <파일 이름>"으로 나타납니다.
+모델 파일은 앱과 따로 받습니다 (수 GB). 기록은 이 PC 밖으로 나가지 않습니다.
+
+Put .gguf model files here; each appears in Privacy → AI settings as "내 PC · <file name>".
+"""
 
 # Standard-library parts the app never uses (GUI toolkits, tests, installers).
 STDLIB_SKIP = {"test", "idlelib", "tkinter", "turtledemo", "ensurepip", "site-packages", "__pycache__"}
@@ -77,8 +96,11 @@ README_TXT = """작업 기록 (WorkHistory) {version}
 선택 사항
   - 창 사용 기록: ActivityWatch를 설치하면 함께 기록합니다 (없어도 작업 폴더 기록은 동작).
     https://github.com/ActivityWatch/activitywatch/releases
-  - AI 보고서·질문: Claude Code를 설치하고 로그인한 뒤, 개인정보 탭 → AI 설정에서 켭니다.
-    https://docs.claude.com/en/docs/claude-code
+  - AI 보고서·질문 (둘 중 하나를 개인정보 탭 → AI 설정에서 고릅니다)
+    · 내 PC의 AI: llm\\models 폴더에 .gguf 모델 파일을 넣으면 "내 PC · <모델>"이 나타납니다.
+      기록이 PC 밖으로 나가지 않고 인터넷 없이 동작합니다. 그래픽카드가 없으면 느립니다.
+    · Claude Code: 설치하고 로그인하면 "Claude Code · Sonnet" 등이 나타납니다 (빠름, 외부 전송).
+      https://docs.claude.com/en/docs/claude-code
 
 데이터 위치
   %LOCALAPPDATA%\\WorkHistory  (이 폴더를 지우거나 새 버전으로 바꿔도 기록은 남습니다)
@@ -173,6 +195,15 @@ def notices(dists: list[md.Distribution], python_version: str) -> str:
              "|---|---|---|",
              "| ActivityWatch | MPL-2.0 | window activity source (talked to over its local REST API) |",
              "| Claude Code | Anthropic Commercial Terms / Consumer Terms | AI features, run as a separate program |",
+             "",
+             "## Local AI (portable package, `llm/` folder)",
+             "",
+             "| Component | License | Use | License text |",
+             "|---|---|---|---|",
+             "| llama.cpp / ggml (`llm/bin`) | MIT | runs the local model on this PC | `llm/LICENSE-llama.cpp.txt` |",
+             "| LLVM OpenMP runtime (`llm/bin/libomp.dll`) | Apache-2.0 WITH LLVM-exception | used by llama.cpp | "
+             "`llm/bin/LICENSE-LLVM-OpenMP` |",
+             "| Qwen3.5 models (`llm/models`, if included) | Apache-2.0 | local AI model | `llm/LICENSE-Qwen3.5.txt` |",
              ""]
     return "\n".join(rows)
 
@@ -206,6 +237,33 @@ def copy_packages(site: Path, dists: list[md.Distribution], target: Path) -> Non
                     ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
 
 
+def copy_llm(out: Path, with_models: bool) -> bool:
+    """llm/bin (llama-server only), the license texts, and llm/models (empty unless with_models)."""
+    bin_dir = LLM / "bin"
+    if not (bin_dir / "llama-server.exe").is_file():
+        if with_models:
+            raise SystemExit("--with-models needs llm/bin/llama-server.exe (see workhistory/ai_local.py)")
+        print("llm/bin/llama-server.exe not found: building without the local AI")
+        return False
+    (out / "llm" / "bin").mkdir(parents=True)
+    for f in bin_dir.iterdir():
+        if f.is_file() and LLM_FILES.match(f.name):
+            shutil.copy2(f, out / "llm" / "bin" / f.name)
+    for name in LLM_LICENSES:
+        if (LLM / name).is_file():
+            shutil.copy2(LLM / name, out / "llm" / name)
+    models = out / "llm" / "models"
+    models.mkdir()
+    (models / "모델 넣는 곳.txt").write_text(MODELS_README, encoding="utf-8-sig")
+    if with_models:
+        ggufs = sorted((LLM / "models").glob("*.gguf"))
+        if not ggufs:
+            raise SystemExit("--with-models: no llm/models/*.gguf")
+        for f in ggufs:
+            shutil.copy2(f, models / f.name)
+    return True
+
+
 def smoke_test(out: Path) -> None:
     """Import everything with the bundled Python only (isolated from the build machine's packages)."""
     code = ("import sys, workhistory, workhistory.server, workhistory.mcp_server, dulwich, mcp; "
@@ -220,6 +278,7 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--venv", type=Path, default=ROOT / ".venv")
     parser.add_argument("--notices", action="store_true", help="only write THIRD_PARTY_NOTICES.md in the repository")
+    parser.add_argument("--with-models", action="store_true", help="put llm/models/*.gguf into the zip too")
     args = parser.parse_args(argv)
     if sys.platform != "win32":
         raise SystemExit("The portable package is for Windows; on macOS / Linux use install.sh.")
@@ -244,14 +303,18 @@ def main(argv=None) -> int:
     (out / "LICENSE.txt").write_text((ROOT / "LICENSE").read_text(encoding="utf-8"), encoding="utf-8-sig")
     (out / "THIRD_PARTY_NOTICES.md").write_text(text, encoding="utf-8")
     (out / "사용법.txt").write_text(README_TXT.format(version=__version__), encoding="utf-8-sig")
+    copy_llm(out, args.with_models)
     smoke_test(out)
 
-    zip_path = DIST / f"WorkHistory-{__version__}-windows-x64.zip"
+    suffix = "-local-ai" if args.with_models else ""
+    zip_path = DIST / f"WorkHistory-{__version__}-windows-x64{suffix}.zip"
     zip_path.unlink(missing_ok=True)
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
         for f in sorted(out.rglob("*")):
             if f.is_file() and "__pycache__" not in f.parts:
-                z.write(f, Path("WorkHistory") / f.relative_to(out))
+                # model files do not compress; storing them saves minutes
+                z.write(f, Path("WorkHistory") / f.relative_to(out),
+                        compress_type=zipfile.ZIP_STORED if f.suffix == ".gguf" else zipfile.ZIP_DEFLATED)
     size = sum(f.stat().st_size for f in out.rglob("*") if f.is_file())
     print(f"{zip_path.name}: {zip_path.stat().st_size / 1e6:.1f} MB (unpacked {size / 1e6:.1f} MB)")
     return 0

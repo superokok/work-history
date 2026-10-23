@@ -6,7 +6,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from . import ai_claude, ai_context, ai_report
+from . import ai_claude, ai_context, ai_local, ai_report
 from .ai_claude import ClaudeCodeModel, is_claude_model
 from .ai_client import AIError, Model, Usage
 from .claude_link import ClaudeLink, ClaudeLinkError, find_cli
@@ -18,7 +18,14 @@ MODELS = ai_claude.MODELS
 DEFAULT_MODEL = "claude-code:sonnet"  # suggested in the UI, and used for the demo database
 
 
+def all_models() -> list[str]:
+    """Claude Code models, then the local models whose files are in the llm folder."""
+    return list(MODELS) + ai_local.available_models()
+
+
 def default_factory(name: str) -> Model:
+    if ai_local.is_local_model(name):
+        return ai_local.LocalModel(name)  # llama-server on this PC; nothing leaves it
     return ClaudeCodeModel(name)  # the Claude Code signed in on this PC; no API key
 
 
@@ -37,7 +44,7 @@ def _set_meta(conn: sqlite3.Connection, key: str, value: str) -> None:
 def chosen_model(conn: sqlite3.Connection) -> Optional[str]:
     """The model the user turned on, or None: AI is off until the user picks one (that is the consent)."""
     name = _meta(conn, "ai_model")
-    return name if name in MODELS else None  # e.g. a retired provider's model counts as off
+    return name if name in all_models() else None  # e.g. a retired provider's or removed local model counts as off
 
 
 def _model_name(conn: sqlite3.Connection, demo: bool) -> str:
@@ -51,7 +58,8 @@ def _model(conn: sqlite3.Connection, demo: bool, factory: ModelFactory) -> Model
 def get_settings(conn: sqlite3.Connection, demo: bool) -> dict:
     return {
         "model": chosen_model(conn) or "",
-        "models": list(MODELS),
+        "models": all_models(),
+        "local_models": ai_local.available_models(),
         "default_model": DEFAULT_MODEL,
         "enabled": chosen_model(conn) is not None,
         # Cheap PATH lookup only; login is checked by '연결 확인' (check_connection).
@@ -107,10 +115,10 @@ def check_connection(conn: sqlite3.Connection, demo: bool, factory: ModelFactory
 
 def update_settings(conn: sqlite3.Connection, data: dict, demo: bool) -> dict:
     if "model" in data:
-        if data["model"] not in MODELS + ("",):
+        if data["model"] not in all_models() + [""]:
             raise Invalid("지원하지 않는 모델입니다")
-        # Choosing a model is the consent to send records through Claude Code (the UI asks first);
-        # "" turns AI off again.
+        # Choosing a model is the consent to give it the records: through Claude Code to Anthropic, or to
+        # the local model on this PC (the UI asks first); "" turns AI off again.
         _set_meta(conn, "ai_model", data["model"])
     return get_settings(conn, demo)
 
@@ -119,7 +127,7 @@ def check_allowed(conn: sqlite3.Connection, demo: bool) -> None:
     """Real work data goes to the AI only after the user turned it on; the demo data always may."""
     if demo or chosen_model(conn) is not None:
         return
-    raise AIError("AI가 꺼져 있습니다. 개인정보 탭의 AI 설정에서 Claude Code를 고르면 사용할 수 있습니다.",
+    raise AIError("AI가 꺼져 있습니다. 개인정보 탭의 AI 설정에서 모델을 고르면 사용할 수 있습니다.",
                   "not_allowed")
 
 

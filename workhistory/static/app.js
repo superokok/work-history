@@ -596,8 +596,10 @@ async function loadReport() {
 
 function renderReportNotice(ai) {
   const notes = [];
-  if (ai && !ai.claude_installed) notes.push("Claude Code가 설치되어 있지 않습니다. Claude Code를 설치하고 로그인하면 AI 초안을 만들 수 있습니다.");
-  else if (ai && !ai.demo && !ai.enabled) notes.push("AI가 꺼져 있습니다. 개인정보 탭의 AI 설정에서 Claude Code를 고르면 실제 기록으로 초안을 만들 수 있습니다.");
+  const local = ai && isLocal(ai.model);
+  if (ai && !local && !ai.claude_installed && !(ai.local_models || []).length) notes.push("Claude Code가 설치되어 있지 않습니다. Claude Code를 설치하고 로그인하거나, 내 PC의 AI 모델을 llm 폴더에 넣으면 AI 초안을 만들 수 있습니다.");
+  else if (ai && !ai.demo && !ai.enabled) notes.push("AI가 꺼져 있습니다. 개인정보 탭의 AI 설정에서 모델을 고르면 실제 기록으로 초안을 만들 수 있습니다.");
+  else if (local) notes.push("내 PC의 AI로 만듭니다. 기록은 이 PC 밖으로 나가지 않습니다. 그래픽카드가 없는 PC에서는 몇 분 걸릴 수 있습니다.");
   $("report-notice").replaceChildren(...notes.map((n) => h("div", { class: "warning" }, n)));
 }
 
@@ -700,19 +702,24 @@ $("report-copy").addEventListener("click", () => guarded(async () => {
 }));
 
 // ------------------------------------------------------------------ AI settings
-const MODEL_LABELS = { "": "사용 안 함", "claude-code": "내 기본 모델", "claude-code:sonnet": "Sonnet (추천)",
-  "claude-code:opus": "Opus", "claude-code:haiku": "Haiku (빠름)" };
+const MODEL_LABELS = { "": "사용 안 함", "claude-code": "Claude Code · 내 기본 모델", "claude-code:sonnet": "Claude Code · Sonnet (추천)",
+  "claude-code:opus": "Claude Code · Opus", "claude-code:haiku": "Claude Code · Haiku (빠름)" };
+const isLocal = (m) => typeof m === "string" && m.startsWith("local:");
+const modelLabel = (m) => MODEL_LABELS[m] || (isLocal(m) ? `내 PC · ${m.slice(6)} (외부 전송 없음)` : m);
 let aiModel = "";
 
 async function loadAISettings() {
   const s = await guarded(() => api("GET", "/api/ai/settings"));
   if (!s) return;
-  $("ai-model").replaceChildren(...["", ...s.models].map((m) => h("option", { value: m }, MODEL_LABELS[m] || m)));
+  $("ai-model").replaceChildren(...["", ...s.models].map((m) => h("option", { value: m }, modelLabel(m))));
   $("ai-model").value = aiModel = s.model;
   const ok = (cond, yes, no) => h("span", { class: `chip ${cond ? "ok" : "err"}` }, cond ? yes : no);
   $("ai-status").replaceChildren(
     ok(s.claude_installed, "Claude Code 설치됨", "Claude Code 없음"),
-    s.demo ? h("span", { class: "chip" }, "데모 DB: 전송 허용") : ok(s.enabled, "AI 켜짐: 실제 기록 전송 허용", "AI 꺼짐"));
+    h("span", { class: `chip ${s.local_models.length ? "ok" : ""}` },
+      s.local_models.length ? `내 PC AI 모델 ${s.local_models.length}개` : "내 PC AI 모델 없음"),
+    s.demo ? h("span", { class: "chip" }, "데모 DB: 전송 허용")
+      : ok(s.enabled, isLocal(s.model) ? "AI 켜짐: 내 PC에서 처리" : "AI 켜짐: 실제 기록 전송 허용", "AI 꺼짐"));
   $("ai-usage").textContent = s.stats.runs
     ? `지금까지 ${s.stats.runs}회 호출 (성공 ${s.stats.ok}) · 입력 ${s.stats.input_tokens.toLocaleString()} / 출력 ${(s.stats.output_tokens + s.stats.thinking_tokens).toLocaleString()} 토큰 · 평균 ${(s.stats.avg_ms / 1000).toFixed(1)}초`
     : "아직 AI를 호출한 적이 없습니다.";
@@ -803,7 +810,7 @@ $("ai-check").addEventListener("click", () => guarded(async () => {
   $("ai-check").disabled = true;
   try {
     const r = await api("POST", "/api/ai/check", {});
-    toast(`연결 확인 완료: Claude Code ${MODEL_LABELS[r.model] || r.model} 사용 가능`);
+    toast(`연결 확인 완료: ${modelLabel(r.model)} 사용 가능`);
   } finally {
     $("ai-check").disabled = false;
   }
@@ -811,8 +818,11 @@ $("ai-check").addEventListener("click", () => guarded(async () => {
 
 $("ai-model").addEventListener("change", (e) => {
   const model = e.target.value;
-  if (model && !aiModel
-      && !confirm("보고서와 'AI에게 묻기'에 Claude Code를 쓸까요? 실제 업무 기록이 (비밀값을 가린 뒤) Claude Code를 거쳐 Anthropic으로 전송됩니다.")) {
+  const question = !model ? null
+    : isLocal(model) ? (aiModel ? null : "보고서와 'AI에게 묻기'에 내 PC의 AI를 쓸까요? 기록은 이 PC 밖으로 나가지 않습니다. 처음 쓸 때 모델을 불러오느라 시간이 걸리고, 그래픽카드가 없는 PC에서는 보고서 하나에 몇 분 걸릴 수 있습니다.")
+    : (aiModel && !isLocal(aiModel)) ? null
+    : "보고서와 'AI에게 묻기'에 Claude Code를 쓸까요? 실제 업무 기록이 (비밀값을 가린 뒤) Claude Code를 거쳐 Anthropic으로 전송됩니다.";
+  if (question && !confirm(question)) {
     e.target.value = aiModel;
     return;
   }

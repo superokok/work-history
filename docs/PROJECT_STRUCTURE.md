@@ -32,6 +32,7 @@ work-history/
 ├─ tests/                  unittest (helpers.py 공용 픽스처)
 ├─ evals/report_eval.py    데모 시나리오로 AI 보고서 품질 실측 (실제 데이터 미사용)
 ├─ tools/build_portable.py Windows 포터블 zip 빌드 → dist/ (git 제외)
+├─ llm/                    (git 제외) 로컬 AI: bin/llama-server.exe + DLL, models/*.gguf, 라이선스 전문
 └─ docs/
    ├─ PROJECT_STRUCTURE.md 이 문서
    ├─ history/             작업 히스토리 (작업 1건 = 파일 1개)
@@ -60,6 +61,7 @@ work-history/
 | 세션 저장 | `sessionstore.py` | 재묶기, 편집, 병합, 분할 |
 | AI | `ai_client.py` | 공급자 중립 `Model` 프로토콜 |
 | | `ai_claude.py` | Claude Code 헤드리스(`claude -p`) 구현, 도구 잠금 |
+| | `ai_local.py` | 내 PC의 AI: llama.cpp `llama-server`를 켜고 끄며 연결 (외부 전송 없음) |
 | | `ai_context.py` | AI에 보낼 정확한 자료 + 검증 가능한 참조(C/S/N/P) |
 | | `ai_report.py` | 보고서 스키마, 프롬프트, 참조 검증, 렌더링 |
 | | `ai_agent.py` | "AI에게 묻기": 읽기 전용 기록 도구 + 인용 확인 |
@@ -90,7 +92,11 @@ uv pip install --python .venv/Scripts/python.exe -e .[claude]
 .venv/Scripts/python.exe -m evals.report_eval
 
 # Windows 포터블 zip
-python tools/build_portable.py
+python tools/build_portable.py                 # llm/bin이 있으면 로컬 AI 실행기도 포함 (모델은 제외)
+python tools/build_portable.py --with-models   # 모델 파일까지 넣은 큰 zip (-local-ai)
+
+# 로컬 모델로 품질 평가 (기기 고정: WORKHISTORY_LLM_DEVICE=none 은 CPU만)
+.venv/Scripts/python.exe -m evals.report_eval --model local:Qwen3.5-4B-Q4_K_M
 ```
 
 데이터 폴더: Windows `%LOCALAPPDATA%\WorkHistory`, macOS `~/Library/Application Support/WorkHistory`,
@@ -102,7 +108,8 @@ Linux `~/.local/share/WorkHistory`. ActivityWatch(개발 PC)는 포터블 설치
 - 스택: Python 표준 라이브러리 + 바닐라 JS, 프레임워크 없음.
 - 주 기록은 창 시간이 아니라 **파일 변경(결과물)**.
 - 스냅샷은 dulwich(Apache-2.0)로, git.exe·GPL 의존 금지.
-- AI는 전부 사용자 PC의 Claude Code(헤드리스). 다른 공급자는 `ai_client.Model`로 교체 가능하게만 유지.
+- AI는 둘 중 선택: 사용자 PC의 Claude Code(헤드리스) 또는 내 PC의 로컬 모델(llama.cpp + Qwen3.5, 외부 전송 없음).
+  둘 다 `ai_client.Model` 구현. 로컬 모델 파일은 `llm/`(git 제외)에 두고 따로 배포.
   모델을 고르기 전(=동의 전)에는 AI 꺼짐.
 - Claude Code 연결(MCP 등록)은 앱 안의 스위치로만, 터미널 단계 없음.
 - OS 독립, 로컬 전용, 배포는 Windows 포터블 zip + macOS/Linux `install.sh`.

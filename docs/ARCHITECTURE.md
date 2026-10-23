@@ -44,6 +44,7 @@ extract.py    – text from code/text, HWP, DOCX/XLSX/PPTX (stdlib only)
 redact.py     – secret / personal-identifier masking before anything leaves the PC
 ai_client.py  – the provider-neutral Model protocol the AI code is written against
 ai_claude.py  – that protocol over headless Claude Code (`claude -p`, locked down)
+ai_local.py   – that protocol over llama.cpp's llama-server on this PC (local models, nothing leaves the PC)
 ai_agent.py   – "AI에게 묻기": read-only history tools + citation check
 mcp_server.py – the history tools over MCP (Claude Code), consent-checked
 claude_link.py – registers the MCP server with Claude Code from the app

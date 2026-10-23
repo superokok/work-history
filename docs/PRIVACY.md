@@ -98,9 +98,11 @@ own name: Windows `Startup\작업 기록.lnk` and `Desktop\작업 기록.lnk`, m
 
 ## Optional AI
 
-Off until the user picks a Claude Code model in 개인정보 → AI 설정 (the app
-asks for consent then) and runs a report or a question. Only then, and only
-for that request, redacted work records are sent through Claude Code to
-Anthropic. "사용 안 함" turns it off again. "보낼 내용 보기" shows the exact
+Off until the user picks a model in 개인정보 → AI 설정 (the app asks for
+consent then) and runs a report or a question. With a "내 PC" model the
+records go only to the local model program the app started on this PC
+(127.0.0.1, random key); nothing leaves the PC. With a Claude Code model,
+and only for that request, redacted work records are sent through Claude
+Code to Anthropic. "사용 안 함" turns it off again. "보낼 내용 보기" shows the exact
 report payload. The app stores no API key. Locally it logs token counts and
 timings only, never prompts or answers.

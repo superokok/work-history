@@ -93,7 +93,7 @@ def main(argv=None) -> int:
     parser.add_argument("--runs", type=int, default=1)
     parser.add_argument("--pause", type=float, default=0, help="seconds between calls")
     parser.add_argument("--retry-wait", type=float, default=65, help="seconds to wait after quota/overload")
-    parser.add_argument("--model", default=ai_service.DEFAULT_MODEL, choices=ai_service.MODELS)
+    parser.add_argument("--model", default=ai_service.DEFAULT_MODEL, choices=ai_service.all_models())
     parser.add_argument("--thinking", default=None, choices=[None, "low", "medium", "high"])
     parser.add_argument("--out", type=Path, help="write raw results as JSON")
     args = parser.parse_args(argv)

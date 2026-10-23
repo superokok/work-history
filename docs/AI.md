@@ -1,4 +1,4 @@
-# AI features (Claude Code)
+# AI features (Claude Code or a local model)
 
 Goal for the AX hackathon: AI that works on the user's *structured, chosen*
 work history — not on screenshots — and never states more than the data
@@ -63,7 +63,57 @@ Re-measured 2026-10-21 (Claude Code 2.1.293, claude-code:sonnet,
 other days' work in daily reports), 0 dropped references, 0 flags, 0 restored
 projects; median 7.4 s, max 11.3 s per report (the slow weekly case is gone).
 
-## Replacing the model (e.g. a 폐쇄망 LLM)
+## Provider: a local model on this PC (llama.cpp)
+
+`workhistory/ai_local.py`. For PCs where records must not leave the machine
+or that have no internet (폐쇄망). The app ships llama.cpp's `llama-server`
+(MIT) in its `llm/bin` folder; every `llm/models/*.gguf` file appears in
+개인정보 → AI 설정 as "내 PC · <file name>" (model name `local:<stem>`).
+
+- The app starts `llama-server` on demand: bound to 127.0.0.1 on a free port,
+  a random API key per start (other programs and web pages cannot use it),
+  no web UI, one slot, 32k context, stopped after 10 minutes unused and when
+  the app exits. Requests bypass any system proxy.
+- Reports: `generate_json` sends the same prompt with the report schema as a
+  `response_format` JSON schema (llama.cpp turns it into a grammar).
+  Thinking mode is off (`enable_thinking: false`): it costs minutes on a CPU
+  and the app verifies the answer anyway.
+- Questions: no MCP; the app runs the tool loop itself (`run_tools`) with the
+  same read-only `HistoryTools`, so reference checks work exactly as before.
+- Devices: llama.cpp's Vulkan build uses NVIDIA, AMD or Intel graphics when
+  the driver is there, else the CPU. `WORKHISTORY_LLM_DEVICE` (e.g. `none`,
+  `Vulkan0`) pins a device for measurements.
+- Models (2026-10-23): Qwen3.5-4B and Qwen3.5-9B, Q4_K_M GGUF from
+  `unsloth/Qwen3.5-*-GGUF`, Apache-2.0, SHA-256 checked against Hugging Face.
+  Model files are not in git (`llm/` is ignored); they are handed out next to
+  the app zip, or built in with `tools/build_portable.py --with-models`.
+
+Measured 2026-10-23 on the development PC (i5-12450H, 32 GB, RTX 2050 4 GB
++ Intel UHD), `evals/report_eval.py --runs 1`, 4 cases each (Claude: 8/8 at
+7–11 s per report):
+
+| Model · device | Passed | Weekly report | Daily report |
+|---|---|---|---|
+| 9B · auto (GPUs) | 4/4 | 161–221 s | 65–101 s |
+| 9B · CPU only | 3/4 | 385–583 s | 122–129 s |
+| 4B · auto (GPUs) | 3/4 | 151–171 s | 41–60 s |
+| 4B · Intel iGPU only | 3/4 | 251–315 s | 85–97 s |
+| 4B · CPU only | 2/4 | 277–338 s | 80–89 s |
+
+- No run dropped a reference, raised a flag or left out a project.
+- 4B wrote "GOV-1423 … 완료" (not finished in the scenario) on all three
+  devices, and once "커서 기반 페이징 전환 검토를 완료" — the over-claim the
+  honesty rules exist for. Not suitable for weekly reports.
+- 9B passed everything on the GPU run; on the CPU run it wrote "복합 인덱스
+  추가를 완료" next to GOV-1423 (the index was written, the issue was not
+  finished) — a borderline catch of the strict pattern. One CPU 4B failure
+  ("…진행, K8s 전환 PoC 환경 구축 완료") is a false positive of the same
+  pattern. One run per case: repeat before relying on these as rates.
+- The Intel iGPU is no faster than the CPU here, so a PC without an NVIDIA
+  or AMD card runs at CPU speed: about 6–10 minutes for a weekly report with
+  9B.
+
+## Replacing the model
 
 The AI code is written against `ai_client.Model`, not against Claude Code:
 `generate_json(system, prompt, schema)` for reports, and either
@@ -71,7 +121,7 @@ The AI code is written against `ai_client.Model`, not against Claude Code:
 `run_tools(system, prompt, tools, execute)` (the app runs the tool loop
 in-process and executes `HistoryTools` itself) for questions. Reference
 checks, redaction, consent and logging stay in the app, so a new provider is
-one class plus a factory entry. A Gemini implementation existed until
+one class plus a factory entry (`ai_local.LocalModel` is the second one). A Gemini implementation existed until
 2026-10-01 and was removed by decision; it is in no release.
 
 ## Data protection

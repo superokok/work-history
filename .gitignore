@@ -10,3 +10,6 @@ dist/
 
 # Reference materials kept outside git
 ex/
+
+# Local LLM runtime and model files (GBs, downloaded separately)
+llm/
