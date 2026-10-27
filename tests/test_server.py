@@ -9,12 +9,10 @@ from urllib.parse import quote
 
 from workhistory.awclient import AWClient
 from workhistory.autostart import Launch
-from workhistory.claude_link import ClaudeLink
 from workhistory.server import App, create_server, find_running_instance
 from workhistory.sync import Syncer
 
 from tests.helpers import FakeAW, TempDB, local_ts
-from tests.test_claude_link import FakeClaude
 
 
 class ServerTests(unittest.TestCase):
@@ -23,13 +21,10 @@ class ServerTests(unittest.TestCase):
         self.db = self._tmp.__enter__()
         self.aw = FakeAW()
         self.aw.add_bucket("aw-watcher-window_devbox", "currentwindow")
-        self.claude = FakeClaude()  # never the real Claude Code CLI
-        link = ClaudeLink(cli="claude", runner=self.claude, python="/opt/app/python")
         # Never the real Startup folder / desktop either.
         self.home = Path(self.db.path).parent / "home"
         launch = Launch("Linux", self.home, ["/opt/app/start-workhistory.sh"])
-        self.server = create_server(App(self.db, Syncer(self.db, AWClient(self.aw.url)), claude_link=link,
-                                        launch=launch), 0)
+        self.server = create_server(App(self.db, Syncer(self.db, AWClient(self.aw.url)), launch=launch), 0)
         self.port = self.server.server_address[1]
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
 
@@ -156,15 +151,8 @@ class ServerTests(unittest.TestCase):
         finally:
             other.server_close()
 
-    def test_claude_code_switch(self):
-        status, body, _ = self.request("GET", "/api/mcp")
-        self.assertEqual((status, body["enabled"], body["claude"]["registered"]), (200, False, False))
-        status, body, _ = self.request("POST", "/api/mcp", {"enabled": True})
-        self.assertEqual((status, body["enabled"], body["claude"]["ours"]), (200, True, True))
-        self.assertEqual(self.claude.servers["workhistory"], ["/opt/app/python", "-m", "workhistory.mcp_server"])
-        status, body, _ = self.request("POST", "/api/mcp", {"enabled": False})
-        self.assertEqual((status, body["enabled"]), (200, False))
-        self.assertEqual(self.claude.servers, {})
+    def test_no_claude_code_registration_api(self):
+        self.assertEqual(self.request("GET", "/api/mcp")[0], 404)  # Claude Code is only an AI model choice now
 
     def test_launch_settings(self):
         status, body, _ = self.request("GET", "/api/launch")

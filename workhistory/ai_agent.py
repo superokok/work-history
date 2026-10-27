@@ -311,11 +311,12 @@ class MCPRun:
 def _run_via_mcp(conn: sqlite3.Connection, model: Any, system: str, prompt: str, demo: bool) -> MCPRun:
     """Run the question through Claude Code with the app's MCP server, which logs every tool
     call and the references it returned to a trace file; citations are checked against that."""
-    from .claude_link import MODULE, console_python
+    from .config import console_python
     db_file = conn.execute("PRAGMA database_list").fetchone()["file"]
     with tempfile.TemporaryDirectory(prefix="workhistory-ask-") as d:
         trace = Path(d) / "trace.jsonl"
-        server = [console_python(), "-m", MODULE, "--db", db_file, "--trace", str(trace)] + (["--demo"] if demo else [])
+        server = [console_python(), "-m", "workhistory.mcp_server", "--db", db_file, "--trace", str(trace)] \
+            + (["--demo"] if demo else [])
         text, usage = model.run_mcp(system, prompt, server, [t.name for t in TOOLS])
         calls, sources = [], {}
         if trace.exists():

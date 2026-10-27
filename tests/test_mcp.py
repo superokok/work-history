@@ -27,12 +27,14 @@ class MCPServerTests(unittest.TestCase):
     def tearDown(self):
         self._tmp.__exit__(None, None, None)
 
-    def call(self, demo_mode: bool, name: str, args: dict):
+    def call(self, demo_mode: bool, name: str, args: dict, app_run: bool = True):
+        """`app_run`: started by the app for a question (it passes a trace file), the only way it answers."""
         from mcp import Client
         from workhistory import mcp_server
+        trace = Path(self.db.path).parent / "trace.jsonl" if app_run else None
 
         async def go():
-            async with Client(mcp_server.build(self.db, self.repos, demo_mode=demo_mode)) as c:
+            async with Client(mcp_server.build(self.db, self.repos, demo_mode=demo_mode, trace=trace)) as c:
                 return await c.call_tool(name, args)
         return asyncio.run(go())
 
@@ -55,11 +57,13 @@ class MCPServerTests(unittest.TestCase):
         self.assertTrue(detail["files"])
         self.assertIn("diff_excerpt", detail)
 
-    def test_real_data_needs_consent_in_the_app(self):
-        out = text_of(self.call(False, "list_projects", {}))
-        self.assertIn("Claude Code 연결", out["error"])
+    def test_only_the_apps_own_claude_runs_get_answers(self):
+        # Another program (not started by the app for a question) is refused, even on demo data.
+        self.assertIn("내부적으로", text_of(self.call(True, "list_projects", {}, app_run=False))["error"])
+        # The app's own run on real data: only while the user's AI model is a Claude Code model.
+        self.assertIn("error", text_of(self.call(False, "list_projects", {})))
         with self.db.connect() as conn:
-            conn.execute("INSERT INTO meta (key, value) VALUES ('mcp_enabled', '1')")
+            conn.execute("INSERT INTO meta (key, value) VALUES ('ai_model', 'claude-code:sonnet')")
         out = text_of(self.call(False, "list_projects", {}))
         self.assertEqual({p["name"] for p in out["projects"]}, {"Gov24 민원 API", "K8s 전환 PoC"})
 
@@ -78,14 +82,18 @@ class MCPServerTests(unittest.TestCase):
 
 @unittest.skipUnless(HAS_MCP, "mcp/dulwich not installed (run tests with .venv python)")
 class StdioTransportTests(unittest.TestCase):
-    """The real transport: a subprocess speaking MCP over stdin/stdout, as Claude Code runs it."""
+    """The real transport: a subprocess speaking MCP over stdin/stdout, as headless Claude Code runs it."""
 
     def test_stdio_round_trip(self):
         from mcp import Client, StdioServerParameters
+        from workhistory import demo
         with TempDB() as db:
+            demo.seed(db)  # the app seeds its demo database before it starts the server
             project_root = Path(__file__).resolve().parents[1]
+            trace = str(Path(db.path).parent / "trace.jsonl")  # as the app starts it for a question
             params = StdioServerParameters(command=sys.executable,
-                                           args=["-m", "workhistory.mcp_server", "--demo", "--db", db.path],
+                                           args=["-m", "workhistory.mcp_server", "--demo", "--db", db.path,
+                                                 "--trace", trace],
                                            cwd=str(project_root))
 
             async def go():

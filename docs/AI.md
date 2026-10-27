@@ -11,19 +11,17 @@ supports.
 2. **Ask your history** ("지난주 로그인 버그 어디까지 했지?"): an agent that
    searches the local history with tools and answers with citations.
 
-## Claude Code path (MCP)
+## Claude Code path for questions (internal MCP)
 
-`workhistory/mcp_server.py` exposes the same read-only tools as the in-app
-agent (`ai_agent.HistoryTools`) over MCP stdio, plus `get_report_data`
-(report payload + the report rules). Claude Code does the reasoning with the
-user's own account, so the app needs no API key on this path. Consent is a
-separate setting (`mcp_enabled`) controlled by one switch in the app, which
-also registers / unregisters the server with Claude Code through its CLI
-(`workhistory/claude_link.py`); enabling rolls consent back if registration
-fails, disabling withdraws consent first. The demo database is always
-allowed. Difference from the in-app path: Claude Code writes the final
-answer, so the app cannot re-verify its citations; every tool result item
-carries a reference the user can check.
+With a Claude Code model, "AI에게 묻기" lets Claude Code run the tool loop:
+the app starts `workhistory/mcp_server.py` for that one question (`--trace
+<file>`), Claude Code (headless, only these tools allowed) calls the same
+read-only tools as the in-app agent (`ai_agent.HistoryTools`), and the app
+checks the answer's citations against the trace. The server answers only such
+app runs, and only while the AI model is a Claude Code model; it is not
+registered in Claude Code and other programs get a refusal. (Until 2026-10-27
+a switch in the app also registered it with the user's own Claude Code; that
+connection was removed.)
 
 ## Provider: Claude Code (no API key)
 

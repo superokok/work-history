@@ -7,9 +7,8 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 from . import ai_claude, ai_context, ai_local, ai_remote, ai_report
-from .ai_claude import ClaudeCodeModel, is_claude_model
+from .ai_claude import ClaudeCodeModel, find_cli
 from .ai_client import AIError, Model, Usage
-from .claude_link import ClaudeLink, ClaudeLinkError, find_cli
 from .store import Invalid
 
 # model name -> Model
@@ -79,44 +78,6 @@ def get_settings(conn: sqlite3.Connection, demo: bool) -> dict:
         "claude_installed": find_cli() is not None,
         "demo": demo,
     }
-
-
-def get_mcp(conn: sqlite3.Connection, demo: bool, link: "ClaudeLink") -> dict:
-    """Claude Code connection: the user's consent plus Claude Code's actual registration state."""
-    try:
-        claude = link.status()
-    except ClaudeLinkError as e:
-        claude = {"installed": bool(link.cli), "name": link.name, "registered": False, "ours": False,
-                  "error": str(e)}
-    return {
-        "enabled": demo or _meta(conn, "mcp_enabled") == "1",
-        "demo": demo,
-        "claude": claude,
-        "manual_command": ["claude", "mcp", "add", "--scope", "user", "--transport", "stdio", link.name, "--",
-                           *link.server_command()],
-    }
-
-
-def set_mcp(conn: sqlite3.Connection, data: dict, demo: bool, link: "ClaudeLink") -> dict:
-    """One switch in the app: consent + registration with Claude Code, kept in step."""
-    enable = data.get("enabled") is True
-    if enable:
-        previous = _meta(conn, "mcp_enabled")
-        _set_meta(conn, "mcp_enabled", "1")
-        try:
-            link.register()
-        except ClaudeLinkError as e:
-            _set_meta(conn, "mcp_enabled", previous or "0")  # stay consistent: no consent without a working link
-            raise Invalid(str(e)) from None
-    else:
-        # Withdraw consent first: the server stops answering even if unregistering fails.
-        _set_meta(conn, "mcp_enabled", "0")
-        conn.commit()
-        try:
-            link.unregister()
-        except ClaudeLinkError as e:
-            raise Invalid("연결 허용은 껐지만 Claude Code 등록 해제에 실패했습니다: " + str(e)) from None
-    return get_mcp(conn, demo, link)
 
 
 def check_connection(conn: sqlite3.Connection, demo: bool, factory: ModelFactory = default_factory) -> dict:

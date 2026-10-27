@@ -173,7 +173,7 @@ class AskThroughClaudeCodeTests(unittest.TestCase):
                 conn.commit()
                 from workhistory import mcp_server
                 self.assertFalse(mcp_server.is_enabled(conn, app_session=True))
-                self.assertFalse(mcp_server.is_enabled(conn))
+                self.assertFalse(mcp_server.is_enabled(conn, app_session=False))
 
 
 if __name__ == "__main__":

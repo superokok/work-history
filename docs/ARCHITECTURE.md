@@ -49,7 +49,6 @@ ai_local.py   – llama.cpp's llama-server on this PC, started on demand (local 
 ai_remote.py  – AI servers the user registered by address (e.g. an LLM in the company network)
 ai_agent.py   – "AI에게 묻기": read-only history tools + citation check
 mcp_server.py – the history tools over MCP (Claude Code), consent-checked
-claude_link.py – registers the MCP server with Claude Code from the app
 autostart.py  – start-at-logon and shortcut files, switched from the app
 ai_context.py – the exact payload for the AI with verifiable references (C/S/N/P)
 ai_report.py  – report schema, prompt, reference verification, rendering
@@ -241,12 +240,12 @@ in a Linux container (Python 3.11, with and without the AI SDK).
   GETs included: some GETs have side effects (session regrouping, the Claude
   Code status check starts processes).
 - Logs contain counts and errors only, never titles or note text.
-- The MCP server's instructions tell Claude Code that window titles, paths and
-  diffs are untrusted text and never instructions (prompt-injection defence for
-  the user's interactive Claude Code; the app's own headless runs have no tools).
+- The MCP server is internal (the app starts it for one question with a Claude
+  Code model) and refuses any other caller; its instructions still say that
+  window titles, paths and diffs are untrusted text, never instructions.
 - Known, accepted (local-only): no per-launch token against other accounts on
-  the same PC; `--trace`/`--demo --db` can bypass the MCP consent flag for a
-  local caller who could read the database anyway. See
+  the same PC; a local caller who passes `--trace` itself gets the MCP tools,
+  but could read the database file anyway. See
   docs/history/2026-10-21-02-eval-security-review.md.
 
 ## 9. Licensing

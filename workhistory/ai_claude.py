@@ -10,12 +10,13 @@ own read-only MCP server.
 
 import json
 import os
+import shutil
 import subprocess
 import tempfile
+from pathlib import Path
 from typing import Any, Callable, Optional
 
 from .ai_client import AIError, Usage
-from .claude_link import find_cli, is_shim
 
 PREFIX = "claude-code"
 ALIASES = ("sonnet", "opus", "haiku")
@@ -24,6 +25,22 @@ TIMEOUT_S = 600
 MAX_BUDGET_USD = "5"  # per run; a guard against runaway loops, far above a normal report
 
 Runner = Callable[..., subprocess.CompletedProcess]
+
+
+def is_shim(cli: str) -> bool:
+    return Path(cli).suffix.lower() in (".cmd", ".bat")
+
+
+def find_cli() -> Optional[str]:
+    """The `claude` executable. For an npm install on Windows, PATH has a .cmd shim that
+    starts the bundled native binary; run that binary directly so arguments (prompts,
+    JSON) are passed verbatim instead of being re-parsed by cmd.exe."""
+    found = shutil.which("claude")
+    if found and is_shim(found):
+        native = Path(found).parent / "node_modules" / "@anthropic-ai" / "claude-code" / "bin" / "claude.exe"
+        if native.is_file():
+            return str(native)
+    return found
 
 
 def is_claude_model(name: str) -> bool:

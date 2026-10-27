@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
 
-from .claude_link import console_python
+from .config import console_python
 from .store import Invalid
 
 APP_NAME = "작업 기록"

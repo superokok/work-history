@@ -78,16 +78,6 @@ long-term use.
 Logs record counts, timings and error types only. Window titles, app names
 from events, note text, and search queries are not logged.
 
-## Claude Code connection (MCP)
-
-Off by default. When enabled in 개인정보 → Claude Code 연결, Claude Code may
-call the app's read-only tools; their results (redacted, recording rules
-applied) are sent to the model provider of the Claude account in use. Turning
-the switch off withdraws consent (the server then refuses every call) and
-removes the app's registration from Claude Code. The app changes Claude Code's
-user configuration only through this switch, only for its own server name, and
-never edits Claude Code's files directly.
-
 ## Start at logon and shortcuts
 
 Off by default. 개인정보 → 실행 creates or removes only files with the app's

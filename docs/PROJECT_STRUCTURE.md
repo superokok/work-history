@@ -68,9 +68,8 @@ work-history/
 | | `ai_report.py` | 보고서 스키마, 프롬프트, 참조 검증, 렌더링 |
 | | `ai_agent.py` | "AI에게 묻기": 읽기 전용 기록 도구 + 인용 확인 |
 | | `ai_service.py` | AI 설정, 동의, 실행 로그, 저장된 보고서 |
-| 외부 연동 | `mcp_server.py` | Claude Code용 읽기 전용 MCP 서버 (동의 확인) |
-| | `claude_link.py` | 앱에서 `claude mcp add/remove --scope user` 등록 |
-| | `autostart.py` | 로그온 시 시작, 바로가기 생성 |
+| | `mcp_server.py` | 내부용 읽기 전용 MCP 서버: Claude Code 모델로 "AI에게 묻기"할 때만 앱이 띄움 (외부 연결 거부) |
+| 외부 연동 | `autostart.py` | 로그온 시 시작, 바로가기 생성 |
 | 서비스 | `service.py` | 타임라인, 검색, 메모, 프로젝트, 리뷰, 이어서 하기 쿼리 |
 | | `server.py` | JSON API + 정적 UI, 127.0.0.1 전용 |
 | 기타 | `stats.py` | 실사용 보정률 통계 (`python -m workhistory.stats`) |
@@ -113,5 +112,6 @@ Linux `~/.local/share/WorkHistory`. ActivityWatch(개발 PC)는 포터블 설치
 - AI는 셋 중 선택 (모두 `ai_client.Model` 구현): 내 PC의 로컬 모델(llama.cpp + Qwen3.5, 외부 전송 없음, 기본·추천),
   주소로 등록한 AI 서버(OpenAI 호환, 행망·사내 LLM), Claude Code(헤드리스). 로컬 모델 파일은 `llm/`(git 제외), 따로 배포.
   모델을 고르기 전(=동의 전)에는 AI 꺼짐.
-- Claude Code 연결(MCP 등록)은 앱 안의 스위치로만, 터미널 단계 없음.
+- Claude Code는 AI 설정의 모델 선택지로만 씀 (로컬 모델과 비교용). Claude Code에 앱을 등록하는 "Claude Code 연결"은
+  2026-10-27에 없앰.
 - OS 독립, 로컬 전용, 배포는 Windows 포터블 zip + macOS/Linux `install.sh`.

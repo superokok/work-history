@@ -20,7 +20,6 @@ from .ai_client import AIError
 from .awclient import AWError
 from .autostart import Launch
 from .autostart import default as default_launch
-from .claude_link import ClaudeLink
 from .db import Database
 from .store import load_tracking
 from .snapshots import Snapshotter
@@ -58,10 +57,9 @@ class App:
     def __init__(self, db: Database, syncer: Optional[Syncer], demo: bool = False,
                  ai_factory: ai_service.ModelFactory = ai_service.default_factory,
                  snapshotter: Optional[Snapshotter] = None, repos_dir: Optional[Path] = None,
-                 claude_link: Optional[ClaudeLink] = None, launch: Optional[Launch] = None):
+                 launch: Optional[Launch] = None):
         self.db = db
         self.launch = launch or default_launch()
-        self.claude_link = claude_link or ClaudeLink(demo=demo)
         self.syncer = syncer
         self.snapshotter = snapshotter
         self.repos_dir = Path(repos_dir) if repos_dir else snapshots_dir(db)
@@ -275,14 +273,6 @@ class App:
             if self.demo:
                 raise ApiError(409, "데모 모드에서는 바로가기를 만들지 않습니다")
             return {**self.launch.create_shortcut(), "demo": self.demo}
-
-        @r("GET", "/api/mcp")
-        def get_mcp(conn, query, body):
-            return ai_service.get_mcp(conn, self.demo, self.claude_link)
-
-        @r("POST", "/api/mcp")
-        def set_mcp(conn, query, body):
-            return ai_service.set_mcp(conn, body, self.demo, self.claude_link)
 
         @r("POST", "/api/ai/ask")
         def ai_ask(conn, query, body):

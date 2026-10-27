@@ -126,28 +126,6 @@ Claude Code를 헤드리스로 실행하며 자체 읽기 전용 기록 도구 �
 설치와 로그인만 확인하며, "보낼 내용 보기"는 보고서가 보내는 내용을 그대로 보여
 줍니다. 자세한 내용: [docs/AI.md](docs/AI.md).
 
-## Claude Code (MCP)
-
-Claude Code 안에서 내 기록에 대해 물어볼 수 있습니다 ("지난주 GOV-1418 어디까지
-했지?"). 앱에는 읽기 전용 MCP 서버(`workhistory.mcp_server`, MCP Python SDK, MIT)가
-들어 있으며 도구는 `search_history`, `get_day`, `list_projects`, `get_project`,
-`get_change`, `get_report_data`입니다.
-
-1. extra 설치: `uv pip install --python <venv python> -e .[claude]`
-   (Claude Code가 설치되어 로그인되어 있어야 합니다).
-2. 앱에서 **개인정보 → Claude Code 연결**의 "Claude Code에서 내 업무 기록 사용"을
-   켭니다. 앱이 Claude Code 자체 CLI로 서버를 등록하고
-   (`claude mcp add --scope user workhistory ...`) 상태를 보여 줍니다. 끄면 등록도
-   지웁니다. 터미널 작업은 필요 없습니다.
-
-앱은 자기 이름(`workhistory`, `--demo`일 때는 `workhistory-demo`)만 추가·삭제하며,
-같은 이름이 다른 곳을 가리키면 건드리지 않습니다. 특수한 환경을 위해 "수동 설정"에
-직접 실행할 명령도 보여 줍니다. 결과는 Claude 계정의 모델 제공자에게 전달되며,
-비밀값은 가려지고 기록 규칙이 적용됩니다.
-
-Claude Code 2.1.268 헤드리스 모드에서 데모 데이터로 처음부터 끝까지 확인했습니다:
-도구로 9턴에 걸쳐 기록을 찾아 올바른 참조와 함께 답했습니다.
-
 ## 실사용 검증
 
 일주일 체크리스트는 [docs/VALIDATION.md](docs/VALIDATION.md)를 보세요. 날짜별 보정률

@@ -4,6 +4,16 @@ import os
 import sys
 from pathlib import Path
 
+
+def console_python(executable: str = sys.executable) -> str:
+    """The interpreter for a child process with console streams: pythonw.exe -> python.exe."""
+    path = Path(executable)
+    if path.stem.lower() == "pythonw":
+        sibling = path.with_name("python" + path.suffix)
+        if sibling.exists():
+            return str(sibling)
+    return executable
+
 APP_DIR_NAME = "WorkHistory"
 DB_FILENAME = "workhistory.db"
 DEMO_DB_FILENAME = "demo.db"

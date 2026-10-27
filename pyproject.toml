@@ -13,7 +13,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-claude = ["mcp>=2.2"]        # MCP server for Claude Code (MIT): "AI에게 묻기" and Claude Code access
+claude = ["mcp>=2.2"]        # internal MCP server (MIT): "AI에게 묻기" with a Claude Code model
 desktop = ["pywebview>=5"]  # optional native window (BSD-3-Clause)
 
 [project.scripts]

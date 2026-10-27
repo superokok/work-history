@@ -110,7 +110,7 @@ function showTab(name) {
   if (name === "report") loadReport();
   if (name === "resume") loadResume();
   if (name === "projects") { renderProjects(); loadFolders(); }
-  if (name === "privacy") { loadLaunch(); loadAISettings(); loadMCP(); loadTracking(); loadExclusions(); }
+  if (name === "privacy") { loadLaunch(); loadAISettings(); loadTracking(); loadExclusions(); }
 }
 
 // ------------------------------------------------------------------ status
@@ -838,54 +838,6 @@ $("launch-shortcut").addEventListener("click", () => guarded(async () => {
   const l = await api("POST", "/api/launch/shortcut", {});
   renderLaunch(l);
   toast(`${l.shortcut.where}에 바로가기를 만들었습니다.`);
-}));
-
-// ------------------------------------------------------------------ Claude Code (MCP)
-const quoteArg = (s) => (/[\s"]/.test(s) ? `"${s.replace(/"/g, '\\"')}"` : s);
-
-function renderMCP(m) {
-  const c = m.claude;
-  const on = m.enabled && c.registered && c.ours;
-  $("mcp-enabled").checked = on;
-  $("mcp-enabled").disabled = !c.installed;
-  const chip = (cls, text) => h("span", { class: `chip ${cls}` }, text);
-  $("mcp-status").replaceChildren(...[
-    !c.installed ? chip("err", "Claude Code가 설치되어 있지 않습니다")
-      : chip("ok", c.version ? `Claude Code ${c.version.replace(/\s*\(Claude Code\)/, "")}` : "Claude Code 있음"),
-    c.installed ? (on ? chip("ok", "연결됨") : c.registered && !c.ours
-      ? chip("err", `'${c.name}' 이름을 다른 서버가 사용 중`) : chip("", "연결 안 됨")) : null,
-    m.enabled && c.installed && !c.registered ? chip("err", "허용됐지만 등록이 없음 — 다시 켜 주세요") : null,
-    c.error ? chip("err", c.error) : null].filter(Boolean));
-  $("mcp-command").textContent = m.manual_command.map(quoteArg).join(" ");
-}
-
-async function loadMCP() {
-  $("mcp-status").replaceChildren(h("span", { class: "muted" }, "Claude Code 상태 확인 중…"));
-  const m = await guarded(() => api("GET", "/api/mcp"));
-  if (m) renderMCP(m);
-}
-
-$("mcp-enabled").addEventListener("change", (e) => {
-  const enable = e.target.checked;
-  if (enable && !confirm("Claude Code에서 내 업무 기록을 쓰도록 연결할까요? Claude Code가 찾은 내용은 Anthropic으로 전송됩니다.")) {
-    e.target.checked = false;
-    return;
-  }
-  e.target.disabled = true;
-  $("mcp-status").replaceChildren(h("span", { class: "muted" }, enable ? "Claude Code에 연결하는 중…" : "연결을 해제하는 중…"));
-  guarded(async () => {
-    try {
-      renderMCP(await api("POST", "/api/mcp", { enabled: enable }));
-      toast(enable ? "Claude Code에 연결했습니다. Claude Code를 새로 열면 바로 쓸 수 있습니다." : "Claude Code 연결을 해제했습니다.");
-    } finally {
-      loadMCP();  // show the real state even if something failed
-    }
-  });
-});
-
-$("mcp-copy").addEventListener("click", () => guarded(async () => {
-  await navigator.clipboard.writeText($("mcp-command").textContent);
-  toast("명령을 복사했습니다. 터미널에 붙여 넣어 실행하세요.");
 }));
 
 $("ai-check").addEventListener("click", () => guarded(async () => {
