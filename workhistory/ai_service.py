@@ -6,7 +6,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from . import ai_claude, ai_context, ai_local, ai_report
+from . import ai_claude, ai_context, ai_local, ai_remote, ai_report
 from .ai_claude import ClaudeCodeModel, is_claude_model
 from .ai_client import AIError, Model, Usage
 from .claude_link import ClaudeLink, ClaudeLinkError, find_cli
@@ -15,12 +15,21 @@ from .store import Invalid
 # model name -> Model
 ModelFactory = Callable[[str], Model]
 MODELS = ai_claude.MODELS
-DEFAULT_MODEL = "claude-code:sonnet"  # suggested in the UI, and used for the demo database
+DEFAULT_MODEL = "claude-code:sonnet"  # the suggestion when no local model is installed
 
 
-def all_models() -> list[str]:
-    """Claude Code models, then the local models whose files are in the llm folder."""
-    return list(MODELS) + ai_local.available_models()
+def default_model() -> str:
+    """Suggested in the UI and used for the demo database: the largest local model if any is installed
+    (records stay on the PC; the larger model followed the report rules best), else Claude Code."""
+    files = ai_local.model_files()
+    if files:
+        return max(files, key=lambda name: files[name].stat().st_size)
+    return DEFAULT_MODEL
+
+
+def all_models(conn: Optional[sqlite3.Connection] = None) -> list[str]:
+    """Claude Code models, the local models in the llm folder, and (with `conn`) the registered AI servers."""
+    return list(MODELS) + ai_local.available_models() + (ai_remote.available_models(conn) if conn else [])
 
 
 def default_factory(name: str) -> Model:
@@ -44,23 +53,27 @@ def _set_meta(conn: sqlite3.Connection, key: str, value: str) -> None:
 def chosen_model(conn: sqlite3.Connection) -> Optional[str]:
     """The model the user turned on, or None: AI is off until the user picks one (that is the consent)."""
     name = _meta(conn, "ai_model")
-    return name if name in all_models() else None  # e.g. a retired provider's or removed local model counts as off
+    return name if name in all_models(conn) else None  # a removed local model or server counts as off
 
 
 def _model_name(conn: sqlite3.Connection, demo: bool) -> str:
-    return chosen_model(conn) or DEFAULT_MODEL
+    return chosen_model(conn) or default_model()
 
 
 def _model(conn: sqlite3.Connection, demo: bool, factory: ModelFactory) -> Model:
-    return factory(_model_name(conn, demo))
+    name = _model_name(conn, demo)
+    if factory is default_factory and ai_remote.is_remote_model(name):
+        return ai_remote.model(conn, name)  # a registered server: its address and key are in the database
+    return factory(name)
 
 
 def get_settings(conn: sqlite3.Connection, demo: bool) -> dict:
     return {
         "model": chosen_model(conn) or "",
-        "models": all_models(),
+        "models": all_models(conn),
         "local_models": ai_local.available_models(),
-        "default_model": DEFAULT_MODEL,
+        "servers": ai_remote.list_endpoints(conn),
+        "default_model": default_model(),
         "enabled": chosen_model(conn) is not None,
         # Cheap PATH lookup only; login is checked by '연결 확인' (check_connection).
         "claude_installed": find_cli() is not None,
@@ -115,7 +128,7 @@ def check_connection(conn: sqlite3.Connection, demo: bool, factory: ModelFactory
 
 def update_settings(conn: sqlite3.Connection, data: dict, demo: bool) -> dict:
     if "model" in data:
-        if data["model"] not in all_models() + [""]:
+        if data["model"] not in all_models(conn) + [""]:
             raise Invalid("지원하지 않는 모델입니다")
         # Choosing a model is the consent to give it the records: through Claude Code to Anthropic, or to
         # the local model on this PC (the UI asks first); "" turns AI off again.
@@ -180,7 +193,7 @@ def generate_report(conn: sqlite3.Connection, kind: str, day: date, demo: bool,
     model_name = _model_name(conn, demo)
     started, usage = time.time(), Usage()
     try:
-        model = factory(model_name)
+        model = _model(conn, demo, factory)
         raw, usage = model.generate_json(ai_report.SYSTEM, ai_report.prompt(kind, ctx), ai_report.SCHEMA)
     except AIError as e:
         log_run(conn, f"report_{kind}", model_name, started, usage, 0, False, e.kind)

@@ -12,7 +12,6 @@ Folder layout (next to the app; WORKHISTORY_LLM_DIR overrides it):
 """
 
 import atexit
-import json
 import logging
 import os
 import secrets
@@ -24,16 +23,16 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Optional
 
-from .ai_client import MAX_TOOL_CALLS, AIError, AgentResult, ToolSpec, ToolTrace, Usage
+from .ai_client import AIError
+from .ai_openai import HTTPFailure, OpenAICompatModel, http_json
 
 log = logging.getLogger(__name__)
 
 PREFIX = "local"
 SERVER_EXE = "llama-server.exe" if os.name == "nt" else "llama-server"
 CONTEXT_TOKENS = 32768        # the largest weekly context is ~17k tokens, plus the answer and tool turns
-MAX_ANSWER_TOKENS = 8192
 START_TIMEOUT_S = 300         # loading a 5 GB model from a slow disk
 REQUEST_TIMEOUT_S = 1800      # a CPU-only PC can need minutes for one report
 IDLE_STOP_S = 600             # give the memory back after 10 minutes without use
@@ -195,10 +194,8 @@ atexit.register(SERVER.stop)
 
 # ---------------------------------------------------------------- the Model
 
-class LocalModel:
-    """`Model` backed by llama-server on this PC. Reports: a JSON-schema-constrained answer.
-    Questions: the app runs the tool loop itself (`run_tools`), so the model only ever sees
-    what the app's read-only history tools return."""
+class LocalModel(OpenAICompatModel):
+    """`Model` backed by llama-server on this PC (requests and answers: ai_openai)."""
 
     def __init__(self, name: str, server: _Server = SERVER):
         files = model_files()
@@ -206,81 +203,22 @@ class LocalModel:
             raise AIError("로컬 AI 모델 파일을 찾을 수 없습니다. llm/models 폴더를 확인하세요.", "config")
         self.name = name
         self.path = files[name]
+        self.model_id = self.path.stem
         self.exe = server_exe()
         self.server = server
 
     def _post(self, body: dict) -> dict:
         url, key = self.server.acquire(self.exe, self.path)
         try:
-            req = urllib.request.Request(url + "/v1/chat/completions", method="POST",
-                                         data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
-                                         headers={"Content-Type": "application/json", "Authorization": f"Bearer {key}"})
-            with _opener.open(req, timeout=REQUEST_TIMEOUT_S) as r:
-                return json.loads(r.read().decode("utf-8"))
-        except urllib.error.HTTPError as e:
-            detail = e.read().decode("utf-8", "replace")[:300]
-            if "context" in detail.lower() and ("exceed" in detail.lower() or "too long" in detail.lower()):
-                raise AIError("기록이 많아 로컬 AI가 한 번에 읽을 수 없습니다. 기간을 줄여 다시 시도하세요.", "invalid_output") from None
-            raise AIError(f"로컬 AI가 요청을 처리하지 못했습니다 (HTTP {e.code}).", "server") from None
-        except (urllib.error.URLError, OSError, TimeoutError):
+            return http_json(url + "/v1/chat/completions", body, key, REQUEST_TIMEOUT_S)
+        except HTTPFailure:
+            raise
+        except AIError:
             raise AIError("로컬 AI가 제시간에 답하지 않았습니다. 기간을 줄이거나 더 작은 모델을 고르세요.", "server") from None
         finally:
             self.server.release()
-
-    def _chat(self, messages: list[dict], **extra: Any) -> tuple[dict, Usage]:
-        body = {"model": self.path.stem, "messages": messages, "temperature": 0.2, "max_tokens": MAX_ANSWER_TOKENS,
-                # thinking aloud costs minutes on a CPU and the app checks the answer anyway
-                "chat_template_kwargs": {"enable_thinking": False}, **extra}
-        data = self._post(body)
-        u = data.get("usage") or {}
-        usage = Usage(input_tokens=u.get("prompt_tokens") or 0, output_tokens=u.get("completion_tokens") or 0,
-                      requests=1)
-        try:
-            return data["choices"][0]["message"], usage
-        except (KeyError, IndexError, TypeError):
-            raise AIError("로컬 AI 응답 형식이 올바르지 않습니다. 다시 시도하세요.", "invalid_output") from None
 
     def check(self) -> None:
         """The program and model are here and the model loads. Sends no work data."""
         self.server.acquire(self.exe, self.path)
         self.server.release()
-
-    def generate_json(self, system: str, prompt: str, schema: dict,
-                      max_output_tokens: int = 16000, thinking: Optional[str] = None) -> tuple[Any, Usage]:
-        message, usage = self._chat(
-            [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
-            max_tokens=min(max_output_tokens, MAX_ANSWER_TOKENS),
-            response_format={"type": "json_schema", "json_schema": {"name": "answer", "schema": schema}})
-        try:
-            return json.loads(message.get("content") or ""), usage
-        except json.JSONDecodeError:
-            raise AIError("로컬 AI 응답 형식이 올바르지 않습니다. 다시 시도하세요.", "invalid_output") from None
-
-    def run_tools(self, system: str, prompt: str, tools: list[ToolSpec],
-                  execute: Callable[[str, dict], Any], max_calls: int = MAX_TOOL_CALLS) -> AgentResult:
-        specs = [{"type": "function", "function": {"name": t.name, "description": t.description,
-                                                   "parameters": t.parameters}} for t in tools]
-        messages: list[dict] = [{"role": "system", "content": system}, {"role": "user", "content": prompt}]
-        total, calls = Usage(), []
-        while True:
-            budget_left = len(calls) < max_calls
-            message, usage = self._chat(messages, **({"tools": specs} if budget_left else {}))
-            total.add(usage)
-            requested = message.get("tool_calls") or []
-            if not requested or not budget_left:
-                return AgentResult((message.get("content") or "").strip(), total, calls)
-            messages.append({"role": "assistant", "content": message.get("content") or "", "tool_calls": requested})
-            for call in requested:
-                fn = call.get("function") or {}
-                name, args = fn.get("name", ""), {}
-                try:
-                    parsed = json.loads(fn.get("arguments") or "{}")
-                    if not isinstance(parsed, dict):
-                        raise ValueError("arguments must be an object")
-                    args = parsed
-                    result, ok = execute(name, args), True
-                except Exception as e:  # a bad call is reported back to the model, as the MCP server does
-                    result, ok = {"error": str(e)[:300]}, False
-                calls.append(ToolTrace(name, args, ok))
-                messages.append({"role": "tool", "tool_call_id": call.get("id", ""),
-                                 "content": json.dumps(result, ensure_ascii=False)})

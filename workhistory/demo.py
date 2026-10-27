@@ -165,15 +165,15 @@ def _chunks(rng: random.Random, start: float, end: float, mix: list[tuple[str, i
         t, previous = t + length, name
 
 
-def seed(db: Database, repos_dir: Optional[Path] = None) -> bool:
+def seed(db: Database, repos_dir: Optional[Path] = None, now: Optional[float] = None) -> bool:
     """Fill an empty demo database. Returns False if it already has data.
 
     With `repos_dir`, the fictional file history (demo_files.EDITS) is written
     as snapshot commits, exactly like the real folder scanner would.
     """
     rng = random.Random(1418)
-    now = time.time()
-    today = date.today()
+    now = time.time() if now is None else now  # a fixed clock makes the scenario reproducible (evals)
+    today = date.fromtimestamp(now)
     monday = today - timedelta(days=today.weekday())
     track = [TrackRule(a, t) for a, t in TRACK_RULES]
     with db.connect() as conn:

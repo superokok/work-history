@@ -135,22 +135,33 @@ def timeline(conn: sqlite3.Connection, day: date, project: Any = None, app: Opti
     }
 
 
+_CHANGE_SQL = ("SELECT c.*, f.label AS folder, f.project_id FROM changes c "
+               "JOIN watched_folders f ON f.id = c.folder_id ")
+
+
+def _change_out(conn: sqlite3.Connection, c: sqlite3.Row, limit_files: int) -> dict:
+    files = [dict(r) for r in conn.execute(
+        "SELECT id, path, kind, is_text, lines_added, lines_removed FROM change_files "
+        "WHERE change_id = ? ORDER BY path LIMIT ?", (c["id"], limit_files))]
+    return {"id": c["id"], "ts": c["ts"], "folder": c["folder"], "project_id": c["project_id"],
+            "files_added": c["files_added"], "files_modified": c["files_modified"],
+            "files_deleted": c["files_deleted"], "lines_added": c["lines_added"],
+            "lines_removed": c["lines_removed"], "files": files}
+
+
 def list_changes(conn: sqlite3.Connection, day: date, limit_files: int = 50) -> list[dict]:
     """File changes (results) recorded on a day, newest last. Baseline snapshots are not work."""
     start, end = day_bounds(day)
-    out = []
-    for c in conn.execute(
-            "SELECT c.*, f.label AS folder, f.project_id FROM changes c "
-            "JOIN watched_folders f ON f.id = c.folder_id "
-            "WHERE c.baseline = 0 AND c.ts >= ? AND c.ts < ? ORDER BY c.ts", (start, end)):
-        files = [dict(r) for r in conn.execute(
-            "SELECT id, path, kind, is_text, lines_added, lines_removed FROM change_files "
-            "WHERE change_id = ? ORDER BY path LIMIT ?", (c["id"], limit_files))]
-        out.append({"id": c["id"], "ts": c["ts"], "folder": c["folder"], "project_id": c["project_id"],
-                    "files_added": c["files_added"], "files_modified": c["files_modified"],
-                    "files_deleted": c["files_deleted"], "lines_added": c["lines_added"],
-                    "lines_removed": c["lines_removed"], "files": files})
-    return out
+    return [_change_out(conn, c, limit_files) for c in conn.execute(
+        _CHANGE_SQL + "WHERE c.baseline = 0 AND c.ts >= ? AND c.ts < ? ORDER BY c.ts", (start, end))]
+
+
+def get_change(conn: sqlite3.Connection, change_id: int, limit_files: int = 50) -> dict:
+    """One recorded file change (a C reference), for opening its diffs straight from a citation."""
+    row = conn.execute(_CHANGE_SQL + "WHERE c.id = ? AND c.baseline = 0", (change_id,)).fetchone()
+    if row is None:
+        raise NotFound("파일 변경 기록을 찾을 수 없습니다")
+    return _change_out(conn, row, limit_files)
 
 
 def assign_project(conn: sqlite3.Connection, event_ids: Any, project_id: Any) -> int:

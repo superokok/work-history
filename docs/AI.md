@@ -113,6 +113,29 @@ Measured 2026-10-23 on the development PC (i5-12450H, 32 GB, RTX 2050 4 GB
   or AMD card runs at CPU speed: about 6–10 minutes for a weekly report with
   9B.
 
+## Provider: AI servers registered by address
+
+`workhistory/ai_remote.py`, table `ai_endpoints` (schema v6). For an LLM that
+already runs somewhere in the company network (행망): 개인정보 → AI 설정 →
+"AI 서버 등록" takes a name, an address (`10.1.2.3:8000`, `http://host/v1`, …),
+the model name (or "서버의 모델 불러오기", `GET /v1/models`) and an optional API
+key. Each registration is a model choice `remote:<id>`.
+
+- Any server with the OpenAI-compatible chat API works (vLLM, Ollama,
+  llama.cpp, LM Studio, TGI, a gateway). The shared client is
+  `ai_openai.OpenAICompatModel`: reports try a JSON schema, then JSON mode,
+  then plain text with the schema in the prompt; `<think>` output is removed;
+  questions run the app's own tool loop (a server without tool calling can
+  still write reports, and says so for questions).
+- Choosing a server is the consent to send the (redacted) records there; the
+  UI names the address. "연결 확인" only lists the server's models.
+- The API key is stored in the app database on this PC and never returned by
+  the API (`has_key` only). Requests bypass any system proxy. HTTPS
+  certificates are verified (no option to turn that off).
+- Removing the chosen server turns AI off; nothing falls back silently.
+- Local models need no registration: every `llm/models/*.gguf` is listed
+  automatically, and the largest one is the suggested default.
+
 ## Replacing the model
 
 The AI code is written against `ai_client.Model`, not against Claude Code:
@@ -145,6 +168,19 @@ one class plus a factory entry (`ai_local.LocalModel` is the second one). A Gemi
 - Every reference the model returns is checked against the records that were
   actually sent; unknown references are dropped.
 - A 실적/이슈 bullet without a valid reference is shown as "근거 없음".
+- A 실적 bullet that says something is finished (완료, 해결, 종료, 마무리, …;
+  `ai_report.DONE_WORDS`) is shown as "완료 확인 필요" unless one of its
+  references is the user's own words saying so: a note (N), or a session
+  note or title the user wrote (S). File changes and window activity show
+  work, not that it is done. (Since 2026-10-27; added after the local models
+  wrote "GOV-1423 … 완료" for an unfinished issue.) When the claim names
+  issue keys (GOV-1423), each key needs a sentence of the user's own that
+  names it and says it is done — a note "GOV-1418 완료. GOV-1423 3.2초" does
+  not finish GOV-1423. The summary has no references and is checked against
+  all of the user's words the same way ("요약 … (완료 근거 없음 — 확인 필요)").
+  Limit: a claim without an issue key passes if any of the user's words in
+  the period says something was finished.
+- Clicking a "파일 변경" (C) citation opens that change's diffs directly.
 - 차주 계획 may only come from the user's own notes and next actions
   (references to notes/next actions); otherwise it is marked as a suggestion
   for the user to confirm.

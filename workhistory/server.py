@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 from urllib.parse import parse_qs, urlparse
 
-from . import ai_agent, ai_service, service, sessionstore, snapshots
+from . import ai_agent, ai_remote, ai_service, service, sessionstore, snapshots
 from .ai_client import AIError
 from .awclient import AWError
 from .autostart import Launch
@@ -235,6 +235,29 @@ class App:
         def check_ai(conn, query, body):
             return ai_service.check_connection(conn, self.demo, self.ai_factory)
 
+        # Registered AI servers (OpenAI-compatible, by address). Keys travel only in request bodies.
+        @r("POST", "/api/ai/servers")
+        def add_ai_server(conn, query, body):
+            return ai_remote.add_endpoint(conn, body)
+
+        @r("POST", "/api/ai/servers/models")
+        def ai_server_models(conn, query, body):
+            return {"models": ai_remote.fetch_models(body.get("url"), body.get("api_key"))}
+
+        @r("PATCH", r"/api/ai/servers/(\d+)")
+        def update_ai_server(conn, query, body, sid):
+            return ai_remote.update_endpoint(conn, int(sid), body)
+
+        @r("DELETE", r"/api/ai/servers/(\d+)")
+        def delete_ai_server(conn, query, body, sid):
+            ai_remote.delete_endpoint(conn, int(sid))
+            return {"ok": True}
+
+        @r("POST", r"/api/ai/servers/(\d+)/check")
+        def check_ai_server(conn, query, body, sid):
+            ai_remote.model(conn, ai_remote.model_name(int(sid))).check()
+            return {"ok": True}
+
         @r("GET", "/api/launch")
         def get_launch(conn, query, body):
             return {**self.launch.status(), "demo": self.demo}
@@ -305,6 +328,10 @@ class App:
                 raise ApiError(409, "데모 모드에서는 폴더를 기록하지 않습니다")
             conn.commit()
             return [asdict(r) for r in self.snapshotter.run_now()]
+
+        @r("GET", r"/api/changes/(\d+)")
+        def change(conn, query, body, cid):
+            return service.get_change(conn, int(cid))
 
         @r("GET", r"/api/change-files/(\d+)/diff")
         def change_file_diff(conn, query, body, fid):

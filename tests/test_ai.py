@@ -125,6 +125,51 @@ class ValidationTests(AIDataTestCase):
         self.assertEqual(report.dropped_refs, 2)
         self.assertEqual(block.seconds, 50 * 60)
 
+    def test_finished_claims_need_the_users_own_words(self):
+        with self.db.connect() as conn:
+            done_note = service.create_note(conn, {"day": DAY.isoformat(), "body": "GOV-1418 QA 확인 완료로 종료",
+                                                   "project_id": self.gov})["id"]
+        raw = {"summary": "", "projects": [{"project": "Gov24 백엔드", "next": [], "issues": [], "done": [
+            {"text": "토큰 갱신 버그 수정 완료", "refs": [f"S{self.first}"]},          # session only: not proof
+            {"text": "GOV-1418 QA 확인 후 종료", "refs": [f"S{self.first}", f"N{done_note}"]},  # the user said so
+            {"text": "배포 대기 건 해결", "refs": [f"N{self.note}"]},                  # note says nothing is done
+            {"text": "해결 방안 검토", "refs": [f"S{self.first}"]},                   # not a claim
+            {"text": "토큰 갱신 로직 수정", "refs": [f"S{self.first}"]},
+        ]}]}
+        report = ai_report.validate("weekly", self.context(), raw)
+        [block] = report.projects
+        self.assertEqual([i.flag for i in block.done],
+                         ["unconfirmed_done", None, "unconfirmed_done", None, None])
+        self.assertIn("토큰 갱신 버그 수정 완료 (완료 근거 없음 — 확인 필요)", ai_report.render_text(report))
+
+    def test_a_note_about_another_issue_does_not_finish_this_one(self):
+        """The demo note that fooled the first version: one note, two issues, only one of them done."""
+        with self.db.connect() as conn:
+            note = service.create_note(conn, {"day": DAY.isoformat(), "project_id": self.gov,
+                                              "body": "GOV-1418 QA 확인 완료로 종료. GOV-1423: 응답 3.2초, 인덱스를 안 탐"})["id"]
+        raw = {"summary": "GOV-1418 버그 수정 및 GOV-1423 조회 성능 개선을 완료하고, K8s 전환을 진행함. "
+                          "GOV-1418은 QA 확인 후 종료함.",
+               "projects": [{"project": "Gov24 백엔드", "next": [], "issues": [], "done": [
+                   {"text": "GOV-1423 조회 성능 개선 완료", "refs": [f"N{note}"]},
+                   {"text": "GOV-1418 QA 확인 후 종료", "refs": [f"N{note}"]},
+               ]}]}
+        report = ai_report.validate("weekly", self.context(), raw)
+        self.assertEqual([i.flag for i in report.projects[0].done], ["unconfirmed_done", None])
+        self.assertEqual(report.summary_flag, "unconfirmed_done")  # its first sentence calls GOV-1423 done
+        self.assertIn("(완료 근거 없음 — 확인 필요)", ai_report.render_text(report).splitlines()[2])
+        self.assertEqual(ai_report.to_dict(report, self.context())["summary_flag"], "unconfirmed_done")
+
+        raw["summary"] = "GOV-1418은 QA 확인 후 종료했고, GOV-1423은 인덱스를 검토 중."
+        self.assertIsNone(ai_report.validate("weekly", self.context(), raw).summary_flag)
+
+    def test_a_title_the_user_wrote_backs_a_finished_claim(self):
+        with self.db.connect() as conn:
+            sessionstore.update_session(conn, self.first, {"title": "AuthService 리팩터링 마무리"})
+        raw = {"summary": "", "projects": [{"project": "Gov24 백엔드", "next": [], "issues": [], "done": [
+            {"text": "AuthService 리팩터링 마무리", "refs": [f"S{self.first}"]}]}]}
+        [block] = ai_report.validate("weekly", self.context(), raw).projects
+        self.assertIsNone(block.done[0].flag)
+
     def test_project_left_out_by_ai_is_restored(self):
         report = ai_report.validate("weekly", self.context(), {"summary": "", "projects": []})
         self.assertEqual([(b.project, b.missing_from_ai) for b in report.projects], [("Gov24 백엔드", True)])

@@ -125,6 +125,8 @@ pre.diff { overflow: auto; font: 12px/1.45 Consolas, "D2Coding", monospace; marg
 pre.diff .add { background: rgba(58,167,109,.18); }
 pre.diff .del { background: rgba(201,60,60,.18); }
 pre.diff .hunk { color: var(--muted); }
+pre.diff .diff-file { font-weight: 600; margin-top: 12px; padding: 4px 0; border-bottom: 1px solid var(--line); }
+pre.diff .diff-file:first-child { margin-top: 0; }
 .ref-chip.change { border-color: #d9822b; }
 .answer { white-space: pre-wrap; line-height: 1.7; margin: 8px 0; }
 .answer .ref-chip { margin: 0 2px; }

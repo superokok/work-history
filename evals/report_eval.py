@@ -21,7 +21,8 @@ import statistics
 import sys
 import tempfile
 import time
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from datetime import time as dtime
 from pathlib import Path
 
 from workhistory import ai_context, ai_report, ai_service, demo
@@ -57,8 +58,10 @@ CASES = [
 ]
 
 
-def evaluate(case: dict, report: ai_report.Report) -> list[str]:
-    failures = []
+def evaluate(case: dict, report: ai_report.Report) -> tuple[list[str], list[str]]:
+    """(failures, caught): an over-claim in a line the app flagged as 'unconfirmed_done' is shown to the
+    user with a warning, so it is counted as caught, not as a failure."""
+    failures, caught = [], []
     blocks = {b.project: b for b in report.projects}
     for project, patterns in case["require"].items():
         block = blocks.get(project)
@@ -66,13 +69,13 @@ def evaluate(case: dict, report: ai_report.Report) -> list[str]:
         for p in patterns:
             if not re.search(p, text):
                 failures.append(f"missing in {project}: /{p}/")
-    everything = report.summary + "\n" + "\n".join(
-        i.text for b in report.projects for s in (b.done, b.next, b.issues) for i in s)
+    items = [i for b in report.projects for s in (b.done, b.next, b.issues) for i in s]
     for p in case["forbid"]:
-        m = re.search(p, everything)
-        if m:
-            failures.append(f"forbidden /{p}/ -> '{m.group(0)}'")
-    return failures
+        hits = [(text, flagged) for text, flagged in [(report.summary, report.summary_flag == "unconfirmed_done")]
+                + [(i.text, i.flag == "unconfirmed_done") for i in items] if re.search(p, text)]
+        for text, flagged in hits:
+            (caught if flagged else failures).append(f"forbidden /{p}/ -> '{re.search(p, text).group(0)}'")
+    return failures, caught
 
 
 def _generate_with_patience(model, case, ctx, args):
@@ -93,7 +96,7 @@ def main(argv=None) -> int:
     parser.add_argument("--runs", type=int, default=1)
     parser.add_argument("--pause", type=float, default=0, help="seconds between calls")
     parser.add_argument("--retry-wait", type=float, default=65, help="seconds to wait after quota/overload")
-    parser.add_argument("--model", default=ai_service.DEFAULT_MODEL, choices=ai_service.all_models())
+    parser.add_argument("--model", default=ai_service.default_model(), choices=ai_service.all_models())
     parser.add_argument("--thinking", default=None, choices=[None, "low", "medium", "high"])
     parser.add_argument("--out", type=Path, help="write raw results as JSON")
     args = parser.parse_args(argv)
@@ -110,8 +113,11 @@ def main(argv=None) -> int:
     try:
         db = Database(work / "demo.db")
         db.migrate()
-        demo.seed(db, work / "snapshots")
         monday = date.today() - timedelta(days=date.today().weekday())
+        # The scenario as of this week's Friday evening, whatever the day and hour of the run:
+        # otherwise "this week" holds less data on a Tuesday morning than on a Thursday evening.
+        clock = datetime.combine(monday + timedelta(days=4), dtime(19, 0)).timestamp()
+        demo.seed(db, work / "snapshots", now=clock)
         for case in CASES:
             day = monday + timedelta(days=case["offset"])
             start, end = ((day, day) if case["kind"] == "daily"
@@ -130,13 +136,13 @@ def main(argv=None) -> int:
                     all_ok = False
                     continue
                 report = ai_report.validate(case["kind"], ctx, raw)
-                failures = evaluate(case, report)
+                failures, caught = evaluate(case, report)
                 flags = [i.flag for b in report.projects for s in (b.done, b.next, b.issues) for i in s if i.flag]
                 row = {"case": case["name"], "run": run + 1, "seconds": round(time.time() - started, 1),
                        "input_tokens": usage.input_tokens, "output_tokens": usage.output_tokens,
                        "thinking_tokens": usage.thinking_tokens, "dropped_refs": report.dropped_refs,
                        "flags": flags, "restored": [b.project for b in report.projects if b.missing_from_ai],
-                       "failures": failures, "text": ai_report.render_text(report)}
+                       "failures": failures, "caught": caught, "text": ai_report.render_text(report)}
                 results.append(row)
                 ok = not failures and not report.dropped_refs and not row["restored"]
                 all_ok &= ok
@@ -145,6 +151,8 @@ def main(argv=None) -> int:
                       f"dropped {report.dropped_refs}, flags {flags}, restored {row['restored']}")
                 for f in failures:
                     print(f"       - {f}")
+                for c in caught:
+                    print(f"       ~ caught by the app's '완료 확인 필요' flag: {c}")
     finally:
         shutil.rmtree(work, ignore_errors=True)
 

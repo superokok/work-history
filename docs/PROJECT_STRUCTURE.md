@@ -51,7 +51,7 @@ work-history/
 | | `sync.py` | 증분 가져오기, 중복 제거, 수집 시 개인정보 필터 |
 | | `snapshots.py` | 작업 폴더 스냅샷 (dulwich), 변경 기록 |
 | | `extract.py` | 코드/텍스트, HWP, DOCX/XLSX/PPTX 텍스트 추출 |
-| 저장 | `db.py` | SQLite 스키마 + 마이그레이션 (`PRAGMA user_version`, 현재 v5) |
+| 저장 | `db.py` | SQLite 스키마 + 마이그레이션 (`PRAGMA user_version`, 현재 v6) |
 | | `store.py` | 공용 로더, 하루 경계, 세션 재계산 표시 |
 | 처리 (순수 함수) | `normalize.py` | 창 − AFK − 차단 구간 − 제외, 하루 단위 자르기 |
 | | `classify.py` | 수동 지정 > 키워드 규칙 > 없음 |
@@ -61,7 +61,9 @@ work-history/
 | 세션 저장 | `sessionstore.py` | 재묶기, 편집, 병합, 분할 |
 | AI | `ai_client.py` | 공급자 중립 `Model` 프로토콜 |
 | | `ai_claude.py` | Claude Code 헤드리스(`claude -p`) 구현, 도구 잠금 |
-| | `ai_local.py` | 내 PC의 AI: llama.cpp `llama-server`를 켜고 끄며 연결 (외부 전송 없음) |
+| | `ai_openai.py` | OpenAI 호환 API 공통 (보고서 JSON 단계적 대체, 도구 루프, 생각 출력 제거) |
+| | `ai_local.py` | 내 PC의 AI: llama.cpp `llama-server`를 켜고 끄며 연결 (외부 전송 없음, 자동 등록) |
+| | `ai_remote.py` | 주소로 등록한 AI 서버 (행망·사내 LLM, 어떤 모델이든 OpenAI 호환이면 연결) |
 | | `ai_context.py` | AI에 보낼 정확한 자료 + 검증 가능한 참조(C/S/N/P) |
 | | `ai_report.py` | 보고서 스키마, 프롬프트, 참조 검증, 렌더링 |
 | | `ai_agent.py` | "AI에게 묻기": 읽기 전용 기록 도구 + 인용 확인 |
@@ -108,8 +110,8 @@ Linux `~/.local/share/WorkHistory`. ActivityWatch(개발 PC)는 포터블 설치
 - 스택: Python 표준 라이브러리 + 바닐라 JS, 프레임워크 없음.
 - 주 기록은 창 시간이 아니라 **파일 변경(결과물)**.
 - 스냅샷은 dulwich(Apache-2.0)로, git.exe·GPL 의존 금지.
-- AI는 둘 중 선택: 사용자 PC의 Claude Code(헤드리스) 또는 내 PC의 로컬 모델(llama.cpp + Qwen3.5, 외부 전송 없음).
-  둘 다 `ai_client.Model` 구현. 로컬 모델 파일은 `llm/`(git 제외)에 두고 따로 배포.
+- AI는 셋 중 선택 (모두 `ai_client.Model` 구현): 내 PC의 로컬 모델(llama.cpp + Qwen3.5, 외부 전송 없음, 기본·추천),
+  주소로 등록한 AI 서버(OpenAI 호환, 행망·사내 LLM), Claude Code(헤드리스). 로컬 모델 파일은 `llm/`(git 제외), 따로 배포.
   모델을 고르기 전(=동의 전)에는 AI 꺼짐.
 - Claude Code 연결(MCP 등록)은 앱 안의 스위치로만, 터미널 단계 없음.
 - OS 독립, 로컬 전용, 배포는 Windows 포터블 zip + macOS/Linux `install.sh`.

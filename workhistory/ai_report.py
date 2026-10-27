@@ -1,6 +1,7 @@
 """AI work report drafts (daily 업무일지 / weekly 주간보고) with verified citations."""
 
 import json
+import re
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
@@ -14,6 +15,11 @@ SECTION_LABELS = {
 }
 # A project with at least this much recorded work must appear in the report.
 MIN_PROJECT_S_FOR_REPORT = 15 * 60
+# Words that say something is finished. File changes and sessions show work, not that it is done:
+# only the user's own words (notes, titles they wrote) may back such a claim.
+DONE_WORDS = re.compile(r"완료|종료|마무리|마쳤|끝냈|끝났|끝냄|완성(?!도)|"
+                        r"해결(?!\s*(?:방안|방법|책|을\s*위|하기\s*위|해야|필요))|"
+                        r"\b(?:resolved|closed|done)\b", re.I)
 
 _ITEM = {
     "type": "object",
@@ -67,7 +73,7 @@ SYSTEM = """당신은 소프트웨어 개발자의 업무 보고서 초안을 �
 class Item:
     text: str
     refs: list[str]
-    flag: Optional[str] = None  # None | 'no_evidence' | 'unconfirmed_plan'
+    flag: Optional[str] = None  # None | 'no_evidence' | 'unconfirmed_plan' | 'unconfirmed_done'
 
 
 @dataclass
@@ -89,6 +95,7 @@ class Report:
     projects: list[ProjectBlock]
     offwork_s: float
     dropped_refs: int = 0
+    summary_flag: Optional[str] = None  # 'unconfirmed_done' when the summary calls unbacked work finished
 
 
 def prompt(kind: str, ctx: Context) -> str:
@@ -96,7 +103,41 @@ def prompt(kind: str, ctx: Context) -> str:
             + json.dumps(ctx.payload, ensure_ascii=False, indent=1))
 
 
-def _items(raw: Any, valid: set[str], section: str) -> tuple[list[Item], int]:
+ISSUE_KEY = re.compile(r"\b[A-Z][A-Z0-9]+-\d+\b")  # GOV-1423, JIRA-12
+_SENTENCE_END = re.compile(r"(?<=[.!?。])\s+|\n+|;\s*")
+
+
+def claims_done(text: str) -> bool:
+    return bool(DONE_WORDS.search(text))
+
+
+def _sentences(text: str) -> list[str]:
+    return [s for s in _SENTENCE_END.split(text) if s.strip()]
+
+
+def _done_backed(text: str, words: list[str]) -> bool:
+    """The user's own words (`words`) say that what `text` claims is finished.
+    With issue keys in the claim, each key needs a sentence of the user's own that names it and says
+    it is done: one note "GOV-1418 완료. GOV-1423 응답 3.2초" does not make GOV-1423 finished."""
+    said_done = [s for w in words for s in _sentences(w) if claims_done(s)]
+    keys = set(ISSUE_KEY.findall(text))
+    if not keys:
+        return bool(said_done)
+    return all(any(key in s for s in said_done) for key in keys)
+
+
+def _summary_backed(summary: str, user_words: dict[str, str]) -> bool:
+    """Every finished claim in the summary (which has no references) is backed by some user's words."""
+    words = list(user_words.values())
+    for sentence in _sentences(summary):
+        for m in DONE_WORDS.finditer(sentence):
+            if not _done_backed(sentence[:m.end()], words):  # what the sentence calls done up to that word
+                return False
+    return True
+
+
+def _items(raw: Any, valid: set[str], section: str,
+           user_words: Optional[dict[str, str]] = None) -> tuple[list[Item], int]:
     items, dropped = [], 0
     for entry in raw if isinstance(raw, list) else []:
         if not isinstance(entry, dict):
@@ -114,6 +155,9 @@ def _items(raw: Any, valid: set[str], section: str) -> tuple[list[Item], int]:
                 flag = "unconfirmed_plan"
         elif not refs:
             flag = "no_evidence"
+        elif section == "done" and claims_done(text) and not _done_backed(
+                text, [(user_words or {}).get(r, "") for r in refs]):
+            flag = "unconfirmed_done"
         items.append(Item(text, refs, flag))
     return items, dropped
 
@@ -130,7 +174,7 @@ def validate(kind: str, ctx: Context, raw: Any) -> Report:
         name = str(entry.get("project") or "미분류").strip() or "미분류"
         block = blocks.setdefault(name, ProjectBlock(name, ctx.project_seconds.get(name, 0.0)))
         for section in ("done", "next", "issues"):
-            items, d = _items(entry.get(section), ctx.refs, section)
+            items, d = _items(entry.get(section), ctx.refs, section, ctx.user_words)
             getattr(block, section).extend(items)
             dropped += d
     # Never let a named project with real recorded work (time or file changes) silently disappear.
@@ -142,8 +186,10 @@ def validate(kind: str, ctx: Context, raw: Any) -> Report:
         if name not in blocks and (seconds >= MIN_PROJECT_S_FOR_REPORT or ctx.project_changes.get(name)):
             blocks[name] = ProjectBlock(name, seconds, missing_from_ai=True)
     ordered = sorted(blocks.values(), key=lambda b: (b.project == "미분류", -b.seconds))
-    return Report(kind, ctx.start.isoformat(), ctx.end.isoformat(),
-                  str(raw.get("summary") or "").strip(), ordered, ctx.offwork_s, dropped)
+    summary = str(raw.get("summary") or "").strip()
+    summary_flag = None if _summary_backed(summary, ctx.user_words) else "unconfirmed_done"
+    return Report(kind, ctx.start.isoformat(), ctx.end.isoformat(), summary, ordered, ctx.offwork_s, dropped,
+                  summary_flag)
 
 
 def render_text(report: Report) -> str:
@@ -152,7 +198,8 @@ def render_text(report: Report) -> str:
     period = report.start if report.start == report.end else f"{report.start} ~ {report.end}"
     lines = [f"# {KINDS[report.kind]} · {period}", ""]
     if report.summary:
-        lines += [f"요약: {report.summary}", ""]
+        flag = " (완료 근거 없음 — 확인 필요)" if report.summary_flag else ""
+        lines += [f"요약: {report.summary}{flag}", ""]
     for b in report.projects:
         lines.append(f"## {b.project}" + (f" ({duration(b.seconds)})" if b.seconds else ""))
         if b.missing_from_ai:
@@ -164,7 +211,8 @@ def render_text(report: Report) -> str:
                 lines.append("- 없음")
             for it in items:
                 suffix = {"no_evidence": " (근거 없음 — 확인 필요)",
-                          "unconfirmed_plan": " (AI 제안 — 확인 필요)"}.get(it.flag or "", "")
+                          "unconfirmed_plan": " (AI 제안 — 확인 필요)",
+                          "unconfirmed_done": " (완료 근거 없음 — 확인 필요)"}.get(it.flag or "", "")
                 lines.append(f"- {it.text}{suffix}")
         lines.append("")
     if report.offwork_s >= 60:
@@ -183,6 +231,7 @@ def to_dict(report: Report, ctx: Context) -> dict:
         return {"text": it.text, "refs": it.refs, "flag": it.flag}
     return {
         "kind": report.kind, "start": report.start, "end": report.end, "summary": report.summary,
+        "summary_flag": report.summary_flag,
         "projects": [{"project": b.project, "seconds": b.seconds, "missing_from_ai": b.missing_from_ai,
                       "done": [item(i) for i in b.done], "next": [item(i) for i in b.next],
                       "issues": [item(i) for i in b.issues]} for b in report.projects],

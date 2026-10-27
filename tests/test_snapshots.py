@@ -286,6 +286,14 @@ class IntegrationTests(SnapshotTestCase):
             status, diff = call("GET", f"/api/change-files/{file_id}/diff")
             self.assertEqual(status, 200)
             self.assertIn("+class Main {}", diff["diff"])
+            # a C reference opens straight from a citation: the change with its files
+            status, change = call("GET", f"/api/changes/{results[0]['change_id']}")
+            self.assertEqual((status, change["folder"], [f["id"] for f in change["files"]]),
+                             (200, "gov24", [file_id]))
+            self.assertEqual(call("GET", "/api/changes/999999")[0], 404)
+            with self.db.connect() as conn:
+                baseline = conn.execute("SELECT id FROM changes WHERE baseline = 1").fetchone()[0]
+            self.assertEqual(call("GET", f"/api/changes/{baseline}")[0], 404)  # the first snapshot is not work
             self.assertEqual(call("DELETE", f"/api/folders/{self.folder}", {})[0], 200)
             self.assertFalse(snapshots.repo_path(self.repos, self.folder).exists())
         finally:

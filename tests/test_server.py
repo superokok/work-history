@@ -86,6 +86,17 @@ class ServerTests(unittest.TestCase):
         status, _, _ = self.request("GET", "/", extra_headers={"Sec-Fetch-Site": "cross-site"})
         self.assertEqual(status, 200)  # a link to the app itself still opens it
 
+    def test_ai_server_registration_api(self):
+        status, srv, _ = self.request("POST", "/api/ai/servers", {"name": "행망 LLM", "url": "10.1.2.3:8000",
+                                                              "model_id": "qwen3-32b", "api_key": "sk-top-secret"})
+        self.assertEqual((status, srv["url"], srv["has_key"]), (200, "http://10.1.2.3:8000/v1", True))
+        status, settings, _ = self.request("GET", "/api/ai/settings")
+        self.assertIn(srv["model"], settings["models"])
+        self.assertNotIn("sk-top-secret", json.dumps(settings))
+        self.assertEqual(self.request("POST", "/api/ai/servers", {"name": "x", "url": "ftp://h", "model_id": "m"})[0], 400)
+        self.assertEqual(self.request("DELETE", f"/api/ai/servers/{srv['id']}", {})[0], 200)
+        self.assertEqual(self.request("DELETE", f"/api/ai/servers/{srv['id']}", {})[0], 404)
+
     def test_write_requires_custom_header_and_json(self):
         status, _, _ = self.request("POST", "/api/projects", {"name": "x"}, write_header=False)
         self.assertEqual(status, 403)

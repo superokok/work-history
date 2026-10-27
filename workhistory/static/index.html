@@ -209,6 +209,25 @@
         <p class="muted small-text"><b>내 PC</b> 모델은 앱 폴더의 llm 폴더에 있는 AI를 이 PC에서 직접 돌립니다. 기록이 PC 밖으로 나가지 않고 인터넷이 없어도 되지만, 그래픽카드가 없으면 느립니다.</p>
         <p class="muted small-text"><b>Claude Code</b> 모델은 이 PC에 설치·로그인된 Claude Code로 보고서와 'AI에게 묻기'를 처리합니다. API 키가 필요 없고, 사용량은 Claude 계정에 포함됩니다. 켜기 전에는 실제 업무 기록을 AI에 보내지 않습니다 (데모 데이터는 가능). 켜면 업무 기록이 비밀값을 가린 뒤 Claude Code를 거쳐 Anthropic으로 전송되고, 이때 Claude Code는 파일·명령·웹 도구 없이 이 앱의 읽기 전용 기록 도구만 쓸 수 있습니다. '연결 확인'은 업무 기록을 보내지 않고 설치·로그인 상태만 확인합니다.</p>
         <p id="ai-usage" class="muted small-text"></p>
+        <h3>등록된 모델</h3>
+        <ul id="ai-model-list" class="plain"></ul>
+        <details id="ai-server-box">
+          <summary>AI 서버 등록 (행망·사내 LLM)</summary>
+          <p class="muted small-text">OpenAI 호환 API를 주는 LLM 서버(vLLM, Ollama, llama.cpp, LM Studio, 사내 게이트웨이 등)를 주소로 등록하면 어떤 모델이든 쓸 수 있습니다. 등록한 서버를 고르면 업무 기록이 (비밀값을 가린 뒤) 그 서버로 전송됩니다. API 키는 이 PC에만 저장되고 다시 표시되지 않습니다.</p>
+          <form id="ai-server-form">
+            <div class="row">
+              <input id="ai-server-name" placeholder="이름 (예: 행망 LLM)" maxlength="60" size="16">
+              <input id="ai-server-url" placeholder="주소 (예: http://10.1.2.3:8000)" size="30">
+              <input id="ai-server-key" type="password" placeholder="API 키 (필요할 때만)" autocomplete="off" size="20">
+            </div>
+            <div class="row">
+              <input id="ai-server-model" placeholder="모델 이름" list="ai-server-models" size="30">
+              <datalist id="ai-server-models"></datalist>
+              <button type="button" id="ai-server-fetch" class="small">서버의 모델 불러오기</button>
+              <button type="submit" class="primary">등록</button>
+            </div>
+          </form>
+        </details>
       </div>
       <div class="card">
         <h2>Claude Code 연결 <span class="badge ai">MCP</span></h2>

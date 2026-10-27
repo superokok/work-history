@@ -42,6 +42,9 @@ class Context:
     sources: dict[str, dict] = field(default_factory=dict)
     project_seconds: dict[str, float] = field(default_factory=dict)  # name -> work seconds
     project_changes: dict[str, int] = field(default_factory=dict)  # name -> recorded file changes
+    # ref -> what the user wrote themselves (a note; a session's note and a title they edited).
+    # Only these may back a claim that something is finished.
+    user_words: dict[str, str] = field(default_factory=dict)
     offwork_s: float = 0.0
 
     @property
@@ -172,6 +175,9 @@ def build(conn: sqlite3.Connection, start: date, end: date, repos_dir: Optional[
             }
             if s["note"]:
                 item["user_note"] = redact(s["note"])
+            words = " ".join(filter(None, [s["note"], s["title"] if s["title_edited"] else ""]))
+            if words:
+                ctx.user_words[ref] = words
             sessions_out.append(item)
             ctx.refs.add(ref)
             ctx.sources[ref] = {"type": "session", "day": day.isoformat(), "label": s["title"],
@@ -186,6 +192,7 @@ def build(conn: sqlite3.Connection, start: date, end: date, repos_dir: Optional[
                           "text": redact(n["body"])})
         ctx.refs.add(f"N{n['id']}")
         ctx.sources[f"N{n['id']}"] = {"type": "note", "day": n["day"], "label": n["body"][:60]}
+        ctx.user_words[f"N{n['id']}"] = n["body"]
         if n["project_id"] in projects:
             used_projects.add(n["project_id"])
 

@@ -93,6 +93,12 @@ class DiscoveryTests(LocalLLMTestCase):
             with self.assertRaises(AIError):
                 ai_service.check_allowed(conn, demo=False)
 
+    def test_largest_local_model_is_the_suggestion(self):
+        (self.dir / "models" / "Bigger-Q4.gguf").write_bytes(b"x" * 10)
+        self.assertEqual(ai_service.default_model(), "local:Bigger-Q4")
+        (self.dir / "bin" / ai_local.SERVER_EXE).unlink()  # no local AI: Claude Code is suggested
+        self.assertEqual(ai_service.default_model(), ai_service.DEFAULT_MODEL)
+
     def test_factory_picks_the_local_backend(self):
         self.assertIsInstance(ai_service.default_factory("local:Tiny-Q4"), ai_local.LocalModel)
 

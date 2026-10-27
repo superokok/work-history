@@ -226,6 +226,17 @@ MIGRATIONS: list[str] = [
     CREATE INDEX idx_change_files_change ON change_files(change_id);
     CREATE INDEX idx_change_files_path ON change_files(path);
     """,
+    # v6: AI servers the user registered by address (OpenAI-compatible); model choice "remote:<id>"
+    """
+    CREATE TABLE ai_endpoints (
+        id         INTEGER PRIMARY KEY,
+        name       TEXT NOT NULL,
+        url        TEXT NOT NULL,          -- API base ending in /v1
+        model_id   TEXT NOT NULL,          -- the model name the server expects
+        api_key    TEXT NOT NULL DEFAULT '',
+        created_at REAL NOT NULL
+    );
+    """,
 ]
 
 SCHEMA_VERSION = len(MIGRATIONS)
