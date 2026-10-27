@@ -49,3 +49,11 @@ use and redistribution. Full license texts ship in the portable package under
 |---|---|---|
 | ActivityWatch | MPL-2.0 | window activity source (talked to over its local REST API) |
 | Claude Code | Anthropic Commercial Terms / Consumer Terms | AI features, run as a separate program |
+
+## Local AI (portable package, `llm/` folder)
+
+| Component | License | Use | License text |
+|---|---|---|---|
+| llama.cpp / ggml (`llm/bin`) | MIT | runs the local model on this PC | `llm/LICENSE-llama.cpp.txt` |
+| LLVM OpenMP runtime (`llm/bin/libomp.dll`) | Apache-2.0 WITH LLVM-exception | used by llama.cpp | `llm/bin/LICENSE-LLVM-OpenMP` |
+| Qwen3.5 models (`llm/models`, if included) | Apache-2.0 | local AI model | `llm/LICENSE-Qwen3.5.txt` |
