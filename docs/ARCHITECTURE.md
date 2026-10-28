@@ -245,8 +245,7 @@ in a Linux container (Python 3.11, with and without the AI SDK).
   window titles, paths and diffs are untrusted text, never instructions.
 - Known, accepted (local-only): no per-launch token against other accounts on
   the same PC; a local caller who passes `--trace` itself gets the MCP tools,
-  but could read the database file anyway. See
-  docs/history/2026-10-21-02-eval-security-review.md.
+  but could read the database file anyway.
 
 ## 9. Licensing
 

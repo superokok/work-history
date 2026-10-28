@@ -7,7 +7,7 @@
 
 문서: [프로젝트 구조](docs/PROJECT_STRUCTURE.md) · [제품](docs/PRODUCT.md) ·
 [아키텍처](docs/ARCHITECTURE.md) · [개인정보](docs/PRIVACY.md) ·
-[구현 계획](docs/IMPLEMENTATION_PLAN.md) · [작업 히스토리](docs/history/)
+[구현 계획](docs/IMPLEMENTATION_PLAN.md)
 
 ## 설치
 

@@ -1,7 +1,7 @@
 # 프로젝트 구조 한눈에 보기
 
-새 세션에서 가장 먼저 읽는 문서. 상세 설계는 [ARCHITECTURE.md](ARCHITECTURE.md),
-작업 흐름은 [history/](history/)를 본다. 구조가 바뀌면 이 문서를 함께 고친다.
+새 세션에서 가장 먼저 읽는 문서. 상세 설계는 [ARCHITECTURE.md](ARCHITECTURE.md)를 본다.
+구조가 바뀌면 이 문서를 함께 고친다.
 
 _마지막 갱신: 2026-10-28_
 
@@ -36,8 +36,7 @@ work-history/
 ├─ ppt/                    사용자의 발표 파일(.pptx, git 포함). 작업 중 만든 초안 덱은 docs/presentation/(git 제외)
 └─ docs/
    ├─ PROJECT_STRUCTURE.md 이 문서
-   ├─ history/             작업 히스토리 (작업 1건 = 파일 1개)
-   └─ ARCHITECTURE / PRODUCT / IMPLEMENTATION_PLAN / AI / PRIVACY / RESULTS_TRACKING / VALIDATION
+   └─ SELF_REVIEW / ARCHITECTURE / PRODUCT / IMPLEMENTATION_PLAN / AI / PRIVACY / RESULTS_TRACKING / VALIDATION
 ```
 
 ## 모듈 지도 (workhistory/)
