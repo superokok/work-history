@@ -206,7 +206,8 @@ def build(conn: sqlite3.Connection, start: date, end: date, repos_dir: Optional[
             item["user_next_action"] = redact(p["next_action"].strip())
         projects_out.append(item)
         ctx.refs.add(f"P{pid}")
-        ctx.sources[f"P{pid}"] = {"type": "project", "project_id": pid, "label": p["name"]}
+        ctx.sources[f"P{pid}"] = {"type": "project", "project_id": pid, "label": p["name"],
+                                  "next_action": p["next_action"].strip()[:60]}
 
     ctx.project_seconds = dict(project_seconds)
     ctx.payload = {

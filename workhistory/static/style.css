@@ -106,7 +106,27 @@ tr.offwork-row td { color: var(--muted); }
 pre.preview { max-height: 360px; overflow: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px; font-size: 12px; white-space: pre-wrap; word-break: break-all; }
 #report-body { font: 13px/1.6 Consolas, "D2Coding", "Malgun Gothic", monospace; min-height: 420px; }
 .report-project h3 { margin: 12px 0 4px; }
-.report-items li { flex-wrap: wrap; }
+ul.report-items { list-style: none; padding: 0; margin: 0 0 8px; }
+ul.report-items li { padding: 4px 0 6px; font-size: 13px; }
+
+/* AI text vs. records: tinted indigo box = written by the AI; plain rows below = what is in the records */
+.ai-text { background: var(--inferred); border-left: 3px solid #7b6cff; border-radius: 0 6px 6px 0; padding: 5px 8px; }
+.ai-text.flagged { background: var(--warn-bg); border-left-color: #d9822b; }
+.ai-text > .badge.ai:first-child { margin-left: 0; }
+.facts { display: flex; flex-direction: column; gap: 2px; margin: 3px 0 0 14px; }
+.fact { display: flex; gap: 8px; align-items: baseline; text-align: left; font-size: 12px; padding: 2px 8px;
+  border: none; border-left: 3px solid #9aa3b5; border-radius: 0 4px 4px 0; background: var(--bg); }
+.fact:hover { outline: 1px solid var(--accent); }
+.fact.note, .fact.project { border-left-color: #3aa76d; background: var(--user); }
+.fact.change { border-left-color: #d9822b; }
+.fact-kind { color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.fact-text { word-break: break-all; }
+.legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin: 0 0 8px; }
+.legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 4px; vertical-align: -1px; border-radius: 2px; }
+.legend-ai::before { background: var(--inferred); border-left: 3px solid #7b6cff; }
+.legend-fact::before { background: var(--user); border-left: 3px solid #3aa76d; }
+.answer-facts { margin: 4px 0 8px; }
+.answer-facts .facts { margin-left: 0; }
 .chips { display: inline-flex; gap: 4px; flex-wrap: wrap; }
 .ref-chip { font-size: 11px; padding: 1px 6px; border-radius: 999px; }
 .ref-chip.note, .ref-chip.project { border-color: #3aa76d; }
@@ -128,6 +148,6 @@ pre.diff .hunk { color: var(--muted); }
 pre.diff .diff-file { font-weight: 600; margin-top: 12px; padding: 4px 0; border-bottom: 1px solid var(--line); }
 pre.diff .diff-file:first-child { margin-top: 0; }
 .ref-chip.change { border-color: #d9822b; }
-.answer { white-space: pre-wrap; line-height: 1.7; margin: 8px 0; }
+.answer { white-space: pre-wrap; line-height: 1.7; margin: 8px 0; padding: 8px 12px; }
 .answer .ref-chip { margin: 0 2px; }
 code.command { display: block; flex: 1; padding: 6px 8px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; word-break: break-all; font-size: 12px; }

@@ -656,51 +656,70 @@ $("report-generate").addEventListener("click", () => {
   });
 });
 
-function sourceChip(ref, sources) {
-  const src = sources[ref];
-  if (!src) return null;
-  const label = src.type === "session" ? `${src.day.slice(5)} ${hhmm(src.start)} 세션`
-    : src.type === "change" ? `${src.day.slice(5)} ${hhmm(src.start)} 파일 변경`
-    : src.type === "note" ? `${src.day.slice(5)} 메모` : "다음 할 일";
-  return h("button", {
-    class: `ref-chip ${src.type}`, title: src.label,
-    onclick: () => (src.type === "project"
-      ? (state.resumeProject = src.project_id, showTab("resume"))
-      : src.type === "change" ? showChange(Number(ref.slice(1)))
-      : (showTab("timeline"), setDay(src.day))),
-  }, label);
+// ---- Citations. What the AI wrote and what is in the records must never look alike:
+// AI text sits in a tinted "AI" box; records show their own content (the note, the files, the session title).
+const SOURCE_KINDS = { session: "세션", change: "파일 변경", note: "메모", project: "프로젝트", review: "리뷰", day: "타임라인" };
+
+const sourceWhen = (src) => (src.type === "session" || src.type === "change" ? `${src.day.slice(5)} ${hhmm(src.start)}`
+  : src.day ? src.day.slice(5) : "");
+
+function openSource(src, ref) {
+  if (src.type === "project") { state.resumeProject = src.project_id; showTab("resume"); }
+  else if (src.type === "change") showChange(Number(ref.slice(1)));
+  else if (src.type === "review") gotoReview(src.day);
+  else gotoDay(src.day);
 }
 
-const VISIBLE_CHIPS = 5;
+// Inline chip inside an AI answer.
+function citationChip(src, ref = src.ref) {
+  const label = src.type === "project" ? src.label : `${sourceWhen(src)} ${SOURCE_KINDS[src.type]}`;
+  return h("button", { class: `ref-chip ${src.type}`, title: src.label, onclick: () => openSource(src, ref) }, label);
+}
 
-function refChips(refs, sources) {
-  // Many references on one line are noise: show a few, fold the rest behind "+N".
-  const chips = refs.map((ref) => sourceChip(ref, sources)).filter(Boolean);
-  const box = h("span", { class: "chips" }, chips.slice(0, VISIBLE_CHIPS));
-  if (chips.length > VISIBLE_CHIPS) {
-    const more = h("button", { class: "ref-chip", title: "근거 더 보기" }, `+${chips.length - VISIBLE_CHIPS}`);
-    more.addEventListener("click", () => { more.remove(); box.append(...chips.slice(VISIBLE_CHIPS)); });
+// One record, showing what it actually says.
+function factRow(src, ref) {
+  const text = src.type === "project" && src.next_action ? `${src.label} · 다음 할 일: ${src.next_action}` : src.label;
+  return h("button", { class: `fact ${src.type}`, title: "기록 열기", onclick: () => openSource(src, ref) },
+    h("span", { class: "fact-kind" }, [SOURCE_KINDS[src.type], sourceWhen(src)].filter(Boolean).join(" · ")),
+    h("span", { class: "fact-text" }, text));
+}
+
+const VISIBLE_FACTS = 3;
+
+function factList(refs, sources) {
+  // Many records under one line are noise: show a few, fold the rest behind "+N".
+  const rows = refs.filter((ref) => sources[ref]).map((ref) => factRow(sources[ref], ref));
+  const box = h("div", { class: "facts" }, rows.slice(0, VISIBLE_FACTS));
+  if (rows.length > VISIBLE_FACTS) {
+    const more = h("button", { class: "link small-text" }, `근거 ${rows.length - VISIBLE_FACTS}개 더 보기`);
+    more.addEventListener("click", () => { more.remove(); box.append(...rows.slice(VISIBLE_FACTS)); });
     box.append(more);
   }
   return box;
 }
 
+const factLegend = () => h("div", { class: "legend" },
+  h("span", { class: "legend-ai" }, "AI가 쓴 문장"), h("span", { class: "legend-fact" }, "기록에 있는 사실 (누르면 열림)"));
+
 function renderReportSide(r) {
   const flagBadge = { no_evidence: badge("plain", "근거 없음"), unconfirmed_plan: badge("plain", "AI 제안"),
     unconfirmed_done: badge("plain", "완료 확인 필요") };
+  const aiText = (text, flag) => h("div", { class: `ai-text${flag ? " flagged" : ""}` },
+    badge("ai", "AI"), " ", text, flag ? [" ", flagBadge[flag].cloneNode(true)] : null);
   const [doneLabel, nextLabel, issueLabel] = r.kind === "daily" ? ["오늘 한 일", "다음 할 일", "이슈"] : ["금주 실적", "차주 계획", "이슈"];
   $("report-side").replaceChildren(
     h("div", { class: "card" },
-      h("h2", {}, "근거 ", badge("inferred", "AI 초안")),
-      r.summary ? h("p", {}, r.summary, r.summary_flag ? [" ", flagBadge[r.summary_flag].cloneNode(true)] : null) : null,
+      h("h2", {}, "AI 초안과 근거"),
+      factLegend(),
+      r.summary ? aiText(r.summary, r.summary_flag) : null,
       ...r.projects.map((p) => h("div", { class: "report-project" },
         h("h3", {}, p.project, p.seconds ? h("span", { class: "meta" }, ` · ${dur(p.seconds)}`) : null),
         p.missing_from_ai ? h("p", { class: "warning" }, "기록된 작업이 있지만 AI 초안에 빠졌습니다. 직접 작성하세요.") : null,
         ...[[doneLabel, p.done], [nextLabel, p.next], [issueLabel, p.issues]].filter(([, items]) => items.length).map(([label, items]) =>
           h("div", {}, h("div", { class: "meta" }, label),
-            h("ul", { class: "plain compact report-items" }, items.map((it) => h("li", {},
-              h("span", {}, it.text, " ", it.flag ? flagBadge[it.flag].cloneNode(true) : null),
-              refChips(it.refs, r.sources))))))))),
+            h("ul", { class: "report-items" }, items.map((it) => h("li", {},
+              aiText(it.text, it.flag),
+              it.refs.length ? factList(it.refs, r.sources) : null)))))))),
     h("p", { class: "muted small-text" },
       `AI 사용: 입력 ${r.usage.input_tokens.toLocaleString()} · 출력 ${(r.usage.output_tokens + r.usage.thinking_tokens).toLocaleString()} 토큰`,
       r.dropped_refs ? ` · 확인되지 않은 근거 ${r.dropped_refs}개는 제외했습니다` : ""),
@@ -974,8 +993,11 @@ $("ask-form").addEventListener("submit", (e) => {
         const m = part.match(/^\[([SCNPDR][0-9A-Za-z-]+)\]$/);
         return m && sources[m[1]] ? citationChip(sources[m[1]]) : inlineMarkdown(part);
       }).flat();
+      const cited = r.citations.map((c) => c.ref);
       $("ask-result").replaceChildren(
-        h("div", { class: "answer" }, ...parts),
+        factLegend(),
+        h("div", { class: "ai-text answer" }, badge("ai", "AI 답변"), " ", ...parts),
+        cited.length ? h("div", { class: "answer-facts" }, h("div", { class: "meta" }, "답변에 쓴 기록"), factList(cited, sources)) : null,
         h("p", { class: "muted small-text" },
           `확인한 기록: ${r.tool_calls.map((c) => TOOL_LABELS[c.name] || c.name).join(" → ") || "없음"}`,
           r.dropped_refs ? ` · 확인되지 않은 근거 ${r.dropped_refs}개는 지웠습니다` : "",
@@ -996,23 +1018,6 @@ function inlineMarkdown(text) {
     /^\*\*[^*\n]+\*\*$/.test(part) ? h("b", {}, part.slice(2, -2))
       : /^`[^`\n]+`$/.test(part) ? h("code", {}, part.slice(1, -1))
       : part);
-}
-
-function citationChip(src) {
-  const label = src.type === "session" ? `${src.day.slice(5)} ${hhmm(src.start)} 세션`
-    : src.type === "change" ? `${src.day.slice(5)} ${hhmm(src.start)} 파일 변경`
-    : src.type === "note" ? `${src.day.slice(5)} 메모`
-    : src.type === "review" ? `${src.day.slice(5)} 리뷰`
-    : src.type === "day" ? `${src.day.slice(5)} 타임라인` : src.label;
-  return h("button", {
-    class: `ref-chip ${src.type}`, title: src.label,
-    onclick: () => {
-      if (src.type === "project") { state.resumeProject = src.project_id; showTab("resume"); }
-      else if (src.type === "change") showChange(Number(src.ref.slice(1)));
-      else if (src.type === "review") gotoReview(src.day);
-      else gotoDay(src.day);
-    },
-  }, label);
 }
 
 function renderSearch(r) {
