@@ -1,37 +1,39 @@
 import http.client
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+import subprocess
 import threading
 import unittest
 from datetime import date, timedelta
 from pathlib import Path
 from urllib.parse import quote
 
-from workhistory.awclient import AWClient
 from workhistory.autostart import Launch
 from workhistory.server import App, create_server, find_running_instance
 from workhistory.sync import Syncer
 
-from tests.helpers import FakeAW, TempDB, local_ts
+from tests.helpers import TempDB, add_raw, local_ts
+
+
+def _fake_shortcut(env):
+    Path(env["WH_LNK"]).write_text("lnk")
+    return subprocess.CompletedProcess([], 0, "", "")
 
 
 class ServerTests(unittest.TestCase):
     def setUp(self):
         self._tmp = TempDB()
         self.db = self._tmp.__enter__()
-        self.aw = FakeAW()
-        self.aw.add_bucket("aw-watcher-window_devbox", "currentwindow")
         # Never the real Startup folder / desktop either.
         self.home = Path(self.db.path).parent / "home"
-        launch = Launch("Linux", self.home, ["/opt/app/start-workhistory.sh"])
-        self.server = create_server(App(self.db, Syncer(self.db, AWClient(self.aw.url)), launch=launch), 0)
+        launch = Launch([r"C:\app\작업 기록.cmd"], lambda name: self.home / name, _fake_shortcut)
+        self.server = create_server(App(self.db, Syncer(self.db), launch=launch), 0)
         self.port = self.server.server_address[1]
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
 
     def tearDown(self):
         self.server.shutdown()
         self.server.server_close()
-        self.aw.close()
         self._tmp.__exit__(None, None, None)
 
     def request(self, method, path, body=None, host=None, write_header=True, ctype="application/json",
@@ -127,8 +129,8 @@ class ServerTests(unittest.TestCase):
         yesterday = date.today() - timedelta(days=1)
         today = yesterday.isoformat()  # a full past day keeps the test independent of the clock
         start = local_ts(yesterday, 10)
-        self.aw.add_event("aw-watcher-window_devbox", start, start + 900, {"app": "Code.exe", "title": "a.py"})
-        self.aw.add_event("aw-watcher-window_devbox", start + 1800, start + 2400, {"app": "Code.exe", "title": "b.py"})
+        add_raw(self.db, "window", start, start + 900, "Code.exe", "a.py")
+        add_raw(self.db, "window", start + 1800, start + 2400, "Code.exe", "b.py")
         self.request("POST", "/api/sync", {})
         status, t, _ = self.request("GET", f"/api/timeline?date={today}")
         self.assertEqual(len(t["sessions"]), 2)
@@ -171,7 +173,7 @@ class ServerTests(unittest.TestCase):
         self.assertEqual((status, body["autostart"]["enabled"]), (200, False))
         status, body, _ = self.request("POST", "/api/launch", {"autostart": True})
         self.assertEqual((status, body["autostart"]["enabled"]), (200, True))
-        self.assertTrue((self.home / ".config" / "autostart" / "workhistory.desktop").exists())
+        self.assertTrue((self.home / "startup" / "작업 기록.lnk").exists())
         self.assertEqual(self.request("POST", "/api/launch", {"autostart": "yes"})[0], 400)
         status, body, _ = self.request("POST", "/api/launch/shortcut", {})
         self.assertEqual((status, body["shortcut"]["exists"]), (200, True))

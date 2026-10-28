@@ -121,8 +121,6 @@ async function loadStatus() {
   const s = await api("GET", "/api/status");
   $("demo-banner").hidden = !s.demo;
   $("db-path").textContent = s.db_path;
-  $("source-builtin").hidden = s.source !== "builtin";
-  $("source-aw").hidden = s.source !== "activitywatch";
   $("pause-btn").textContent = s.paused ? "기록 재개" : "일시정지";
   $("sync-btn").hidden = s.demo;
   const chip = $("sync-status");
@@ -135,18 +133,15 @@ async function loadStatus() {
     chip.textContent = "데모 모드";
   } else if (!s.sync) {
     chip.textContent = "첫 동기화 중…";
-  } else if (s.source === "builtin" && (s.collector_error || !s.sync.ok)) {
+  } else if (!s.collecting) {
+    chip.textContent = "창 기록 안 함 (작업 폴더만)";
+  } else if (s.collector_error || !s.sync.ok) {
     chip.classList.add("err");
     chip.textContent = "창 기록 오류 (저장된 기록만 표시)";
     chip.title = s.collector_error || s.sync.error || "";
-  } else if (s.sync.ok) {
-    chip.classList.add("ok");
-    const missing = !s.sync.buckets_found.window ? " · 창 기록 없음" : !s.sync.buckets_found.afk ? " · 유휴 감지 없음" : "";
-    chip.textContent = `${s.source === "builtin" ? "창 기록 중" : "ActivityWatch 연결됨"} · ${hhmm(s.sync.finished_at)} 동기화${missing}`;
   } else {
-    chip.classList.add("err");
-    chip.textContent = "ActivityWatch 연결 안 됨 (저장된 기록만 표시)";
-    chip.title = s.sync.error || "";
+    chip.classList.add("ok");
+    chip.textContent = `창 기록 중 · ${hhmm(s.sync.finished_at)} 동기화`;
   }
   return s;
 }

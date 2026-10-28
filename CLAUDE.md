@@ -38,7 +38,7 @@
 - 런타임 의존성은 최소로. 새 패키지는 상업적 판매가 가능한 라이선스(MIT/BSD/Apache 등)만,
   추가 전에 사용자에게 묻는다. GPL 계열·git.exe 의존 금지 (스냅샷은 dulwich).
 - 로컬 전용: 서버는 127.0.0.1에만 바인딩, 실제 업무 데이터는 사용자 동의 없이 외부로 보내지 않는다.
-- OS 독립 유지 (Windows 우선이지만 macOS/Linux에서도 동작).
+- Windows 전용 (2026-10-28 결정: macOS/Linux 지원과 ActivityWatch를 뺌). 창 기록은 앱의 내장 수집기로.
 - 사용자가 앱 기능을 쓸 때 터미널 단계가 필요 없게 한다 (설정은 앱 안에서).
 - 아키텍처·라이선스·개인정보·범위 결정은 사용자에게 묻고, 나머지는 작은 단위로 검증하며 진행한다.
-- 테스트: `.venv/Scripts/python.exe -m unittest discover -s tests -t .` (macOS/Linux는 `.venv/bin/python`)
+- 테스트: `.venv/Scripts/python.exe -m unittest discover -s tests -t .`

@@ -31,7 +31,7 @@ from .ai_openai import HTTPFailure, OpenAICompatModel, http_json
 log = logging.getLogger(__name__)
 
 PREFIX = "local"
-SERVER_EXE = "llama-server.exe" if os.name == "nt" else "llama-server"
+SERVER_EXE = "llama-server.exe"
 CONTEXT_TOKENS = 32768        # the largest weekly context is ~17k tokens, plus the answer and tool turns
 START_TIMEOUT_S = 300         # loading a 5 GB model from a slow disk
 REQUEST_TIMEOUT_S = 1800      # a CPU-only PC can need minutes for one report

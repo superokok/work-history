@@ -3,15 +3,11 @@ import unittest
 from datetime import date, timedelta
 
 from workhistory import service, sessionstore
-from workhistory.awclient import AWClient
 from workhistory.classify import TrackRule, is_tracked
 from workhistory.store import Invalid
 from workhistory.sync import recent_apps, reset_window_cursors, sync_once
 
-from tests.helpers import FakeAW, TempDB, local_ts
-
-WIN = "aw-watcher-window_devbox"
-AFK = "aw-watcher-afk_devbox"
+from tests.helpers import TempDB, add_raw, local_ts
 
 
 class IsTrackedTests(unittest.TestCase):
@@ -27,19 +23,15 @@ class IsTrackedTests(unittest.TestCase):
 
 class TrackingSyncTests(unittest.TestCase):
     def setUp(self):
-        self.aw = FakeAW()
-        self.aw.add_bucket(WIN, "currentwindow")
-        self.aw.add_bucket(AFK, "afkstatus")
-        self.client = AWClient(self.aw.url, timeout=5)
         self._tmp = TempDB()
         self.db = self._tmp.__enter__()
         self.day = date.today() - timedelta(days=1)
         t = lambda h, m=0: local_ts(self.day, h, m)
-        self.aw.add_event(WIN, t(9), t(9, 40), {"app": "idea64.exe", "title": "gov24-api – A.java"})
-        self.aw.add_event(WIN, t(9, 40), t(10, 0), {"app": "chrome.exe", "title": "YouTube - Google Chrome"})
-        self.aw.add_event(WIN, t(10, 0), t(10, 20), {"app": "chrome.exe", "title": "PROJ-1 - Jira - Google Chrome"})
-        self.aw.add_event(WIN, t(10, 20), t(10, 30), {"app": "LockApp.exe", "title": "Windows 기본 잠금 화면"})
-        self.aw.add_event(WIN, t(10, 30), t(11, 0), {"app": "KakaoTalk.exe", "title": "가족방"})
+        add_raw(self.db, "window", t(9), t(9, 40), "idea64.exe", "gov24-api – A.java")
+        add_raw(self.db, "window", t(9, 40), t(10, 0), "chrome.exe", "YouTube - Google Chrome")
+        add_raw(self.db, "window", t(10, 0), t(10, 20), "chrome.exe", "PROJ-1 - Jira - Google Chrome")
+        add_raw(self.db, "window", t(10, 20), t(10, 30), "LockApp.exe", "Windows 기본 잠금 화면")
+        add_raw(self.db, "window", t(10, 30), t(11, 0), "KakaoTalk.exe", "가족방")
         with self.db.connect() as conn:
             service.add_track_rule(conn, {"app": "idea64"})
             service.add_track_rule(conn, {"app": "chrome", "title": "jira"})
@@ -47,7 +39,6 @@ class TrackingSyncTests(unittest.TestCase):
 
     def tearDown(self):
         self._tmp.__exit__(None, None, None)
-        self.aw.close()
 
     def events(self):
         with self.db.connect() as conn:
@@ -55,13 +46,13 @@ class TrackingSyncTests(unittest.TestCase):
                 "SELECT app, title FROM window_events ORDER BY start_ts")]
 
     def test_untracked_apps_keep_only_time(self):
-        sync_once(self.db, self.client, backfill_days=3)
+        sync_once(self.db)
         self.assertEqual(self.events(), [
             ("idea64.exe", "gov24-api – A.java"), ("", ""), ("chrome.exe", "PROJ-1 - Jira - Google Chrome"),
             ("LockApp.exe", "Windows 기본 잠금 화면"), ("", "")])
 
     def test_timeline_and_review_separate_offwork(self):
-        sync_once(self.db, self.client, backfill_days=3)
+        sync_once(self.db)
         with self.db.connect() as conn:
             t = service.timeline(conn, self.day)
             r = service.get_review(conn, self.day)
@@ -78,17 +69,17 @@ class TrackingSyncTests(unittest.TestCase):
         self.assertNotIn("가족방", r["generated"])
 
     def test_reapply_recovers_forgotten_app_and_back_to_all(self):
-        sync_once(self.db, self.client, backfill_days=3)
+        sync_once(self.db)
         with self.db.connect() as conn:
             service.add_track_rule(conn, {"app": "kakaotalk"})
             reset_window_cursors(conn, 3)
-        sync_once(self.db, self.client)
+        sync_once(self.db)
         self.assertIn(("KakaoTalk.exe", "가족방"), self.events())
         self.assertIn(("", ""), self.events())  # YouTube still untracked
         with self.db.connect() as conn:
             service.set_track_mode(conn, {"mode": "all"})
             reset_window_cursors(conn, 3)
-        sync_once(self.db, self.client)
+        sync_once(self.db)
         self.assertNotIn(("", ""), self.events())
         with self.db.connect() as conn:
             t = service.timeline(conn, self.day)
@@ -111,10 +102,10 @@ class TrackingSyncTests(unittest.TestCase):
                 service.set_track_mode(conn, {"mode": "selected"})
             self.assertEqual(service.get_tracking(conn)["mode"], "all")
 
-    def test_recent_apps_reads_aw_without_storing(self):
+    def test_recent_apps_reads_raw_events_without_importing(self):
         with self.db.connect() as conn:
             rules = [TrackRule(r["app_pattern"], r["title_pattern"]) for r in service.get_tracking(conn)["rules"]]
-        apps = recent_apps(self.client, rules, days=3)
+            apps = recent_apps(conn, rules, days=3)
         self.assertEqual([(a["app"], round(a["seconds"] / 60), a["tracked"]) for a in apps],
                          [("chrome.exe", 40, True), ("idea64.exe", 40, True), ("KakaoTalk.exe", 30, False)])
         self.assertEqual(self.events(), [])  # nothing imported

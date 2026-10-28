@@ -553,7 +553,7 @@ def add_exclusion(conn: sqlite3.Connection, data: dict) -> dict:
     for i in range(0, len(doomed), 500):
         chunk = doomed[i:i + 500]
         conn.execute(f"DELETE FROM window_events WHERE id IN ({','.join('?' * len(chunk))})", chunk)
-    # And from the built-in collector's raw events.
+    # And from the collector's raw events.
     raw = [r["id"] for r in conn.execute(
         f"SELECT id, app, title FROM collector_events WHERE kind = 'window' AND {field} LIKE ? ESCAPE '\\'",
         (_like(pattern),)) if matches_any(keyword, r["app"], r["title"])]
@@ -619,7 +619,7 @@ def delete_data(conn: sqlite3.Connection, data: dict, now: Optional[float] = Non
         "usage_events": conn.execute(
             "DELETE FROM usage_events WHERE ts >= ? AND ts <= ?", (lo, hi)).rowcount,
     }
-    # The built-in collector's raw events too, so they are really gone (ActivityWatch keeps its own).
+    # The collector's raw events too, so they are really gone.
     conn.execute("DELETE FROM collector_events WHERE start_ts >= ? AND end_ts <= ?", (lo, hi))
     if data.get("all") is True:
         conn.execute("DELETE FROM session_days")

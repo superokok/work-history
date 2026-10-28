@@ -10,11 +10,10 @@ _마지막 갱신: 2026-10-28_
 **작업 기록 (WorkHistory)**: 개발자용 로컬 전용 업무 기록 앱.
 
 - 주 기록 = **결과물**: 등록한 작업 폴더의 파일 변경을 5분마다 숨김 Git 저장소(dulwich)에 스냅샷.
-- 보조 기록 = **창 활동**: 앱/창 제목/유휴 상태를 작업 세션으로 묶음. Windows는 앱이 직접 기록
-  (내장 수집기), macOS/Linux는 ActivityWatch에서 가져옴.
+- 보조 기록 = **창 활동**: 앱이 직접 기록한 앱/창 제목/유휴 상태를 작업 세션으로 묶음.
 - 그 위에 타임라인, 일일 리뷰, 이어서 하기, 검색, 프로젝트, 개인정보 설정,
   AI 보고서·"AI에게 묻기"(Claude Code 헤드리스), Claude Code용 읽기 전용 MCP 서버.
-- 스택: Python 3.11+ (표준 라이브러리 위주) + 바닐라 HTML/JS, SQLite. 빌드 단계 없음.
+- 스택: Python 3.11+ (표준 라이브러리 위주) + 바닐라 HTML/JS, SQLite. 빌드 단계 없음. **Windows 전용.**
 - 저장소: https://github.com/superokok/work-history (private), 브랜치 `main`.
 - 라이선스: 자체 코드는 PROPRIETARY. 의존성은 상업적 판매 가능한 것만.
 
@@ -26,8 +25,6 @@ work-history/
 ├─ README.md               설치·사용법·명령행 옵션
 ├─ pyproject.toml          패키지 정의 (dulwich 필수; extras: claude=mcp, desktop=pywebview)
 ├─ start-workhistory.cmd   Windows 실행기 (.venv 우선)
-├─ start-workhistory.sh    macOS/Linux 실행기
-├─ install.sh              macOS/Linux 최초 설치
 ├─ workhistory/            앱 패키지 (아래 모듈 지도)
 │  └─ static/              UI: index.html, app.js, style.css (한국어)
 ├─ tests/                  unittest (helpers.py 공용 픽스처)
@@ -48,9 +45,8 @@ work-history/
 |---|---|---|
 | 진입 | `__main__.py` | 명령행 옵션, 단일 인스턴스, 서버·동기화 시작 |
 | 설정 | `config.py` | 상수 (세션 묶기 기준 등), 데이터 폴더 경로 |
-| 수집 | `collector.py` | Windows 내장 창·유휴 수집기 (ctypes, 2초마다) + `LocalSource`(awclient와 같은 호출로 제공) |
-| | `awclient.py` | ActivityWatch REST 클라이언트 (macOS/Linux) |
-| | `sync.py` | 증분 가져오기, 중복 제거, 수집 시 개인정보 필터 |
+| 수집 | `collector.py` | 창·유휴 수집기 (앱 안 스레드, ctypes, 2초마다) → 원본 `collector_events` (35일) |
+| | `sync.py` | 원본을 1분마다 가져오기, 중복 제거, 개인정보 규칙 적용 |
 | | `snapshots.py` | 작업 폴더 스냅샷 (dulwich), 변경 기록, 하위 폴더별 프로젝트 (앱은 추천만, 사람이 확인) |
 | | `extract.py` | 코드/텍스트, HWP, DOCX/XLSX/PPTX 텍스트 추출 |
 | 저장 | `db.py` | SQLite 스키마 + 마이그레이션 (`PRAGMA user_version`, 현재 v9) |
@@ -89,7 +85,7 @@ uv pip install --python .venv/Scripts/python.exe -e .[claude]
 .venv/Scripts/python.exe -m workhistory            # 또는 start-workhistory.cmd
 .venv/Scripts/python.exe -m workhistory --demo     # 데모 데이터
 
-# 테스트 (2026-10-28 기준 238개 통과)
+# 테스트 (2026-10-28 기준 231개 통과)
 .venv/Scripts/python.exe -m unittest discover -s tests -t .
 
 # AI 보고서 품질 평가 (Claude Code 로그인 필요)
@@ -103,9 +99,7 @@ python tools/build_portable.py --with-models   # 모델 파일까지 넣은 큰 
 .venv/Scripts/python.exe -m evals.report_eval --model local:Qwen3.5-4B-Q4_K_M
 ```
 
-데이터 폴더: Windows `%LOCALAPPDATA%\WorkHistory`, macOS `~/Library/Application Support/WorkHistory`,
-Linux `~/.local/share/WorkHistory`. Windows는 ActivityWatch를 쓰지 않는다
-(`--activity-source activitywatch`로만 사용; 개발 PC에 포터블 설치가 남아 있음).
+데이터 폴더: `%LOCALAPPDATA%\WorkHistory`.
 
 주의 (Windows, Claude 데스크톱 앱): Claude 안에서 띄운 프로세스는 `%LOCALAPPDATA%`가
 `%LOCALAPPDATA%\Packages\Claude_*\LocalCache\Local`로 가상화되어 **실제 앱과 다른 DB**를 본다.
@@ -118,10 +112,10 @@ Linux `~/.local/share/WorkHistory`. Windows는 ActivityWatch를 쓰지 않는다
 - 주 기록은 창 시간이 아니라 **파일 변경(결과물)**.
 - 파일 변경의 프로젝트는 앱이 추측해서 넣지 않는다: 하위 폴더별로 추천하고 사람이 확인한 것만 쓴다 (2026-10-28).
 - 스냅샷은 dulwich(Apache-2.0)로, git.exe·GPL 의존 금지.
-- 창 기록은 Windows에서 앱의 내장 수집기로 (ActivityWatch 별도 설치 없이, 2026-10-28). macOS/Linux는 ActivityWatch.
+- **Windows 전용**, 창 기록은 앱의 내장 수집기로. macOS/Linux 지원과 ActivityWatch는 뺐다 (2026-10-28).
 - AI는 셋 중 선택 (모두 `ai_client.Model` 구현): 내 PC의 로컬 모델(llama.cpp + Qwen3.5, 외부 전송 없음, 기본·추천),
   주소로 등록한 AI 서버(OpenAI 호환, 행망·사내 LLM), Claude Code(헤드리스). 로컬 모델 파일은 `llm/`(git 제외), 따로 배포.
   모델을 고르기 전(=동의 전)에는 AI 꺼짐.
 - Claude Code는 AI 설정의 모델 선택지로만 씀 (로컬 모델과 비교용). Claude Code에 앱을 등록하는 "Claude Code 연결"은
   2026-10-27에 없앰.
-- OS 독립, 로컬 전용, 배포는 Windows 포터블 zip + macOS/Linux `install.sh`.
+- 로컬 전용, 배포는 Windows 포터블 zip.

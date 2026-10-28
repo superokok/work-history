@@ -47,7 +47,6 @@ use and redistribution. Full license texts ship in the portable package under
 
 | Component | License | Use |
 |---|---|---|
-| ActivityWatch | MPL-2.0 | window activity source (talked to over its local REST API) |
 | Claude Code | Anthropic Commercial Terms / Consumer Terms | AI features, run as a separate program |
 
 ## Local AI (portable package, `llm/` folder)

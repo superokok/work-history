@@ -1,7 +1,7 @@
 [project]
 name = "workhistory"
 version = "0.1.0"
-description = "Local-first personal work history built on ActivityWatch data"
+description = "Local-first personal work history for Windows (file changes and window activity)"
 requires-python = ">=3.11"
 license = { text = "Proprietary" }
 classifiers = [

@@ -19,29 +19,23 @@ DB_FILENAME = "workhistory.db"
 DEMO_DB_FILENAME = "demo.db"
 
 DEFAULT_PORT = 5730
-DEFAULT_AW_URL = "http://127.0.0.1:5600"
 
+# How often raw window/idle events are imported (sync.py).
 SYNC_INTERVAL_S = 60
-# While ActivityWatch is unreachable, retry this often instead.
-RETRY_INTERVAL_S = 10
-# Re-read this much before the cursor so late heartbeats are not missed.
+# Re-read this much before the cursor so the open event's growth is not missed.
 SYNC_OVERLAP_S = 10 * 60
-SYNC_CHUNK_S = 24 * 60 * 60
 # How often registered work folders are snapshotted.
 SNAPSHOT_INTERVAL_S = 5 * 60
-DEFAULT_BACKFILL_DAYS = 30
 
-# Built-in collector (Windows; see collector.py). Away = no keyboard/mouse input for
-# AFK_AFTER_S, like ActivityWatch's default. Raw events are kept long enough for
-# "최근 30일 기록에 다시 적용".
+# Window/idle collector (collector.py). Away = no keyboard/mouse input for AFK_AFTER_S.
+# Raw events are kept long enough for "최근 30일 기록에 다시 적용".
 COLLECT_POLL_S = 2
 COLLECT_FLUSH_S = 15
 AFK_AFTER_S = 3 * 60
 RAW_RETENTION_S = 35 * 24 * 60 * 60
 
 # Foreground apps that mean "nobody is working" (Windows lock screen).
-# Windows lock screen, macOS login window / screen saver (as reported by ActivityWatch).
-IDLE_APPS = frozenset({"lockapp.exe", "loginwindow", "screensaverengine"})
+IDLE_APPS = frozenset({"lockapp.exe"})
 
 # Consecutive activities with the same app/title/project closer than this are
 # shown as one timeline row.
@@ -61,11 +55,5 @@ REVIEW_MIN_SESSION_S = 5 * 60
 
 
 def default_data_dir() -> Path:
-    """Per-user application data folder, following each OS's convention."""
-    if sys.platform == "win32":
-        base = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local")
-    elif sys.platform == "darwin":
-        base = Path.home() / "Library" / "Application Support"
-    else:
-        base = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share")
-    return base / APP_DIR_NAME
+    """Per-user application data folder: %LOCALAPPDATA%\\WorkHistory."""
+    return Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local") / APP_DIR_NAME

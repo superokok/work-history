@@ -188,7 +188,6 @@ def notices(dists: list[md.Distribution], python_version: str) -> str:
              "",
              "| Component | License | Use |",
              "|---|---|---|",
-             "| ActivityWatch | MPL-2.0 | window activity source (talked to over its local REST API) |",
              "| Claude Code | Anthropic Commercial Terms / Consumer Terms | AI features, run as a separate program |",
              "",
              "## Local AI (portable package, `llm/` folder)",
@@ -276,7 +275,7 @@ def main(argv=None) -> int:
     parser.add_argument("--with-models", action="store_true", help="put llm/models/*.gguf into the zip too")
     args = parser.parse_args(argv)
     if sys.platform != "win32":
-        raise SystemExit("The portable package is for Windows; on macOS / Linux use install.sh.")
+        raise SystemExit("The portable package is built on Windows (the app is Windows only).")
 
     site, home, py_version = venv_paths(args.venv)
     dists = closure(site, TOP_LEVEL)

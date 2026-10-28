@@ -1,8 +1,7 @@
 # 작업 기록 (WorkHistory)
 
-개발자를 위한 로컬 전용 업무 기록 앱입니다. [ActivityWatch](https://activitywatch.net)가
-기록한 앱/창/유휴 활동과 작업 폴더의 파일 변경을 모아, 검색하고 고칠 수 있는
-타임라인으로 만들어 줍니다. 프로젝트와 메모도 함께 관리합니다. 데이터는 컴퓨터 밖으로
+개발자를 위한 Windows용 로컬 전용 업무 기록 앱입니다. 앱이 직접 기록한 앱/창/유휴 활동과
+작업 폴더의 파일 변경을 모아, 검색하고 고칠 수 있는 타임라인으로 만들어 줍니다. 프로젝트와 메모도 함께 관리합니다. 데이터는 컴퓨터 밖으로
 나가지 않습니다.
 
 문서: [프로젝트 구조](docs/PROJECT_STRUCTURE.md) · [제품](docs/PRODUCT.md) ·
@@ -18,31 +17,24 @@ Python 런타임과 패키지가 들어 있어 시스템에 아무것도 설치�
 `http://127.0.0.1:5730/`을 엽니다. 업데이트할 때는 앱을 끄고 폴더를 교체하면 됩니다.
 데이터는 `%LOCALAPPDATA%\WorkHistory`에 그대로 남습니다.
 
-**macOS / Linux.** Python 3.11 이상이 설치된 상태에서 소스 폴더에서 `sh install.sh`를
-한 번 실행한 뒤 `./start-workhistory.sh`로 실행합니다.
-
 **그다음은 앱 안에서** (개인정보 탭): **실행**에서 컴퓨터를 켤 때 자동 시작을 켜고
-바탕화면(Windows) 또는 앱 메뉴(Linux) 바로가기를 만듭니다. **AI 설정**에서 AI 기능을
+바탕화면 바로가기를 만듭니다. **AI 설정**에서 AI 기능을
 켭니다. 터미널 작업은 필요 없습니다.
 
 함께 쓰면 좋은 프로그램 (별도 설치):
 
 - Claude Code (로그인 필요): AI 보고서와 질문에 사용합니다
   (https://docs.claude.com/en/docs/claude-code). API 키는 필요 없습니다.
-- ActivityWatch (macOS/Linux만): 창 활동 기록에 사용합니다
-  (https://github.com/ActivityWatch/activitywatch/releases). Windows는 앱이 직접 기록하므로
-  필요 없습니다. 폴더 스냅샷, AI 보고서 등 나머지 기능은 없어도 동작합니다.
 
 ## 개발
 
 ```bash
 uv venv .venv --python 3.12
-uv pip install --python .venv/Scripts/python.exe -e .[claude]   # Windows
-uv pip install --python .venv/bin/python -e .[claude]           # macOS / Linux
+uv pip install --python .venv/Scripts/python.exe -e .[claude]
 ```
 
-소스에서 실행할 때는 `start-workhistory.cmd` / `./start-workhistory.sh`(`.venv`를
-우선 사용) 또는 venv에서 `python -m workhistory`를 씁니다. 런타임 패키지(모두 상업적
+소스에서 실행할 때는 `start-workhistory.cmd`(`.venv`를 우선 사용) 또는 venv에서
+`python -m workhistory`를 씁니다. 런타임 패키지(모두 상업적
 사용 가능): `dulwich`(폴더 스냅샷, Apache-2.0), `mcp`(MIT)와 그 의존성.
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)를 참고하세요.
 
@@ -64,20 +56,15 @@ python tools/build_portable.py
 |---|---|
 | `--port N` | HTTP 포트 (기본 5730, 항상 127.0.0.1에만 바인딩) |
 | `--db PATH` | 데이터베이스 파일 (기본: 아래의 사용자별 데이터 폴더) |
-| `--aw-url URL` | ActivityWatch 주소 (기본 `http://127.0.0.1:5600`) |
-| `--backfill-days N` | 첫 동기화 때 가져올 ActivityWatch 기록 일수 (기본 30) |
 | `--demo` | 가상의 2주 개발자 시나리오가 담긴 별도 `demo.db` (데모로 표시됨), 동기화 안 함 |
 | `--window` | `pywebview`가 설치되어 있으면 자체 창, 없으면 브라우저. 아직 검증 안 됨. |
 | `--no-browser` | 브라우저를 열지 않음 |
 | `--verbose` | 디버그 로그 |
 
-데이터 폴더: Windows `%LOCALAPPDATA%\WorkHistory`, macOS
-`~/Library/Application Support/WorkHistory`, Linux
-`$XDG_DATA_HOME/WorkHistory` (기본 `~/.local/share/WorkHistory`).
+데이터 폴더: `%LOCALAPPDATA%\WorkHistory`.
 
-자동 시작: 앱 안의 스위치(개인정보 → 실행)로 로그온 시 앱이 시작됩니다.
-Windows에서는 앱이 켜져 있는 동안 창 활동도 직접 기록합니다. macOS/Linux의 ActivityWatch는
-자체 자동 시작을 씁니다 (macOS: 로그인 항목, Linux: 데스크톱 환경의 자동 시작 설정).
+자동 시작: 앱 안의 스위치(개인정보 → 실행)로 로그온 시 앱이 시작됩니다. 창 활동은
+앱이 켜져 있는 동안 기록하므로 자동 시작을 켜 두세요.
 
 ## 사용법
 
@@ -138,33 +125,28 @@ python -m workhistory.stats --days 7
 ## 테스트
 
 ```bash
-.venv/Scripts/python.exe -m unittest discover -s tests -t .   # Windows
-.venv/bin/python -m unittest discover -s tests -t .           # macOS / Linux
+.venv/Scripts/python.exe -m unittest discover -s tests -t .
 ```
 
-테스트는 임시 데이터베이스와, 실제 API의 범위 겹침·잘라내기·하트비트 동작을 흉내 내는
-가짜 ActivityWatch 서버를 씁니다.
+테스트는 임시 데이터베이스와 가짜 창 읽기(수집기)를 씁니다. 실제 Windows 창을 읽는 테스트도
+하나 있습니다.
 
 ## 문제 해결
 
 | 증상 | 해결 |
 |---|---|
-| "창 기록 오류" (Windows) | 상태 칩에 마우스를 올리면 원인이 보입니다. 앱을 다시 시작해 보세요. 그동안 저장된 기록은 계속 보입니다. |
-| "ActivityWatch 연결 안 됨" (macOS/Linux) | ActivityWatch를 실행하고 `http://127.0.0.1:5600`이 열리는지 확인하세요. 그동안 저장된 기록은 계속 보입니다. |
-| 상태 표시에 "창 기록 없음" / "유휴 감지 없음" | `aw-watcher-window` / `aw-watcher-afk` 감시기가 꺼져 있습니다. ActivityWatch 트레이 메뉴 → Modules를 확인하세요. |
+| "창 기록 오류" | 상태 칩에 마우스를 올리면 원인이 보입니다. 앱을 다시 시작해 보세요. 그동안 저장된 기록은 계속 보입니다. |
 | 유휴 데이터가 없다는 노란 경고 | 그날 AFK 데이터가 없어 창 시간이 모두 활동 시간으로 잡혔고, 실제보다 많을 수 있습니다. |
 | "포트 5730를 다른 프로그램이 쓰고 있습니다" | 다른 프로그램이 포트를 쓰고 있습니다 (이 앱이 이미 실행 중이면 그 창을 다시 엽니다). `--port`를 쓰세요. |
-| 관리자 권한(상승된) 앱의 창이 `unknown`으로 나옴 | Windows 내장 수집기는 대부분 읽습니다 (보호된 시스템 프로세스 제외). ActivityWatch는 자체를 관리자 권한으로 실행하지 않으면 그 창을 읽지 못합니다. |
+| 일부 창이 `unknown`으로 나옴 | 보호된 시스템 프로세스는 앱 이름을 읽을 수 없습니다. 관리자 권한 앱은 대부분 읽습니다. |
 | 압축 해제 시 "경로가 너무 깁니다" | 더 짧은 폴더(예: 문서)에 풀어 주세요. 폴더 경로가 약 130자까지는 문제없습니다. |
 | "작업 기록.cmd" 실행 전에 Windows 경고 (내려받은 파일) | 압축 풀기 전에 zip을 오른쪽 클릭 → 속성 → 차단 해제하거나, "실행"을 고르세요. |
-| 앱 설치 이전 데이터가 없음 | 첫 동기화 때는 `--backfill-days`(기본 30)일만 가져옵니다. 더 가져오려면 새 `--db`와 더 큰 값으로 시작하세요. |
+| 앱을 설치하기 전·꺼 둔 동안의 창 기록이 없음 | 창 활동은 앱이 켜져 있을 때만 기록합니다. 파일 변경은 다음 스캔 때 따라잡습니다. |
 
 ## 제한 사항
 
 [ARCHITECTURE §10](docs/ARCHITECTURE.md)과 [개인정보](docs/PRIVACY.md)를 보세요.
-가장 중요한 점: ActivityWatch를 쓰는 macOS/Linux에서는 일시 정지, 제외, 삭제가 이 앱의
-데이터베이스에만 적용되고, ActivityWatch는 거기서 직접 지우기 전까지 자체 사본을 갖고 있습니다.
-Windows 내장 수집기는 앱이 꺼져 있는 동안 창 활동을 기록하지 않습니다.
+가장 중요한 점: 창 활동은 앱이 켜져 있는 동안만 기록합니다.
 
 ## 라이선스
 

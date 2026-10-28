@@ -3,7 +3,6 @@
 import json
 import logging
 import mimetypes
-import os
 import re
 import socket
 import time
@@ -17,8 +16,6 @@ from urllib.parse import parse_qs, urlparse
 
 from . import ai_agent, ai_remote, ai_service, service, sessionstore, snapshots, usage
 from .ai_client import AIError
-from .awclient import AWError
-from .collector import LocalSource
 from .autostart import Launch
 from .autostart import default as default_launch
 from .db import Database
@@ -81,14 +78,13 @@ class App:
         @r("GET", "/api/status")
         def status(conn, query, body):
             last = self.syncer.last_result if self.syncer else None
-            local = self.syncer is not None and isinstance(self.syncer.client, LocalSource)
-            collector = self.syncer.client.collector if local else None
+            collector = self.syncer.collector if self.syncer else None
             return {
                 "demo": self.demo,
                 "paused": service.is_paused(conn),
                 "db_path": self.db.path,
-                # Where window activity comes from: the built-in collector (Windows) or ActivityWatch.
-                "source": None if self.syncer is None else "builtin" if local else "activitywatch",
+                # False when window activity can't be recorded (only file changes then).
+                "collecting": collector is not None,
                 "collector_error": collector.last_error if collector else None,
                 "sync": asdict(last) if last else None,
             }
@@ -211,10 +207,7 @@ class App:
             days = query.get("days", "7")
             if not days.isdigit() or not 1 <= int(days) <= 90:
                 raise ApiError(400, "days는 1~90 사이여야 합니다")
-            try:
-                return recent_apps(self.syncer.client, load_tracking(conn) or [], int(days))
-            except AWError:
-                raise ApiError(503, "ActivityWatch에 연결할 수 없어 앱 목록을 불러오지 못했습니다") from None
+            return recent_apps(conn, load_tracking(conn) or [], int(days))
 
         @r("POST", "/api/tracking/reapply")
         def tracking_reapply(conn, query, body):
@@ -529,11 +522,10 @@ class _ExclusiveServer(ThreadingHTTPServer):
     daemon_threads = True
     # On Windows SO_REUSEADDR lets another process bind the same port (a second
     # instance or a squatter). Demand exclusive use instead.
-    allow_reuse_address = os.name != "nt"
+    allow_reuse_address = False
 
     def server_bind(self) -> None:
-        if os.name == "nt":
-            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
         super().server_bind()
 
 

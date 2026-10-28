@@ -264,8 +264,8 @@ MIGRATIONS: list[str] = [
     UPDATE changes SET project_id = (SELECT f.project_id FROM watched_folders f WHERE f.id = changes.folder_id);
     UPDATE change_files SET project_id = (SELECT c.project_id FROM changes c WHERE c.id = change_files.change_id);
     """,
-    # v9: the built-in window/idle collector's own raw events (collector.py), read by sync.py like
-    # ActivityWatch's buckets. Kept for config.RAW_RETENTION_S only.
+    # v9: the window/idle collector's own raw events (collector.py), imported by sync.py.
+    # Kept for config.RAW_RETENTION_S only.
     """
     CREATE TABLE collector_events (
         id       INTEGER PRIMARY KEY,

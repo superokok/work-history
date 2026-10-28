@@ -2,7 +2,7 @@
 
 ## What is collected
 
-By the app's built-in collector on Windows (ActivityWatch on macOS/Linux), on this computer only:
+By the app itself while it runs (Windows), on this computer only:
 
 - Foreground application executable name (e.g. `Code.exe`)
 - Foreground window title (e.g. `UserController.java - gov24-api - Visual Studio Code`)
@@ -18,21 +18,14 @@ document/file contents, browser URLs, network traffic, microphone or camera.
 
 - App database: `%LOCALAPPDATA%\WorkHistory\workhistory.db` (override with
   `--db`). Demo data uses a separate `demo.db`.
-- Windows: the built-in collector keeps its raw window/idle events in the same app
-  database (`collector_events`) for 35 days, so tracking rules can be re-applied; older rows
-  are deleted automatically. Nothing is recorded while paused or for excluded windows.
-- macOS/Linux: ActivityWatch keeps **its own** database under its data folder
-  (Windows: `%LOCALAPPDATA%\activitywatch\`). Our app reads from it; it does not control
-  it.
-- ActivityWatch listens on `127.0.0.1:5600` only (verified with `netstat` on
-  2026-10-01); keep its `host` setting at the default. It has no
-  authentication, so programs running under your account can read it; the
-  same is true of our app's API and DB file.
+- The collector keeps its raw window/idle events in the same app database
+  (`collector_events`) for 35 days, so tracking rules can be re-applied; older rows are
+  deleted automatically. Nothing is recorded while paused or for excluded windows.
 - The app's data folder is readable only by your account, SYSTEM and
   administrators (default `%LOCALAPPDATA%` ACL). The DB is not encrypted;
   use BitLocker/device encryption against theft.
-- Nothing is uploaded. The app makes no network requests other than to
-  ActivityWatch on `127.0.0.1:5600` (macOS/Linux only).
+- Nothing is uploaded. Window activity is read inside the app; no other program or
+  network service is involved.
 - The app's web server listens on `127.0.0.1` only and rejects requests with a
   foreign `Host` header or without the app's custom header on writes. On
   Windows it binds the port exclusively (`SO_EXCLUSIVEADDRUSE`), so no other
@@ -62,17 +55,12 @@ document/file contents, browser URLs, network traffic, microphone or camera.
 
 ## Controls
 
-| Control | Effect in our DB | Effect in ActivityWatch |
-|---|---|---|
-| **Record only work apps** (기록 대상: 업무 앱만 기록) | Only windows matching a rule (app name contains X, optionally title contains Y) are imported with app and title. All other windows are stored as anonymous **업무 외** time: no app name, no title. "최근 30일에 다시 적용" re-imports from ActivityWatch with the current rules. | None. AW records every window; it has no allow-list option. |
-| **Pause / resume** (일시정지) | Events that start during a pause are discarded at import; paused time is removed from timelines. | **None.** AW keeps recording. To stop AW too, quit it from the tray icon. |
-| **Exclusion list** (제외 목록) | Events whose app or title contains a listed keyword (case-insensitive) are never imported; adding a rule also purges existing matching events. | None. AW stores them. For AW-side exclusion, set `exclude_titles` in AW's `aw-watcher-window` config (check your AW version supports it). |
-| **Delete data** (데이터 삭제) | Deletes imported events, notes, sessions and daily reviews for a date range or everything. | None. Delete AW buckets from the AW web UI (`http://localhost:5600`) if desired. Deleted ranges are not re-imported unless you reset the sync cursor. |
-
-The "Effect in ActivityWatch" column applies on macOS/Linux. On Windows the built-in collector
-(see "Where data lives") follows every control above itself: pause and exclusions stop
-recording, a new exclusion and "delete data" also remove its raw events, and "다시 적용"
-re-imports from its raw events.
+| Control | Effect |
+|---|---|
+| **Record only work apps** (기록 대상: 업무 앱만 기록) | Only windows matching a rule (app name contains X, optionally title contains Y) are imported with app and title. All other windows are stored as anonymous **업무 외** time: no app name, no title. The raw events keep them for 35 days so the app picker can list them and "최근 30일에 다시 적용" can re-import with the current rules. |
+| **Pause / resume** (일시정지) | Nothing is recorded while paused; paused time is removed from timelines. |
+| **Exclusion list** (제외 목록) | Windows whose app or title contains a listed keyword (case-insensitive) are never recorded or imported; adding a rule also purges existing matching events, raw ones included. |
+| **Delete data** (데이터 삭제) | Deletes imported and raw events, notes, sessions and daily reviews for a date range or everything. Deleted ranges are not re-imported. |
 
 ## Sensitive data in window titles
 
@@ -98,10 +86,7 @@ chosen date range). The summary is shown under the 보고서 tab ("효과 측정
 ## Start at logon and shortcuts
 
 Off by default. 개인정보 → 실행 creates or removes only files with the app's
-own name: Windows `Startup\작업 기록.lnk` and `Desktop\작업 기록.lnk`, macOS
-`~/Library/LaunchAgents/com.workhistory.app.plist`, Linux
-`~/.config/autostart/workhistory.desktop` and
-`~/.local/share/applications/workhistory.desktop`. Not available in demo mode.
+own name: `Startup\작업 기록.lnk` and `Desktop\작업 기록.lnk`. Not available in demo mode.
 
 ## Optional AI
 

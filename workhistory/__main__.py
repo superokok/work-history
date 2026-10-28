@@ -10,20 +10,16 @@ from pathlib import Path
 try:
     import dulwich  # noqa: F401  (required for folder snapshots)
 except ImportError:
-    _windows = sys.platform == "win32"
     sys.exit("\n".join([
         "필요한 패키지(dulwich)가 없습니다. 프로젝트 폴더에서 다음을 실행하세요:",
         "  uv venv .venv --python 3.12",
-        "  uv pip install --python " + (".venv/Scripts/python.exe" if _windows else ".venv/bin/python")
-        + " -e .[claude]",
-        "그다음 " + ("start-workhistory.cmd" if _windows else "./start-workhistory.sh") + " 로 실행하세요.",
+        "  uv pip install --python .venv/Scripts/python.exe -e .[claude]",
+        "그다음 start-workhistory.cmd 로 실행하세요.",
     ]))
 
 from . import demo
-from .awclient import AWClient
-from .collector import Collector, LocalSource, default_probe
-from .config import (DB_FILENAME, DEFAULT_AW_URL, DEFAULT_BACKFILL_DAYS, DEFAULT_PORT,
-                     DEMO_DB_FILENAME, default_data_dir)
+from .collector import Collector, default_probe
+from .config import DB_FILENAME, DEFAULT_PORT, DEMO_DB_FILENAME, default_data_dir
 from .db import Database
 from .server import App, create_server, find_running_instance, snapshots_dir
 from .snapshots import Snapshotter
@@ -34,11 +30,6 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="workhistory", description="개인 작업 기록")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     parser.add_argument("--db", type=Path, help="데이터베이스 파일 경로")
-    parser.add_argument("--activity-source", choices=("auto", "builtin", "activitywatch"), default="auto",
-                        help="창 기록을 어디서 가져올지 (auto: Windows는 내장 수집기, 그 밖은 ActivityWatch)")
-    parser.add_argument("--aw-url", default=DEFAULT_AW_URL, help="ActivityWatch 주소")
-    parser.add_argument("--backfill-days", type=int, default=DEFAULT_BACKFILL_DAYS,
-                        help="첫 동기화 때 가져올 과거 일수")
     parser.add_argument("--demo", action="store_true", help="별도 DB에 샘플 데이터로 실행")
     parser.add_argument("--window", action="store_true", help="pywebview 창으로 열기")
     parser.add_argument("--no-browser", action="store_true", help="브라우저를 열지 않음")
@@ -65,14 +56,12 @@ def main(argv: list[str] | None = None) -> int:
         if demo.seed(db, snapshots_dir(db)):
             print("데모 데이터를 생성했습니다.")
     else:
-        probe = default_probe() if args.activity_source != "activitywatch" else None
-        if probe is None and args.activity_source == "builtin":
-            print("이 OS에서는 내장 수집기를 쓸 수 없습니다. ActivityWatch를 씁니다.", file=sys.stderr)
-        if probe is not None:
-            collector = Collector(db, probe)
-            syncer = Syncer(db, LocalSource(db, collector), backfill_days=args.backfill_days)
+        probe = default_probe()
+        if probe is None:
+            print("창 기록을 읽을 수 없습니다 (Windows 전용). 작업 폴더 기록만 동작합니다.", file=sys.stderr)
         else:
-            syncer = Syncer(db, AWClient(args.aw_url), backfill_days=args.backfill_days)
+            collector = Collector(db, probe)
+        syncer = Syncer(db, collector)
         snapshotter = Snapshotter(db, snapshots_dir(db))
 
     try:

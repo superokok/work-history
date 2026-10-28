@@ -3,7 +3,7 @@ import time
 import unittest
 
 from workhistory import service
-from workhistory.collector import MAX_GAP_S, Collector, LocalSource, WindowsProbe
+from workhistory.collector import MAX_GAP_S, Collector, WindowsProbe
 from workhistory.config import AFK_AFTER_S, RAW_RETENTION_S
 from workhistory.sync import recent_apps, sync_once
 
@@ -106,31 +106,30 @@ class CollectorTests(unittest.TestCase):
         self.c.tick(self.t)
         self.assertEqual(len(self.raw()), 1)
 
-    def test_sync_imports_through_local_source(self):
+    def test_sync_imports_raw_events(self):
         self.run_ticks(0, 60)
         self.probe.app, self.probe.title = "Slack.exe", "general"
         self.run_ticks(62, 120)
-        source = LocalSource(self.db, self.c)
         with self.db.connect() as conn:
             service.add_track_rule(conn, {"app": "code"})
             service.set_track_mode(conn, {"mode": "selected"})
-        r = sync_once(self.db, source, now=self.t + 130)
+        r = sync_once(self.db, self.c, now=self.t + 130)
         self.assertTrue(r.ok)
-        self.assertEqual(r.buckets_found, {"window": True, "afk": True})
         with self.db.connect() as conn:
             rows = [(x["app"], x["title"]) for x in conn.execute("SELECT app, title FROM window_events ORDER BY start_ts")]
             self.assertEqual(conn.execute("SELECT COUNT(*) FROM afk_events").fetchone()[0], 1)
         self.assertEqual(rows, [("Code.exe", "main.py"), ("", "")])  # 업무 외: no app, no title
         # The app list still sees untracked apps (from the raw events).
-        apps = {a["app"]: a["tracked"] for a in recent_apps(source, [], now=self.t + 130)}
+        with self.db.connect() as conn:
+            apps = {a["app"]: a["tracked"] for a in recent_apps(conn, [], now=self.t + 130)}
         self.assertEqual(apps, {"Code.exe": False, "Slack.exe": False})
         # A growing event is extended by the next sync, not duplicated.
         self.run_ticks(122, 200)
-        sync_once(self.db, source, now=self.t + 210)
+        sync_once(self.db, self.c, now=self.t + 210)
         with self.db.connect() as conn:
             self.assertEqual(conn.execute("SELECT COUNT(*) FROM window_events").fetchone()[0], 2)
             end = conn.execute("SELECT MAX(end_ts) FROM window_events").fetchone()[0]
-        self.assertAlmostEqual(end, self.t + 200, places=3)  # via ISO time: microseconds
+        self.assertAlmostEqual(end, self.t + 200)
 
 
 @unittest.skipUnless(sys.platform == "win32", "Windows only")

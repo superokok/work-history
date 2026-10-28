@@ -21,7 +21,7 @@ changes to files in the user's work folders, snapshotted into hidden local
 Git repositories (see RESULTS_TRACKING.md). Window activity is a secondary
 signal. AI (Claude Code for now, a 폐쇄망 LLM later) turns the record into
 reports and answers, citing the exact changes, sessions and notes it used.
-ActivityWatch already provides an app-usage dashboard; this product's value is
+Plain activity trackers already show app usage; this product's value is
 the layer on top: projects, work sessions, notes, reviews, search and resume.
 
 ## Primary user
@@ -32,7 +32,7 @@ One developer on Windows 10/11, Korean UI, working offline-first.
 
 | Area | MVP behaviour |
 |---|---|
-| Collection | Window (app + title) and AFK events from ActivityWatch's local REST API. No keystrokes, clipboard, screenshots, OCR, or document contents. |
+| Collection | Window (app + title) and idle periods, read by the app itself (Windows; ActivityWatch until 2026-10-28). No keystrokes, clipboard, screenshots, OCR, or document contents. |
 | Projects | User-created projects; keyword rules on app name / window title; manual override per activity and per session. No LLM. |
 | Work sessions | Deterministic grouping of activity into sessions; editable title, project, notes; merge, split, exclude. Labeled as *inferred*. |
 | Daily timeline | Time range, app, project, duration, session, notes; filters for date, project, app. |
@@ -60,4 +60,4 @@ tracking, OCR/screenshots, mobile, multi-device merge.
 2. Are sessions grouped at a useful granularity (not every window switch)?
 3. Does the daily review save time vs. writing from memory?
 4. Did search recover forgotten work at least once?
-5. Is there value beyond ActivityWatch's own dashboard?
+5. Is there value beyond a plain activity tracker's dashboard?

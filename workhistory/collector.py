@@ -1,17 +1,15 @@
-"""Built-in window/idle collector (Windows), replacing ActivityWatch there.
+"""Window/idle collector (Windows) running inside the app.
 
 Every few seconds it reads the foreground window (app = exe file name, title) and the
-time since the last keyboard/mouse input, and keeps them as heartbeat-merged events in
-`collector_events`, like ActivityWatch's own database but inside ours and only for
-RAW_RETENTION_S. `LocalSource` serves them through the same calls as AWClient, so
-sync.py imports them unchanged (tracking rules, re-apply and the app list work as before).
+time since the last keyboard/mouse input, and keeps them as heartbeat-merged raw events
+in `collector_events` for RAW_RETENTION_S. sync.py imports them into window_events /
+afk_events with the current rules; the raw events let "다시 적용" and the app list work.
 
 Nothing is recorded while paused or for windows matching an exclusion. Only the window
 title and app name are read: no keystrokes, clipboard, screen or document contents.
 """
 
 import logging
-import socket
 import sqlite3
 import sys
 import threading
@@ -19,7 +17,6 @@ import time
 from dataclasses import dataclass
 from typing import Optional, Protocol
 
-from .awclient import to_iso
 from .classify import matches_any
 from .config import AFK_AFTER_S, COLLECT_FLUSH_S, COLLECT_POLL_S, RAW_RETENTION_S
 from .db import Database
@@ -27,9 +24,6 @@ from .store import load_exclusions
 
 log = logging.getLogger(__name__)
 
-SOURCE_NAME = "내장 수집기"
-WINDOW_BUCKET = "workhistory-window"
-AFK_BUCKET = "workhistory-afk"
 # A longer gap between two reads (sleep, hibernate, app closed) starts a new event.
 MAX_GAP_S = 30
 
@@ -103,7 +97,7 @@ class WindowsProbe:
 
 
 def default_probe() -> Optional[Probe]:
-    """The probe for this OS, or None where ActivityWatch is still used."""
+    """The Windows probe, or None when it can't be used (no window activity is recorded then)."""
     if sys.platform != "win32":
         return None
     try:
@@ -246,34 +240,3 @@ class Collector:
         if self._thread:
             self._thread.join(timeout=5)
 
-
-class LocalSource:
-    """The collector's events through AWClient's calls (info / buckets / events)."""
-
-    def __init__(self, db: Database, collector: Optional[Collector] = None):
-        self.db = db
-        self.collector = collector
-        self.hostname = socket.gethostname()
-
-    def info(self) -> dict:
-        return {"version": SOURCE_NAME, "hostname": self.hostname}
-
-    def buckets(self) -> dict[str, dict]:
-        # sync.py asks for buckets before it opens its own write transaction: write the open
-        # events' latest end now so events() sees them (writing later would wait on that transaction).
-        if self.collector is not None:
-            self.collector.flush()
-        common = {"hostname": self.hostname, "created": "builtin"}
-        return {WINDOW_BUCKET: {**common, "type": "currentwindow"},
-                AFK_BUCKET: {**common, "type": "afkstatus"}}
-
-    def events(self, bucket_id: str, start: float, end: float) -> list[dict]:
-        kind = "window" if bucket_id == WINDOW_BUCKET else "afk"
-        with self.db.connect() as conn:
-            rows = conn.execute(
-                "SELECT id, start_ts, end_ts, app, title, status FROM collector_events "
-                "WHERE kind = ? AND end_ts >= ? AND start_ts <= ? ORDER BY start_ts DESC",
-                (kind, start, end)).fetchall()
-        return [{"id": r["id"], "timestamp": to_iso(r["start_ts"]), "duration": r["end_ts"] - r["start_ts"],
-                 "data": {"app": r["app"], "title": r["title"]} if kind == "window" else {"status": r["status"]}}
-                for r in rows]
