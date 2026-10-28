@@ -51,6 +51,18 @@ class ServerTests(unittest.TestCase):
         ct = resp.getheader("Content-Type", "")
         return resp.status, (json.loads(raw) if ct.startswith("application/json") else raw), ct
 
+    def test_usage_api(self):
+        day = date.today().isoformat()
+        status, _, _ = self.request("POST", "/api/reports", {"kind": "daily", "day": day, "body": "a\nb", "metrics": {
+            "sid": "x1", "method": "manual", "active_s": 300, "wall_s": 600}})
+        self.assertEqual(status, 200)
+        self.assertEqual(self.request("POST", "/api/usage", {"kind": "search"})[0], 200)
+        self.assertEqual(self.request("POST", "/api/usage", {"kind": "keystrokes"})[0], 400)
+        self.assertEqual(self.request("GET", "/api/usage/summary?days=0")[0], 400)
+        status, s, _ = self.request("GET", "/api/usage/summary?days=7")
+        self.assertEqual(status, 200)
+        self.assertEqual((s["by_method"]["manual"]["count"], s["searches"]), (1, 1))
+
     def test_static_index(self):
         status, body, ct = self.request("GET", "/")
         self.assertEqual(status, 200)

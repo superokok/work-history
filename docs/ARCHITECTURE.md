@@ -53,6 +53,7 @@ autostart.py  – start-at-logon and shortcut files, switched from the app
 ai_context.py – the exact payload for the AI with verifiable references (C/S/N/P)
 ai_report.py  – report schema, prompt, reference verification, rendering
 ai_service.py – settings, consent, run log, saved reports
+usage.py      – effect measurement: report writing time, kept AI lines, search-to-open time (numbers only)
 review.py     – pure: template daily review + follow-up extraction
    ▼
 service.py    – timeline, search, notes, projects, review, resume queries
@@ -100,7 +101,7 @@ Consequences for sync:
 Not used: AW's query language (`/api/0/query`). We store raw events locally so
 history survives AW reinstalls and so the idle/exclusion logic is testable.
 
-## 5. Data model (schema v6)
+## 5. Data model (schema v7)
 
 ```
 sources        id, bucket_id, bucket_created, kind('window'|'afk'), hostname,
@@ -134,6 +135,11 @@ changes         id, folder_id, commit_id, ts, baseline, files_*/lines_* totals
 change_files    id, change_id, path, kind('A'|'M'|'D'), is_text, lines_added, lines_removed,
                 old_blob, new_blob
 ```
+
+v7 (effect measurement): `usage_events` (id, ts, kind, data JSON): numbers only, for the
+before/after page. Kinds: `report` (one per save: sid, method `ai`|`manual`, active/wall seconds,
+lines, AI-draft lines kept/edited), `search`, `search_open` (seconds after the search),
+`source_open`. `usage.py` records and summarises; never report text or queries.
 
 v6 (AI servers): `ai_endpoints` (id, name, url = API base ending in /v1, model_id, api_key, created_at):
 servers the user registered by address; model choice `remote:<id>`.

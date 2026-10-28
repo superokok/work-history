@@ -54,6 +54,9 @@ const isoDay = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDa
 const hhmm = (ts) => { const d = new Date(ts * 1000); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 const shiftDay = (day, delta) => { const d = new Date(day + "T00:00:00"); d.setDate(d.getDate() + delta); return isoDay(d); };
 const appName = (app) => app.replace(/\.exe$/i, "");
+// Effect-measurement events: numbers only, never blocks or bothers the user.
+const logUsage = (body) => api("POST", "/api/usage", body).catch(() => {});
+
 function dur(s) {
   const m = Math.round(s / 60);
   if (m < 60) return `${m}분`;
@@ -590,7 +593,33 @@ function setReportState() {
     el.textContent = "";
   }
 }
-$("report-body").addEventListener("input", setReportState);
+// ---- Effect measurement (numbers only, kept on this PC): how long a report takes to write, by hand
+// or from an AI draft. Time counts while the user types; a pause counts at most one minute (thinking).
+const IDLE_CAP_MS = 60_000;
+let writing = null; // { sid, method, aiDraft, startedAt, activeMs, lastAt }
+
+function startWriting(method, aiDraft = null) {
+  const now = Date.now();
+  writing = { sid: now.toString(36) + Math.random().toString(36).slice(2, 6), method, aiDraft,
+    startedAt: now, activeMs: 0, lastAt: now };
+}
+
+function touchWriting() {
+  if (!writing) {
+    if (reportSaved) return; // revising a saved report is not a new measurement
+    startWriting("manual");
+  }
+  const now = Date.now();
+  writing.activeMs += Math.min(now - writing.lastAt, IDLE_CAP_MS);
+  writing.lastAt = now;
+}
+
+const writingMetrics = () => writing && { sid: writing.sid, method: writing.method, ai_draft: writing.aiDraft,
+  active_s: writing.activeMs / 1000, wall_s: (Date.now() - writing.startedAt) / 1000 };
+
+$("report-body").addEventListener("input", () => { touchWriting(); setReportState(); });
+
+let reportLoaded = ""; // "kind|day" shown in the editor
 
 async function loadReport() {
   const kind = reportKind(), day = state.reportDay;
@@ -603,11 +632,18 @@ async function loadReport() {
     guarded(() => api("GET", "/api/ai/settings")),
   ]);
   if (!r || kind !== reportKind() || day !== state.reportDay) return;
+  // Coming back to the same report (e.g. after opening a cited record) keeps unsaved edits and the draft's evidence.
+  const unsaved = $("report-body").value !== (reportSaved ? reportSaved.body : "");
   reportSaved = r.saved;
-  $("report-body").value = r.saved ? r.saved.body : "";
+  if (reportLoaded !== `${kind}|${day}` || !unsaved) {
+    reportLoaded = `${kind}|${day}`;
+    $("report-body").value = r.saved ? r.saved.body : "";
+    $("report-side").replaceChildren();
+    writing = null;
+  }
   setReportState();
-  $("report-side").replaceChildren();
   renderReportNotice(ai);
+  loadEffect();
 }
 
 function renderReportNotice(ai) {
@@ -646,6 +682,7 @@ $("report-generate").addEventListener("click", () => {
     try {
       const r = await api("POST", "/api/ai/report", { kind: reportKind(), day: state.reportDay });
       $("report-body").value = r.text;
+      startWriting("ai", r.text);
       setReportState();
       renderReportSide(r);
     } finally {
@@ -664,6 +701,7 @@ const sourceWhen = (src) => (src.type === "session" || src.type === "change" ? `
   : src.day ? src.day.slice(5) : "");
 
 function openSource(src, ref) {
+  logUsage({ kind: "source_open", from: $("tab-report").hidden ? "ask" : "report" });
   if (src.type === "project") { state.resumeProject = src.project_id; showTab("resume"); }
   else if (src.type === "change") showChange(Number(ref.slice(1)));
   else if (src.type === "review") gotoReview(src.day);
@@ -727,11 +765,63 @@ function renderReportSide(r) {
 }
 
 $("report-save").addEventListener("click", () => guarded(async () => {
-  const r = await api("POST", "/api/reports", { kind: reportKind(), day: state.reportDay, body: $("report-body").value });
+  const r = await api("POST", "/api/reports", { kind: reportKind(), day: state.reportDay, body: $("report-body").value,
+    metrics: writingMetrics() });
   reportSaved = r.saved;
   setReportState();
   toast(r.saved ? "보고서를 저장했습니다." : "빈 보고서라 저장된 내용을 지웠습니다.");
+  loadEffect();
 }));
+
+// ---- Effect card: the numbers for the "효과측정지표" page, measured on this PC.
+const fmtSec = (s) => (s == null ? "-" : s < 60 ? `${Math.round(s)}초` : dur(s));
+const METHOD_LABELS = { ai: "AI 초안 고쳐 쓰기", manual: "직접 쓰기" };
+
+async function loadEffect() {
+  const u = await guarded(() => api("GET", "/api/usage/summary?days=30"));
+  if (u) renderEffect(u);
+}
+
+function effectLines(u) {
+  const { ai, manual } = u.by_method;
+  const lines = [];
+  for (const [key, m] of [["manual", manual], ["ai", ai]]) {
+    lines.push(`${METHOD_LABELS[key]}: ${m.count}건${m.count ? ` · 작성 시간 중앙값 ${fmtSec(m.median_active_s)}` : ""}`);
+  }
+  if (ai.median_active_s != null && manual.median_active_s) {
+    lines.push(`→ 작성 시간 ${Math.round((1 - ai.median_active_s / manual.median_active_s) * 100)}% 단축 (중앙값 기준)`);
+  }
+  if (u.ai_kept_ratio != null) lines.push(`AI 초안 줄 중 그대로 쓴 비율: ${Math.round(u.ai_kept_ratio * 100)}%`);
+  if (u.ai_generated) lines.push(`AI 초안 생성: ${u.ai_generated}회 · 평균 ${fmtSec(u.ai_generate_avg_s)}`);
+  lines.push(`기록 찾기: 검색 ${u.searches}회 → 결과 열기 ${u.search_opens}회` +
+    (u.search_open_median_s != null ? ` (검색 후 중앙값 ${fmtSec(u.search_open_median_s)})` : "") +
+    ` · 근거에서 기록 열기 ${u.source_opens}회 · AI에게 묻기 ${u.asks}회`);
+  return lines;
+}
+
+function renderEffect(u) {
+  const lines = effectLines(u);
+  const copy = h("button", { class: "small", onclick: () => guarded(async () => {
+    const text = [`효과 측정 (최근 ${u.days}일, ${isoDay(new Date())} 기준, 이 PC에서 자동 측정)`, ...lines.map((l) => `- ${l}`)].join("\n");
+    await navigator.clipboard.writeText(text);
+    toast("효과 측정 요약을 복사했습니다.");
+  }) }, "요약 복사");
+  $("effect-card").replaceChildren(
+    h("div", { class: "summary-head" }, h("h2", {}, "효과 측정 ", h("span", { class: "meta" }, `최근 ${u.days}일 · 이 PC에만 숫자로 저장`)), copy),
+    h("ul", { class: "plain compact" }, lines.map((l) => h("li", {}, l))),
+    u.reports.length ? h("table", { class: "rows" },
+      h("tr", {}, ...["저장", "보고서", "방식", "작성 시간", "줄 수", "AI 줄 그대로"].map((t) => h("th", {}, t))),
+      ...u.reports.slice(-10).reverse().map((r) => h("tr", {},
+        h("td", { class: "time" }, new Date(r.saved_at * 1000).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })),
+        h("td", {}, `${r.report === "daily" ? "업무일지" : "주간보고"} ${r.start.slice(5)}`),
+        h("td", {}, METHOD_LABELS[r.method]),
+        h("td", { class: "num" }, fmtSec(r.active_s)),
+        h("td", { class: "num" }, String(r.lines)),
+        h("td", { class: "num" }, r.ai_lines ? `${r.kept}/${r.ai_lines}` : "-")))) : "", // replaceChildren would print null
+    h("p", { class: "muted small-text" },
+      "기준선 재기: AI 초안 없이 위 칸에 직접 쓰고 저장하면 '직접 쓰기'로 잽니다. 시간은 입력하는 동안만 세고, 멈춘 시간은 최대 1분까지만 셉니다. ",
+      "보고서 내용·검색어는 저장하지 않습니다."));
+}
 
 $("report-copy").addEventListener("click", () => guarded(async () => {
   await navigator.clipboard.writeText($("report-body").value);
@@ -959,7 +1049,17 @@ $("search-form").addEventListener("submit", (e) => {
       if ($(id).value) params.set(k, $(id).value);
     }
     renderSearch(await api("GET", `/api/search?${params}`));
+    logUsage({ kind: "search" });
+    searchShownAt = Date.now();
   });
+});
+
+// How quickly a search leads to opening something: the first click on a result after each search.
+let searchShownAt = null;
+$("search-results").addEventListener("click", (e) => {
+  if (searchShownAt == null || !e.target.closest("button, a")) return;
+  logUsage({ kind: "search_open", after_s: (Date.now() - searchShownAt) / 1000 });
+  searchShownAt = null;
 });
 
 function gotoDay(day) {
@@ -997,7 +1097,7 @@ $("ask-form").addEventListener("submit", (e) => {
       $("ask-result").replaceChildren(
         factLegend(),
         h("div", { class: "ai-text answer" }, badge("ai", "AI 답변"), " ", ...parts),
-        cited.length ? h("div", { class: "answer-facts" }, h("div", { class: "meta" }, "답변에 쓴 기록"), factList(cited, sources)) : null,
+        cited.length ? h("div", { class: "answer-facts" }, h("div", { class: "meta" }, "답변에 쓴 기록"), factList(cited, sources)) : "",
         h("p", { class: "muted small-text" },
           `확인한 기록: ${r.tool_calls.map((c) => TOOL_LABELS[c.name] || c.name).join(" → ") || "없음"}`,
           r.dropped_refs ? ` · 확인되지 않은 근거 ${r.dropped_refs}개는 지웠습니다` : "",

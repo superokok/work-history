@@ -608,6 +608,8 @@ def delete_data(conn: sqlite3.Connection, data: dict, now: Optional[float] = Non
             "DELETE FROM sessions WHERE day >= ? AND day <= ?", (day_lo, day_hi)).rowcount,
         "reviews": conn.execute(
             "DELETE FROM daily_reviews WHERE day >= ? AND day <= ?", (day_lo, day_hi)).rowcount,
+        "usage_events": conn.execute(
+            "DELETE FROM usage_events WHERE ts >= ? AND ts <= ?", (lo, hi)).rowcount,
     }
     if data.get("all") is True:
         conn.execute("DELETE FROM session_days")

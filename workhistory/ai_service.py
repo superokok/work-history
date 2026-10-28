@@ -6,7 +6,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from . import ai_claude, ai_context, ai_local, ai_remote, ai_report
+from . import ai_claude, ai_context, ai_local, ai_remote, ai_report, usage
 from .ai_claude import ClaudeCodeModel, find_cli
 from .ai_client import AIError, Model, Usage
 from .store import Invalid
@@ -190,6 +190,7 @@ def save_report(conn: sqlite3.Connection, data: dict) -> Optional[dict]:
         "INSERT INTO reports (kind, start_day, end_day, body, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?) "
         "ON CONFLICT (kind, start_day, end_day) DO UPDATE SET body = excluded.body, updated_at = excluded.updated_at",
         (kind, start.isoformat(), end.isoformat(), body, now, now))
+    usage.record_report(conn, kind, start.isoformat(), body, data.get("metrics"), now)
     return get_report(conn, kind, day)
 
 

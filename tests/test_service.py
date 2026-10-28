@@ -198,7 +198,7 @@ class PrivacyTests(ServiceTestCase):
             counts = service.delete_data(conn, {"from": DAY.isoformat(), "to": DAY.isoformat()},
                                          now=local_ts(DAY, 23) + 86400 * 2)
             self.assertEqual(counts, {"window_events": 3, "afk_events": 0, "notes": 1, "sessions": 2, "reviews": 0,
-                                      "changes": 0})
+                                      "usage_events": 0, "changes": 0})
             self.assertEqual(len(all_rows(service.timeline(conn, DAY + timedelta(days=1)))), 1)
             self.assertEqual(conn.execute("SELECT kind FROM blocked_ranges").fetchone()[0], "deleted")
 

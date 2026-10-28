@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 from urllib.parse import parse_qs, urlparse
 
-from . import ai_agent, ai_remote, ai_service, service, sessionstore, snapshots
+from . import ai_agent, ai_remote, ai_service, service, sessionstore, snapshots, usage
 from .ai_client import AIError
 from .awclient import AWError
 from .autostart import Launch
@@ -294,6 +294,18 @@ class App:
         @r("POST", "/api/reports")
         def save_report(conn, query, body):
             return {"saved": ai_service.save_report(conn, body)}
+
+        @r("POST", "/api/usage")
+        def usage_event(conn, query, body):
+            usage.record_client(conn, body)
+            return {"ok": True}
+
+        @r("GET", "/api/usage/summary")
+        def usage_summary(conn, query, body):
+            days = query.get("days", "30")
+            if not days.isdigit() or not 1 <= int(days) <= 365:
+                raise ApiError(400, "days 값이 올바르지 않습니다")
+            return usage.summary(conn, int(days))
 
         @r("GET", "/api/folders")
         def folders(conn, query, body):

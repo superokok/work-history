@@ -237,6 +237,17 @@ MIGRATIONS: list[str] = [
         created_at REAL NOT NULL
     );
     """,
+    # v7: effect measurement (how long reports take, how much of the AI draft survives, how fast
+    # search finds things). Numbers only: never report text, queries or titles.
+    """
+    CREATE TABLE usage_events (
+        id   INTEGER PRIMARY KEY,
+        ts   REAL NOT NULL,
+        kind TEXT NOT NULL,
+        data TEXT NOT NULL DEFAULT '{}'
+    );
+    CREATE INDEX idx_usage_events_ts ON usage_events(ts);
+    """,
 ]
 
 SCHEMA_VERSION = len(MIGRATIONS)

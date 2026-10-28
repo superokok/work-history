@@ -51,7 +51,7 @@ work-history/
 | | `sync.py` | 증분 가져오기, 중복 제거, 수집 시 개인정보 필터 |
 | | `snapshots.py` | 작업 폴더 스냅샷 (dulwich), 변경 기록 |
 | | `extract.py` | 코드/텍스트, HWP, DOCX/XLSX/PPTX 텍스트 추출 |
-| 저장 | `db.py` | SQLite 스키마 + 마이그레이션 (`PRAGMA user_version`, 현재 v6) |
+| 저장 | `db.py` | SQLite 스키마 + 마이그레이션 (`PRAGMA user_version`, 현재 v7) |
 | | `store.py` | 공용 로더, 하루 경계, 세션 재계산 표시 |
 | 처리 (순수 함수) | `normalize.py` | 창 − AFK − 차단 구간 − 제외, 하루 단위 자르기 |
 | | `classify.py` | 수동 지정 > 키워드 규칙 > 없음 |
@@ -68,6 +68,7 @@ work-history/
 | | `ai_report.py` | 보고서 스키마, 프롬프트, 참조 검증, 렌더링 |
 | | `ai_agent.py` | "AI에게 묻기": 읽기 전용 기록 도구 + 인용 확인 |
 | | `ai_service.py` | AI 설정, 동의, 실행 로그, 저장된 보고서 |
+| | `usage.py` | 효과 측정: 보고서 작성 시간, AI 초안 그대로 쓴 줄, 검색 후 여는 시간 (숫자만, 이 PC에만) |
 | | `mcp_server.py` | 내부용 읽기 전용 MCP 서버: Claude Code 모델로 "AI에게 묻기"할 때만 앱이 띄움 (외부 연결 거부) |
 | 외부 연동 | `autostart.py` | 로그온 시 시작, 바로가기 생성 |
 | 서비스 | `service.py` | 타임라인, 검색, 메모, 프로젝트, 리뷰, 이어서 하기 쿼리 |
@@ -86,7 +87,7 @@ uv pip install --python .venv/Scripts/python.exe -e .[claude]
 .venv/Scripts/python.exe -m workhistory            # 또는 start-workhistory.cmd
 .venv/Scripts/python.exe -m workhistory --demo     # 데모 데이터
 
-# 테스트 (2026-10-21 기준 203개 통과)
+# 테스트 (2026-10-28 기준 226개 통과)
 .venv/Scripts/python.exe -m unittest discover -s tests -t .
 
 # AI 보고서 품질 평가 (Claude Code 로그인 필요)
