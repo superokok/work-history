@@ -31,6 +31,14 @@ SYNC_CHUNK_S = 24 * 60 * 60
 SNAPSHOT_INTERVAL_S = 5 * 60
 DEFAULT_BACKFILL_DAYS = 30
 
+# Built-in collector (Windows; see collector.py). Away = no keyboard/mouse input for
+# AFK_AFTER_S, like ActivityWatch's default. Raw events are kept long enough for
+# "최근 30일 기록에 다시 적용".
+COLLECT_POLL_S = 2
+COLLECT_FLUSH_S = 15
+AFK_AFTER_S = 3 * 60
+RAW_RETENTION_S = 35 * 24 * 60 * 60
+
 # Foreground apps that mean "nobody is working" (Windows lock screen).
 # Windows lock screen, macOS login window / screen saver (as reported by ActivityWatch).
 IDLE_APPS = frozenset({"lockapp.exe", "loginwindow", "screensaverengine"})

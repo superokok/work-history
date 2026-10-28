@@ -25,10 +25,10 @@ desktop window instead. No frontend build step.
 ## 3. Pipeline
 
 ```
-ActivityWatch (separate process, 127.0.0.1:5600)
-   │  REST: /api/0/info, /api/0/buckets/, /api/0/buckets/{id}/events
-   ▼
-awclient.py   – thin urllib client, typed errors when AW is unreachable
+Windows: collector.py (in-app thread, Win32 via ctypes) → collector_events table
+         LocalSource  – serves those rows through the same calls as awclient
+macOS/Linux: ActivityWatch (separate process, 127.0.0.1:5600)
+         awclient.py  – thin urllib client for /api/0/info, buckets/, buckets/{id}/events
    ▼
 sync.py       – incremental pull, dedupe/upsert, privacy filtering at ingest
    ▼
@@ -98,10 +98,37 @@ Consequences for sync:
   suffix; we only use it as an identity string.
 - AW unreachable → sync reports status, stored history remains usable.
 
+### 4.1 Built-in collector (Windows, 2026-10-28)
+
+On Windows the app no longer needs ActivityWatch (one install, nothing GPL in the bundle).
+`collector.py` reads every 2 s, with standard-library `ctypes` only:
+
+- foreground window: `GetForegroundWindow` → `GetWindowTextW` (title) and
+  `GetWindowThreadProcessId` → `OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION)` →
+  `QueryFullProcessImageNameW` (app = exe file name, the same format AW used, so existing
+  tracking rules keep matching). Limited rights also read most elevated (admin) windows,
+  which AW's watcher reported as `unknown`.
+- idle: `GetLastInputInfo` vs `GetTickCount` (32-bit wrap handled). Away after 3 min without
+  input (`config.AFK_AFTER_S`, AW's default); the away period starts at the last input.
+
+Same window (or status) read again within 30 s extends the open event; a longer gap (sleep,
+app closed) starts a new one. Open events are written every 15 s and right before a sync.
+Rows go to `collector_events` (kept 35 days, `config.RAW_RETENTION_S`), which plays the role of
+AW's database: `LocalSource` exposes them as two buckets (`workhistory-window`,
+`workhistory-afk`, `created = "builtin"`) through `info()/buckets()/events()`, so `sync.py`,
+"다시 적용" and the app list work unchanged. `buckets()` flushes the open events, because
+sync calls it before opening its own write transaction.
+
+Unlike AW: nothing is recorded while paused or for windows matching an exclusion, adding an
+exclusion purges matching raw rows, and "delete data" deletes raw rows too.
+
+Choice: `--activity-source auto|builtin|activitywatch` (default auto = built-in where available).
+macOS/Linux still use ActivityWatch until a collector is written for them.
+
 Not used: AW's query language (`/api/0/query`). We store raw events locally so
 history survives AW reinstalls and so the idle/exclusion logic is testable.
 
-## 5. Data model (schema v8)
+## 5. Data model (schema v9)
 
 ```
 sources        id, bucket_id, bucket_created, kind('window'|'afk'), hostname,
@@ -140,6 +167,9 @@ v8 (projects for parts of a folder, see RESULTS_TRACKING.md): `folder_areas`
 (folder_id, subpath, project_id NULL = "no project", created_at) holds what the user confirmed;
 `changes.project_id` / `change_files.project_id` are derived from it and the folder's project
 (`snapshots.attribute_folder`, re-run when either changes). Queries use these, not the folder's project.
+
+v9 (built-in collector, §4.1): `collector_events` (id, kind 'window'|'afk', start_ts, end_ts,
+app, title, status), the raw events `sync.py` imports from on Windows; pruned after 35 days.
 
 v7 (effect measurement): `usage_events` (id, ts, kind, data JSON): numbers only, for the
 before/after page. Kinds: `report` (one per save: sid, method `ai`|`manual`, active/wall seconds,
@@ -263,7 +293,7 @@ in a Linux container (Python 3.11, with and without the AI SDK).
 | Component | License | How we use it | Obligation |
 |---|---|---|---|
 | ActivityWatch (`activitywatch`, `aw-server`, `aw-server-rust`, `aw-core`, `aw-client`, `aw-watcher-window`, `aw-watcher-afk`) | MPL-2.0 | Separate process, REST API only; **no AW code copied** | None for our code. MPL-2.0 permits commercial use; it is file-level copyleft and applies only if we modify/distribute MPL files. |
-| AW Windows bundle (`aw-qt` tray) | contains **PyQt6** (GPL-3 or commercial) | Installed separately by the user | Do **not** redistribute the AW bundle inside a commercial product without legal review. Future option: ship only `aw-server-rust` + watchers (audit their deps first) or write our own small collector. |
+| AW Windows bundle (`aw-qt` tray) | contains **PyQt6** (GPL-3 or commercial) | Installed separately by the user (macOS/Linux only since 2026-10-28) | Do **not** redistribute the AW bundle inside a commercial product without legal review. Windows uses our own collector (§4.1) instead. |
 | pywebview (optional) | BSD-3-Clause | Optional desktop window | Keep notice if distributed. |
 | Python, SQLite | PSF / public domain | Runtime | Notice for Python if bundled. |
 
@@ -274,8 +304,11 @@ name or branding.
 
 - Window titles only; no URLs (that needs `aw-watcher-web` browser extension)
   and no file paths unless the editor puts them in the title.
-- AFK detection uses ActivityWatch's default 3-minute threshold; reading
+- AFK detection uses a 3-minute threshold (AW's default, also the built-in collector's); reading
   without input counts as idle.
-- Pausing in our app does not stop ActivityWatch's own recording (it has no
-  pause API in v0.13.2) — see PRIVACY.md.
-- Elevated (admin) windows may report as `unknown` to a non-elevated watcher.
+- With ActivityWatch (macOS/Linux): pausing in our app does not stop ActivityWatch's own
+  recording (it has no pause API in v0.13.2) — see PRIVACY.md. The built-in collector stops.
+- Elevated (admin) windows may report as `unknown` to a non-elevated ActivityWatch watcher;
+  the built-in collector reads most of them. Protected processes still show as `unknown`.
+- The built-in collector runs inside the app: while the app is closed, no window activity is
+  recorded (file changes are caught up at the next scan).

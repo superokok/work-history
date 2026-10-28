@@ -21,6 +21,7 @@ except ImportError:
 
 from . import demo
 from .awclient import AWClient
+from .collector import Collector, LocalSource, default_probe
 from .config import (DB_FILENAME, DEFAULT_AW_URL, DEFAULT_BACKFILL_DAYS, DEFAULT_PORT,
                      DEMO_DB_FILENAME, default_data_dir)
 from .db import Database
@@ -33,6 +34,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="workhistory", description="개인 작업 기록")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     parser.add_argument("--db", type=Path, help="데이터베이스 파일 경로")
+    parser.add_argument("--activity-source", choices=("auto", "builtin", "activitywatch"), default="auto",
+                        help="창 기록을 어디서 가져올지 (auto: Windows는 내장 수집기, 그 밖은 ActivityWatch)")
     parser.add_argument("--aw-url", default=DEFAULT_AW_URL, help="ActivityWatch 주소")
     parser.add_argument("--backfill-days", type=int, default=DEFAULT_BACKFILL_DAYS,
                         help="첫 동기화 때 가져올 과거 일수")
@@ -57,12 +60,19 @@ def main(argv: list[str] | None = None) -> int:
         print(f"데이터베이스를 열 수 없습니다 ({db_path}): {e}", file=sys.stderr)
         return 1
 
-    syncer = snapshotter = None
+    syncer = snapshotter = collector = None
     if args.demo:
         if demo.seed(db, snapshots_dir(db)):
             print("데모 데이터를 생성했습니다.")
     else:
-        syncer = Syncer(db, AWClient(args.aw_url), backfill_days=args.backfill_days)
+        probe = default_probe() if args.activity_source != "activitywatch" else None
+        if probe is None and args.activity_source == "builtin":
+            print("이 OS에서는 내장 수집기를 쓸 수 없습니다. ActivityWatch를 씁니다.", file=sys.stderr)
+        if probe is not None:
+            collector = Collector(db, probe)
+            syncer = Syncer(db, LocalSource(db, collector), backfill_days=args.backfill_days)
+        else:
+            syncer = Syncer(db, AWClient(args.aw_url), backfill_days=args.backfill_days)
         snapshotter = Snapshotter(db, snapshots_dir(db))
 
     try:
@@ -82,6 +92,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"작업 기록: {url}  (DB: {db_path})")
     print("이 창을 닫으면 작업 기록이 종료됩니다. (기록은 저장되어 있습니다)")
 
+    if collector:
+        collector.start()
     if syncer:
         syncer.start()
     if snapshotter:
@@ -106,6 +118,8 @@ def main(argv: list[str] | None = None) -> int:
     finally:
         if syncer:
             syncer.stop()
+        if collector:
+            collector.stop()
         if snapshotter:
             snapshotter.stop()
         server.shutdown()

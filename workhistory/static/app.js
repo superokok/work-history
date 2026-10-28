@@ -121,6 +121,8 @@ async function loadStatus() {
   const s = await api("GET", "/api/status");
   $("demo-banner").hidden = !s.demo;
   $("db-path").textContent = s.db_path;
+  $("source-builtin").hidden = s.source !== "builtin";
+  $("source-aw").hidden = s.source !== "activitywatch";
   $("pause-btn").textContent = s.paused ? "기록 재개" : "일시정지";
   $("sync-btn").hidden = s.demo;
   const chip = $("sync-status");
@@ -133,10 +135,14 @@ async function loadStatus() {
     chip.textContent = "데모 모드";
   } else if (!s.sync) {
     chip.textContent = "첫 동기화 중…";
+  } else if (s.source === "builtin" && (s.collector_error || !s.sync.ok)) {
+    chip.classList.add("err");
+    chip.textContent = "창 기록 오류 (저장된 기록만 표시)";
+    chip.title = s.collector_error || s.sync.error || "";
   } else if (s.sync.ok) {
     chip.classList.add("ok");
     const missing = !s.sync.buckets_found.window ? " · 창 기록 없음" : !s.sync.buckets_found.afk ? " · 유휴 감지 없음" : "";
-    chip.textContent = `ActivityWatch 연결됨 · ${hhmm(s.sync.finished_at)} 동기화${missing}`;
+    chip.textContent = `${s.source === "builtin" ? "창 기록 중" : "ActivityWatch 연결됨"} · ${hhmm(s.sync.finished_at)} 동기화${missing}`;
   } else {
     chip.classList.add("err");
     chip.textContent = "ActivityWatch 연결 안 됨 (저장된 기록만 표시)";
@@ -1309,7 +1315,7 @@ async function loadTracking() {
 }
 
 async function loadTrackApps() {
-  $("track-apps").replaceChildren(h("li", { class: "muted" }, "ActivityWatch에서 불러오는 중…"));
+  $("track-apps").replaceChildren(h("li", { class: "muted" }, "불러오는 중…"));
   const apps = await guarded(() => api("GET", "/api/tracking/apps?days=7"));
   if (!apps) { $("track-apps").replaceChildren(h("li", { class: "muted" }, "불러오지 못했습니다.")); return; }
   $("track-apps").replaceChildren(...(apps.length ? apps.map((a) => h("li", {},
@@ -1346,7 +1352,7 @@ $("track-form").addEventListener("submit", (e) => {
 });
 
 $("track-reapply").addEventListener("click", () => {
-  if (!confirm("최근 30일 기록을 ActivityWatch에서 다시 가져와 지금 규칙대로 고칩니다. 기록 대상이 아닌 창은 이름·제목이 지워집니다. 계속할까요?")) return;
+  if (!confirm("최근 30일 기록을 원본에서 다시 가져와 지금 규칙대로 고칩니다. 기록 대상이 아닌 창은 이름·제목이 지워집니다. 계속할까요?")) return;
   guarded(async () => {
     $("track-reapply").disabled = true;
     try {

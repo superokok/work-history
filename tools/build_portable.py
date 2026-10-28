@@ -76,9 +76,6 @@ if not defined WORKHISTORY_MIN (
   exit /b
 )
 set "WORKHISTORY_LAUNCHER=%~f0"
-set "AW=%LOCALAPPDATA%\ActivityWatch\activitywatch\aw-qt.exe"
-tasklist /FI "IMAGENAME eq aw-qt.exe" 2>nul | find /I "aw-qt.exe" >nul
-if errorlevel 1 if exist "%AW%" start "" "%AW%"
 rem -I: ignore PYTHON* variables and the user's own site-packages.
 "runtime\python.exe" -I -m workhistory %*
 if errorlevel 1 pause
@@ -94,8 +91,6 @@ README_TXT = """작업 기록 (WorkHistory) {version}
   3. 앱의 개인정보 탭 → 실행에서 "컴퓨터를 켤 때 자동 실행", "바탕화면 바로가기"를 켤 수 있습니다.
 
 선택 사항
-  - 창 사용 기록: ActivityWatch를 설치하면 함께 기록합니다 (없어도 작업 폴더 기록은 동작).
-    https://github.com/ActivityWatch/activitywatch/releases
   - AI 보고서·질문 (둘 중 하나를 개인정보 탭 → AI 설정에서 고릅니다)
     · 내 PC의 AI: llm\\models 폴더에 .gguf 모델 파일을 넣으면 "내 PC · <모델>"이 나타납니다.
       기록이 PC 밖으로 나가지 않고 인터넷 없이 동작합니다. 그래픽카드가 없으면 느립니다.

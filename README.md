@@ -29,9 +29,9 @@ Python 런타임과 패키지가 들어 있어 시스템에 아무것도 설치�
 
 - Claude Code (로그인 필요): AI 보고서와 질문에 사용합니다
   (https://docs.claude.com/en/docs/claude-code). API 키는 필요 없습니다.
-- ActivityWatch: 창 활동 기록에 사용합니다
-  (https://github.com/ActivityWatch/activitywatch/releases). 폴더 스냅샷, AI 보고서 등
-  나머지 기능은 없어도 동작하며, 설치되어 있으면 실행기가 함께 시작합니다.
+- ActivityWatch (macOS/Linux만): 창 활동 기록에 사용합니다
+  (https://github.com/ActivityWatch/activitywatch/releases). Windows는 앱이 직접 기록하므로
+  필요 없습니다. 폴더 스냅샷, AI 보고서 등 나머지 기능은 없어도 동작합니다.
 
 ## 개발
 
@@ -76,8 +76,8 @@ python tools/build_portable.py
 `$XDG_DATA_HOME/WorkHistory` (기본 `~/.local/share/WorkHistory`).
 
 자동 시작: 앱 안의 스위치(개인정보 → 실행)로 로그온 시 앱이 시작됩니다.
-ActivityWatch는 자체 자동 시작을 씁니다 (Windows: `shell:startup`의 바로가기,
-macOS: 로그인 항목, Linux: 데스크톱 환경의 자동 시작 설정).
+Windows에서는 앱이 켜져 있는 동안 창 활동도 직접 기록합니다. macOS/Linux의 ActivityWatch는
+자체 자동 시작을 씁니다 (macOS: 로그인 항목, Linux: 데스크톱 환경의 자동 시작 설정).
 
 ## 사용법
 
@@ -149,11 +149,12 @@ python -m workhistory.stats --days 7
 
 | 증상 | 해결 |
 |---|---|
-| "ActivityWatch 연결 안 됨" | `aw-qt.exe`를 실행하고 `http://127.0.0.1:5600`이 열리는지 확인하세요. 그동안 저장된 기록은 계속 보입니다. |
+| "창 기록 오류" (Windows) | 상태 칩에 마우스를 올리면 원인이 보입니다. 앱을 다시 시작해 보세요. 그동안 저장된 기록은 계속 보입니다. |
+| "ActivityWatch 연결 안 됨" (macOS/Linux) | ActivityWatch를 실행하고 `http://127.0.0.1:5600`이 열리는지 확인하세요. 그동안 저장된 기록은 계속 보입니다. |
 | 상태 표시에 "창 기록 없음" / "유휴 감지 없음" | `aw-watcher-window` / `aw-watcher-afk` 감시기가 꺼져 있습니다. ActivityWatch 트레이 메뉴 → Modules를 확인하세요. |
 | 유휴 데이터가 없다는 노란 경고 | 그날 AFK 데이터가 없어 창 시간이 모두 활동 시간으로 잡혔고, 실제보다 많을 수 있습니다. |
 | "포트 5730를 다른 프로그램이 쓰고 있습니다" | 다른 프로그램이 포트를 쓰고 있습니다 (이 앱이 이미 실행 중이면 그 창을 다시 엽니다). `--port`를 쓰세요. |
-| 관리자 권한(상승된) 앱의 창이 `unknown`으로 나옴 | ActivityWatch 자체를 관리자 권한으로 실행하지 않으면 감시기가 그 창을 읽지 못합니다. |
+| 관리자 권한(상승된) 앱의 창이 `unknown`으로 나옴 | Windows 내장 수집기는 대부분 읽습니다 (보호된 시스템 프로세스 제외). ActivityWatch는 자체를 관리자 권한으로 실행하지 않으면 그 창을 읽지 못합니다. |
 | 압축 해제 시 "경로가 너무 깁니다" | 더 짧은 폴더(예: 문서)에 풀어 주세요. 폴더 경로가 약 130자까지는 문제없습니다. |
 | "작업 기록.cmd" 실행 전에 Windows 경고 (내려받은 파일) | 압축 풀기 전에 zip을 오른쪽 클릭 → 속성 → 차단 해제하거나, "실행"을 고르세요. |
 | 앱 설치 이전 데이터가 없음 | 첫 동기화 때는 `--backfill-days`(기본 30)일만 가져옵니다. 더 가져오려면 새 `--db`와 더 큰 값으로 시작하세요. |
@@ -161,8 +162,9 @@ python -m workhistory.stats --days 7
 ## 제한 사항
 
 [ARCHITECTURE §10](docs/ARCHITECTURE.md)과 [개인정보](docs/PRIVACY.md)를 보세요.
-가장 중요한 점: 일시 정지, 제외, 삭제는 이 앱의 데이터베이스에만 적용됩니다.
-ActivityWatch는 거기서 직접 지우기 전까지 자체 사본을 갖고 있습니다.
+가장 중요한 점: ActivityWatch를 쓰는 macOS/Linux에서는 일시 정지, 제외, 삭제가 이 앱의
+데이터베이스에만 적용되고, ActivityWatch는 거기서 직접 지우기 전까지 자체 사본을 갖고 있습니다.
+Windows 내장 수집기는 앱이 꺼져 있는 동안 창 활동을 기록하지 않습니다.
 
 ## 라이선스
 
