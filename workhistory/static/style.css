@@ -137,7 +137,11 @@ ul.report-items li { padding: 4px 0 6px; font-size: 13px; }
 .change-files { font-size: 12px; margin-top: 2px; }
 .file-A { color: #3aa76d; }
 .file-D { color: var(--danger); text-decoration: line-through; }
-.folder-item { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.folder-item { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.folder-item .unassigned { display: inline-block; font-size: 12px; background: var(--warn-bg); border: 1px solid var(--warn-line); border-radius: 6px; padding: 3px 8px; margin-top: 4px; }
+.folder-item .areas { flex-basis: 100%; border-left: 3px solid var(--line); padding: 4px 0 4px 10px; }
+.area-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 3px 0; flex-wrap: wrap; }
+.area-saved summary { cursor: pointer; font-size: 12px; color: var(--muted); margin-top: 4px; }
 .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 20; display: flex; align-items: center; justify-content: center; padding: 16px; }
 .overlay[hidden] { display: none; }
 .overlay-box { width: min(1000px, 100%); max-height: 90vh; display: flex; flex-direction: column; margin: 0; }

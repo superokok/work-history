@@ -49,9 +49,9 @@ work-history/
 | 설정 | `config.py` | 상수 (세션 묶기 기준 등), 데이터 폴더 경로 |
 | 수집 | `awclient.py` | ActivityWatch REST 클라이언트 |
 | | `sync.py` | 증분 가져오기, 중복 제거, 수집 시 개인정보 필터 |
-| | `snapshots.py` | 작업 폴더 스냅샷 (dulwich), 변경 기록 |
+| | `snapshots.py` | 작업 폴더 스냅샷 (dulwich), 변경 기록, 하위 폴더별 프로젝트 (앱은 추천만, 사람이 확인) |
 | | `extract.py` | 코드/텍스트, HWP, DOCX/XLSX/PPTX 텍스트 추출 |
-| 저장 | `db.py` | SQLite 스키마 + 마이그레이션 (`PRAGMA user_version`, 현재 v7) |
+| 저장 | `db.py` | SQLite 스키마 + 마이그레이션 (`PRAGMA user_version`, 현재 v8) |
 | | `store.py` | 공용 로더, 하루 경계, 세션 재계산 표시 |
 | 처리 (순수 함수) | `normalize.py` | 창 − AFK − 차단 구간 − 제외, 하루 단위 자르기 |
 | | `classify.py` | 수동 지정 > 키워드 규칙 > 없음 |
@@ -87,7 +87,7 @@ uv pip install --python .venv/Scripts/python.exe -e .[claude]
 .venv/Scripts/python.exe -m workhistory            # 또는 start-workhistory.cmd
 .venv/Scripts/python.exe -m workhistory --demo     # 데모 데이터
 
-# 테스트 (2026-10-28 기준 226개 통과)
+# 테스트 (2026-10-28 기준 230개 통과)
 .venv/Scripts/python.exe -m unittest discover -s tests -t .
 
 # AI 보고서 품질 평가 (Claude Code 로그인 필요)
@@ -105,10 +105,16 @@ python tools/build_portable.py --with-models   # 모델 파일까지 넣은 큰 
 Linux `~/.local/share/WorkHistory`. ActivityWatch(개발 PC)는 포터블 설치
 `%LOCALAPPDATA%\ActivityWatch\activitywatch\aw-qt.exe`.
 
+주의 (Windows, Claude 데스크톱 앱): Claude 안에서 띄운 프로세스는 `%LOCALAPPDATA%`가
+`%LOCALAPPDATA%\Packages\Claude_*\LocalCache\Local`로 가상화되어 **실제 앱과 다른 DB**를 본다.
+실제 앱 데이터는 실행 중인 앱의 API(`http://127.0.0.1:5730/api/...`)로 확인·변경한다.
+실제 앱은 Claude 밖에서 띄운다 (`explorer.exe "<시작프로그램>\작업 기록.lnk"`).
+
 ## 주요 결정 (바꾸기 전에 사용자에게 확인)
 
 - 스택: Python 표준 라이브러리 + 바닐라 JS, 프레임워크 없음.
 - 주 기록은 창 시간이 아니라 **파일 변경(결과물)**.
+- 파일 변경의 프로젝트는 앱이 추측해서 넣지 않는다: 하위 폴더별로 추천하고 사람이 확인한 것만 쓴다 (2026-10-28).
 - 스냅샷은 dulwich(Apache-2.0)로, git.exe·GPL 의존 금지.
 - AI는 셋 중 선택 (모두 `ai_client.Model` 구현): 내 PC의 로컬 모델(llama.cpp + Qwen3.5, 외부 전송 없음, 기본·추천),
   주소로 등록한 AI 서버(OpenAI 호환, 행망·사내 LLM), Claude Code(헤드리스). 로컬 모델 파일은 `llm/`(git 제외), 따로 배포.

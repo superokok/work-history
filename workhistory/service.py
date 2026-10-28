@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from . import review as review_text
-from . import sessionstore, store
+from . import sessionstore, snapshots, store
 from .classify import FIELDS, OFFWORK_APP, Keyword, matches_any, resolve_project
 from .normalize import merge_rows
 from .sessions import offwork_seconds
@@ -135,13 +135,13 @@ def timeline(conn: sqlite3.Connection, day: date, project: Any = None, app: Opti
     }
 
 
-_CHANGE_SQL = ("SELECT c.*, f.label AS folder, f.project_id FROM changes c "
+_CHANGE_SQL = ("SELECT c.*, f.label AS folder FROM changes c "
                "JOIN watched_folders f ON f.id = c.folder_id ")
 
 
 def _change_out(conn: sqlite3.Connection, c: sqlite3.Row, limit_files: int) -> dict:
     files = [dict(r) for r in conn.execute(
-        "SELECT id, path, kind, is_text, lines_added, lines_removed FROM change_files "
+        "SELECT id, path, kind, is_text, lines_added, lines_removed, project_id FROM change_files "
         "WHERE change_id = ? ORDER BY path LIMIT ?", (c["id"], limit_files))]
     return {"id": c["id"], "ts": c["ts"], "folder": c["folder"], "project_id": c["project_id"],
             "files_added": c["files_added"], "files_modified": c["files_modified"],
@@ -245,6 +245,7 @@ def delete_project(conn: sqlite3.Connection, project_id: int) -> None:
     conn.execute("UPDATE sessions SET project_manual = 0 WHERE project_id = ?", (project_id,))
     if conn.execute("DELETE FROM projects WHERE id = ?", (project_id,)).rowcount == 0:
         raise NotFound("프로젝트를 찾을 수 없습니다")
+    snapshots.attribute_all(conn)  # its sub-folders are asked about again; changes may now lean elsewhere
     store.bump_session_version(conn)
 
 
@@ -468,13 +469,13 @@ def search(conn: sqlite3.Connection, q: str, date_from: Optional[date] = None,
 
     files_sql = ("SELECT cf.id, cf.change_id, cf.path, cf.kind, cf.lines_added, cf.lines_removed, c.ts, "
                  "f.label AS folder, "
-                 "f.project_id, date(c.ts, 'unixepoch', 'localtime') AS day FROM change_files cf "
+                 "cf.project_id, date(c.ts, 'unixepoch', 'localtime') AS day FROM change_files cf "
                  "JOIN changes c ON c.id = cf.change_id JOIN watched_folders f ON f.id = c.folder_id "
                  "WHERE c.baseline = 0 AND cf.path LIKE ? ESCAPE '\\'")
     files_args: list[Any] = [like]
     sql, args = day_filter("date(c.ts, 'unixepoch', 'localtime')")
     if filtering:
-        sql += " AND f.project_id IS ?"
+        sql += " AND cf.project_id IS ?"
         args.append(wanted)
     changed_files = [dict(r) for r in conn.execute(files_sql + sql + " ORDER BY c.ts DESC LIMIT ?",
                                                    [*files_args, *args, limit])]

@@ -80,7 +80,7 @@ def _changes(conn: sqlite3.Connection, ctx: Context, start: date, end: date, rep
              name_of, projects: dict, used_projects: set) -> list[dict]:
     lo, hi = store.day_bounds(start)[0], store.day_bounds(end)[1]
     rows = conn.execute(
-        "SELECT c.*, f.label AS folder, f.project_id FROM changes c JOIN watched_folders f ON f.id = c.folder_id "
+        "SELECT c.*, f.label AS folder FROM changes c JOIN watched_folders f ON f.id = c.folder_id "
         "WHERE c.baseline = 0 AND c.ts >= ? AND c.ts < ? ORDER BY c.ts", (lo, hi)).fetchall()
     repos: dict[int, object] = {}
     out, budget = [], DIFF_LINES_TOTAL
@@ -97,7 +97,10 @@ def _changes(conn: sqlite3.Connection, ctx: Context, start: date, end: date, rep
                 "time": _hm(c["ts"]), "folder": c["folder"], "project": project,
                 "files": [{"path": f["path"], "change": {"A": "추가", "M": "수정", "D": "삭제"}[f["kind"]],
                            **({"lines": f"+{f['lines_added']} -{f['lines_removed']}"}
-                              if f["lines_added"] is not None else {})} for f in files],
+                              if f["lines_added"] is not None else {}),
+                           # one snapshot can touch two projects' sub-folders
+                           **({"project": name_of(f["project_id"])} if f["project_id"] != c["project_id"] else {})}
+                          for f in files],
             }
             if repos_dir is not None and budget > 0:
                 diff: list[str] = []

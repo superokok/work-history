@@ -248,6 +248,22 @@ MIGRATIONS: list[str] = [
     );
     CREATE INDEX idx_usage_events_ts ON usage_events(ts);
     """,
+    # v8: projects for parts of a folder. The user confirms each sub-folder once (project_id NULL =
+    # "no project", so it is not asked again); the deepest entry wins, the folder's own project is the
+    # default. changes/change_files.project_id are derived from these (snapshots.attribute_folder).
+    """
+    CREATE TABLE folder_areas (
+        folder_id  INTEGER NOT NULL REFERENCES watched_folders(id) ON DELETE CASCADE,
+        subpath    TEXT NOT NULL,              -- relative, '/'-separated, e.g. 'knowlune' or '2026/plan'
+        project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+        created_at REAL NOT NULL,
+        PRIMARY KEY (folder_id, subpath)
+    );
+    ALTER TABLE changes ADD COLUMN project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL;
+    ALTER TABLE change_files ADD COLUMN project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL;
+    UPDATE changes SET project_id = (SELECT f.project_id FROM watched_folders f WHERE f.id = changes.folder_id);
+    UPDATE change_files SET project_id = (SELECT c.project_id FROM changes c WHERE c.id = change_files.change_id);
+    """,
 ]
 
 SCHEMA_VERSION = len(MIGRATIONS)

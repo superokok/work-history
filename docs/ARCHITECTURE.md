@@ -101,7 +101,7 @@ Consequences for sync:
 Not used: AW's query language (`/api/0/query`). We store raw events locally so
 history survives AW reinstalls and so the idle/exclusion logic is testable.
 
-## 5. Data model (schema v7)
+## 5. Data model (schema v8)
 
 ```
 sources        id, bucket_id, bucket_created, kind('window'|'afk'), hostname,
@@ -135,6 +135,11 @@ changes         id, folder_id, commit_id, ts, baseline, files_*/lines_* totals
 change_files    id, change_id, path, kind('A'|'M'|'D'), is_text, lines_added, lines_removed,
                 old_blob, new_blob
 ```
+
+v8 (projects for parts of a folder, see RESULTS_TRACKING.md): `folder_areas`
+(folder_id, subpath, project_id NULL = "no project", created_at) holds what the user confirmed;
+`changes.project_id` / `change_files.project_id` are derived from it and the folder's project
+(`snapshots.attribute_folder`, re-run when either changes). Queries use these, not the folder's project.
 
 v7 (effect measurement): `usage_events` (id, ts, kind, data JSON): numbers only, for the
 before/after page. Kinds: `report` (one per save: sid, method `ai`|`manual`, active/wall seconds,

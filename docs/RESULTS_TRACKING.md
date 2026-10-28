@@ -26,6 +26,26 @@ is Claude Code for now (assumed reachable), behind a provider interface so a
 5. AI reports and questions cite changes (`C<id>`) next to sessions and notes,
    with the same reference verification as before.
 
+## Which project a change belongs to (decision 2026-10-28)
+
+People often register one parent folder (`workspace`, a file-server document
+folder) that holds several projects. The app **suggests, the user confirms**;
+it never assigns a project on a guess, because a silently wrong project ends
+up in a report and is hard to notice, while an unassigned change stays visible.
+
+- The folder's own project (optional) is the default for all its files.
+- For a folder without one, the projects tab shows "프로젝트가 정해지지 않은
+  파일 변경 N건" and lists the sub-folders those changes are in. A project whose
+  name equals the sub-folder name (ignoring case, spaces, `-`, `_`, `.`) is
+  pre-selected, but nothing is saved until the user presses 확인.
+- "안쪽 폴더로 나누기" lists the next level (for `2026/기획팀/...` layouts).
+- "프로젝트 없음 (묻지 않기)" is a decision too: that sub-folder is not asked again.
+- The deepest confirmed sub-folder wins (`folder_areas`), then the folder's project.
+  Each changed file gets a project; a change (one snapshot) takes the project
+  most of its files belong to. Search and "AI에게 묻기" use the per-file project.
+- Changing a folder's project or a sub-folder confirmation re-applies to past
+  changes. Deleting a project makes its sub-folders unassigned again.
+
 ## Git implementation and licensing
 
 - **dulwich 1.2.15** (pure-Python Git), used under its **Apache-2.0** option
@@ -72,3 +92,5 @@ is Claude Code for now (assumed reachable), behind a provider interface so a
 - Snapshot granularity is the scan interval (default 5 min); several saves
   within one interval become one change.
 - Renames are recorded as delete + add.
+- One snapshot can touch two projects' sub-folders; the timeline shows it under
+  the project most of its files belong to (the AI context marks the other files).

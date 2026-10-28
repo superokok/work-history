@@ -233,6 +233,91 @@ class FolderTests(SnapshotTestCase):
             shutil.rmtree(other, ignore_errors=True)
 
 
+class AreaTests(SnapshotTestCase):
+    """Projects for sub-folders: suggested by name, saved only when the user confirms."""
+
+    def setUp(self):
+        super().setUp()
+        with self.db.connect() as conn:
+            self.alpha = conn.execute("INSERT INTO projects (name, created_at) VALUES ('Alpha', 0)").lastrowid
+            self.beta = conn.execute("INSERT INTO projects (name, created_at) VALUES ('beta-api', 0)").lastrowid
+        self.scan()  # baseline
+        self.write("alpha/a.py", "a = 1\n")
+        self.write("beta_api/b.py", "b = 1\n")
+        self.write("common/c.md", "c\n")
+        self.write("2026/plan/p.md", "p\n")
+        self.write("notes.txt", "n\n")
+        self.change = self.scan().change_id
+
+    def projects(self):
+        with self.db.connect() as conn:
+            files = dict(conn.execute("SELECT path, project_id FROM change_files WHERE change_id = ?",
+                                      (self.change,)).fetchall())
+            return files, conn.execute("SELECT project_id FROM changes WHERE id = ?", (self.change,)).fetchone()[0]
+
+    def test_nothing_is_assigned_until_confirmed(self):
+        with self.db.connect() as conn:
+            areas = snapshots.list_areas(conn, self.folder)
+            folder = snapshots.get_folder(conn, self.folder)
+        self.assertEqual({g["name"]: g["suggested_project_id"] for g in areas["groups"]},
+                         {"alpha": self.alpha, "beta_api": self.beta, "common": None, "2026": None})
+        self.assertEqual((areas["loose_files"], folder["unassigned_files"], folder["unassigned_changes"]), (1, 5, 1))
+        files, change = self.projects()
+        self.assertEqual((set(files.values()), change), ({None}, None))  # suggestions are not saved
+
+    def test_confirmed_sub_folders_and_deepest_wins(self):
+        with self.db.connect() as conn:
+            snapshots.set_area(conn, self.folder, {"subpath": "alpha", "project_id": self.alpha})
+            snapshots.set_area(conn, self.folder, {"subpath": "beta_api", "project_id": self.beta})
+            folder = snapshots.set_area(conn, self.folder, {"subpath": "common", "project_id": None})
+            self.assertEqual(folder["unassigned_files"], 2)  # "no project" is decided, not asked again
+            # drilling into a year folder lists the next level
+            self.assertEqual([g["subpath"] for g in snapshots.list_areas(conn, self.folder, "2026")["groups"]],
+                             ["2026/plan"])
+            snapshots.set_area(conn, self.folder, {"subpath": "2026", "project_id": self.beta})
+            snapshots.set_area(conn, self.folder, {"subpath": "2026\\plan", "project_id": self.alpha})
+        files, change = self.projects()
+        self.assertEqual(files, {"alpha/a.py": self.alpha, "beta_api/b.py": self.beta, "common/c.md": None,
+                                 "2026/plan/p.md": self.alpha, "notes.txt": None})
+        self.assertEqual(change, self.alpha)  # the project most of its files belong to
+        # the folder's own project is the default for whatever no sub-folder claims
+        with self.db.connect() as conn:
+            snapshots.update_folder(conn, self.folder, {"project_id": self.beta})
+            snapshots.remove_area(conn, self.folder, {"subpath": "2026/plan"})
+            self.assertEqual(snapshots.get_folder(conn, self.folder)["unassigned_files"], 0)
+        files, _ = self.projects()
+        self.assertEqual((files["notes.txt"], files["common/c.md"], files["2026/plan/p.md"]),
+                         (self.beta, None, self.beta))
+
+    def test_new_changes_follow_confirmed_areas_and_queries_use_them(self):
+        from datetime import date
+        from workhistory import service
+        with self.db.connect() as conn:
+            snapshots.set_area(conn, self.folder, {"subpath": "alpha", "project_id": self.alpha})
+        self.write("alpha/new.py", "x = 2\n")
+        later = self.scan().change_id
+        with self.db.connect() as conn:
+            self.assertEqual(conn.execute("SELECT project_id FROM changes WHERE id = ?", (later,)).fetchone()[0],
+                             self.alpha)
+            found = service.search(conn, "new.py", project=self.alpha)["files"]
+            self.assertEqual([f["path"] for f in found], ["alpha/new.py"])
+            day = date.fromtimestamp(self.t)
+            self.assertIn(self.alpha, [c["project_id"] for c in service.timeline(conn, day)["changes"]])
+            service.delete_project(conn, self.alpha)  # its sub-folder is asked about again
+            self.assertEqual(snapshots.list_areas(conn, self.folder)["areas"], [])
+            self.assertIsNone(conn.execute("SELECT project_id FROM changes WHERE id = ?", (later,)).fetchone()[0])
+
+    def test_validation(self):
+        with self.db.connect() as conn:
+            for bad in ({"subpath": ""}, {"subpath": "../x"}, {"subpath": 3}):
+                with self.assertRaises(Invalid):
+                    snapshots.set_area(conn, self.folder, {**bad, "project_id": None})
+            with self.assertRaises(snapshots.NotFound):
+                snapshots.set_area(conn, self.folder, {"subpath": "alpha", "project_id": 999})
+            with self.assertRaises(snapshots.NotFound):
+                snapshots.remove_area(conn, self.folder, {"subpath": "alpha"})
+
+
 class IntegrationTests(SnapshotTestCase):
     def test_timeline_search_and_delete(self):
         from datetime import date
@@ -294,6 +379,12 @@ class IntegrationTests(SnapshotTestCase):
             with self.db.connect() as conn:
                 baseline = conn.execute("SELECT id FROM changes WHERE baseline = 1").fetchone()[0]
             self.assertEqual(call("GET", f"/api/changes/{baseline}")[0], 404)  # the first snapshot is not work
+            status, areas = call("GET", f"/api/folders/{self.folder}/areas")
+            self.assertEqual((status, [g["subpath"] for g in areas["groups"]]), (200, ["src"]))
+            status, folder = call("POST", f"/api/folders/{self.folder}/areas", {"subpath": "src", "project_id": None})
+            self.assertEqual((status, folder["unassigned_files"]), (200, 0))
+            self.assertEqual(call("GET", f"/api/folders/{self.folder}/areas?under=..")[0], 400)
+            self.assertEqual(call("DELETE", f"/api/folders/{self.folder}/areas", {"subpath": "src"})[0], 200)
             self.assertEqual(call("DELETE", f"/api/folders/{self.folder}", {})[0], 200)
             self.assertFalse(snapshots.repo_path(self.repos, self.folder).exists())
         finally:

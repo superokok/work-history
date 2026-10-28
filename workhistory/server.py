@@ -324,6 +324,18 @@ class App:
             snapshots.remove_folder(conn, int(fid), self.repos_dir)
             return {"ok": True}
 
+        @r("GET", r"/api/folders/(\d+)/areas")
+        def folder_areas(conn, query, body, fid):
+            return snapshots.list_areas(conn, int(fid), query.get("under", ""))
+
+        @r("POST", r"/api/folders/(\d+)/areas")
+        def set_folder_area(conn, query, body, fid):
+            return snapshots.set_area(conn, int(fid), body)
+
+        @r("DELETE", r"/api/folders/(\d+)/areas")
+        def remove_folder_area(conn, query, body, fid):
+            return snapshots.remove_area(conn, int(fid), body)
+
         @r("POST", "/api/folders/scan")
         def scan_folders(conn, query, body):
             if self.snapshotter is None:

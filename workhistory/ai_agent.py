@@ -219,9 +219,11 @@ class HistoryTools:
         changes = []
         for c in self.conn.execute(
                 "SELECT c.id, c.ts, f.label AS folder FROM changes c JOIN watched_folders f ON f.id = c.folder_id "
-                "WHERE c.baseline = 0 AND f.project_id = ? ORDER BY c.ts DESC LIMIT 10", (match,)):
+                "WHERE c.baseline = 0 AND c.id IN (SELECT change_id FROM change_files WHERE project_id = ?) "
+                "ORDER BY c.ts DESC LIMIT 10", (match,)):
             files = [row["path"] for row in self.conn.execute(
-                "SELECT path FROM change_files WHERE change_id = ? ORDER BY path LIMIT 8", (c["id"],))]
+                "SELECT path FROM change_files WHERE change_id = ? AND project_id = ? ORDER BY path LIMIT 8",
+                (c["id"], match))]
             ref = self._cite(f"C{c['id']}", {"type": "change", "day": _day_of(c["ts"]), "start": c["ts"],
                                              "label": f"{c['folder']}: " + ", ".join(
                                                  f.rsplit("/", 1)[-1] for f in files[:3])})
@@ -243,7 +245,7 @@ class HistoryTools:
         if not m:
             raise ValueError("ref는 C12 같은 형식입니다")
         row = self.conn.execute(
-            "SELECT c.*, f.label AS folder, f.project_id FROM changes c JOIN watched_folders f "
+            "SELECT c.*, f.label AS folder FROM changes c JOIN watched_folders f "
             "ON f.id = c.folder_id WHERE c.id = ? AND c.baseline = 0", (int(m.group(1)),)).fetchone()
         if row is None:
             return {"error": "그런 파일 변경이 없습니다"}
