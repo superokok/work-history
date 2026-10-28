@@ -14,5 +14,5 @@ ex/
 # Local LLM runtime and model files (GBs, downloaded separately)
 llm/
 
-# Draft decks generated during work (the presentation itself lives outside git)
+# Draft decks generated during work (the user's own presentation files live in ppt/, tracked)
 docs/presentation/

@@ -3,7 +3,7 @@
 새 세션에서 가장 먼저 읽는 문서. 상세 설계는 [ARCHITECTURE.md](ARCHITECTURE.md),
 작업 흐름은 [history/](history/)를 본다. 구조가 바뀌면 이 문서를 함께 고친다.
 
-_마지막 갱신: 2026-10-21_
+_마지막 갱신: 2026-10-28_
 
 ## 무엇인가
 
@@ -33,6 +33,7 @@ work-history/
 ├─ evals/report_eval.py    데모 시나리오로 AI 보고서 품질 실측 (실제 데이터 미사용)
 ├─ tools/build_portable.py Windows 포터블 zip 빌드 → dist/ (git 제외)
 ├─ llm/                    (git 제외) 로컬 AI: bin/llama-server.exe + DLL, models/*.gguf, 라이선스 전문
+├─ ppt/                    사용자의 발표 파일(.pptx, git 포함). 작업 중 만든 초안 덱은 docs/presentation/(git 제외)
 └─ docs/
    ├─ PROJECT_STRUCTURE.md 이 문서
    ├─ history/             작업 히스토리 (작업 1건 = 파일 1개)
