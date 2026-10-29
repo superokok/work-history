@@ -85,7 +85,7 @@ uv pip install --python .venv/Scripts/python.exe -e .[claude]
 .venv/Scripts/python.exe -m workhistory            # 또는 start-workhistory.cmd
 .venv/Scripts/python.exe -m workhistory --demo     # 데모 데이터
 
-# 테스트 (2026-10-28 기준 231개 통과)
+# 테스트 (2026-10-29 기준 232개 통과)
 .venv/Scripts/python.exe -m unittest discover -s tests -t .
 
 # AI 보고서 품질 평가 (Claude Code 로그인 필요)
@@ -94,6 +94,7 @@ uv pip install --python .venv/Scripts/python.exe -e .[claude]
 # Windows 포터블 zip
 python tools/build_portable.py                 # llm/bin이 있으면 로컬 AI 실행기도 포함 (모델은 제외)
 python tools/build_portable.py --with-models   # 모델 파일까지 넣은 큰 zip (-local-ai)
+python tools/build_portable.py --offline --with-models  # 행망(폐쇄망)용: Claude Code 연결(mcp 등) 제외 (-offline-local-ai)
 
 # 로컬 모델로 품질 평가 (기기 고정: WORKHISTORY_LLM_DEVICE=none 은 CPU만)
 .venv/Scripts/python.exe -m evals.report_eval --model local:Qwen3.5-4B-Q4_K_M
@@ -118,4 +119,5 @@ python tools/build_portable.py --with-models   # 모델 파일까지 넣은 큰 
   모델을 고르기 전(=동의 전)에는 AI 꺼짐.
 - Claude Code는 AI 설정의 모델 선택지로만 씀 (로컬 모델과 비교용). Claude Code에 앱을 등록하는 "Claude Code 연결"은
   2026-10-27에 없앰.
-- 로컬 전용, 배포는 Windows 포터블 zip.
+- 로컬 전용, 배포는 Windows 포터블 zip. 행망용은 `--offline` 빌드: `mcp`와 그 의존성 30여 개를 빼고,
+  앱은 `mcp`가 없으면 Claude Code 모델을 목록에서 숨긴다 (`ai_claude.bundled()`, 2026-10-29).

@@ -8,6 +8,7 @@ thing Claude can do is answer, or read the work history through this app's
 own read-only MCP server.
 """
 
+import importlib.util
 import json
 import os
 import shutil
@@ -25,6 +26,12 @@ TIMEOUT_S = 600
 MAX_BUDGET_USD = "5"  # per run; a guard against runaway loops, far above a normal report
 
 Runner = Callable[..., subprocess.CompletedProcess]
+
+
+def bundled() -> bool:
+    """Is the Claude Code link part of this install? The offline (closed-network) package leaves
+    out the `mcp` package that "AI에게 묻기" needs, and with it every Claude Code model."""
+    return importlib.util.find_spec("mcp") is not None
 
 
 def is_shim(cli: str) -> bool:

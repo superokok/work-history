@@ -45,7 +45,8 @@ uv pip install --python .venv/Scripts/python.exe -e .[claude]
 python tools/build_portable.py
 ```
 
-결과물: `dist/WorkHistory-<버전>-windows-x64.zip`. 빌드는 압축하기 전에 번들 Python으로
+결과물: `dist/WorkHistory-<버전>-windows-x64.zip`. `--with-models`는 `llm/models`의 모델까지 넣고,
+`--offline`은 행망(폐쇄망)용으로 Claude Code 연결(`mcp`와 의존성)을 뺍니다 (내 PC의 AI만 사용). 빌드는 압축하기 전에 번들 Python으로
 빌드 PC와 격리된 상태에서 앱을 import해 확인합니다.
 
 ### 명령행 옵션

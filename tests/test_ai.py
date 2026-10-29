@@ -2,6 +2,7 @@ import importlib.util
 import json
 import unittest
 from datetime import date, timedelta
+from unittest import mock
 
 from workhistory import ai_context, ai_report, ai_service, service, sessionstore, store
 from workhistory.ai_client import AIError, Usage
@@ -265,6 +266,17 @@ class ServiceTests(AIDataTestCase):
             self.assertFalse(ai_service.get_settings(conn, False)["enabled"])
             with self.assertRaises(AIError):
                 ai_service.check_allowed(conn, demo=False)
+
+    def test_offline_package_has_no_claude_models(self):
+        # The offline package leaves out mcp; Claude Code models disappear and a saved one counts as off.
+        with self.db.connect() as conn:
+            ai_service.update_settings(conn, {"model": "claude-code:haiku"}, False)
+            with mock.patch.object(ai_service.ai_claude, "bundled", return_value=False):
+                s = ai_service.get_settings(conn, demo=False)
+                self.assertFalse([m for m in s["models"] if m.startswith("claude-code")])
+                self.assertEqual((s["enabled"], s["claude_installed"]), (False, False))
+                with self.assertRaises(store.Invalid):
+                    ai_service.update_settings(conn, {"model": "claude-code:sonnet"}, False)
 
 
 HAS_DULWICH = importlib.util.find_spec("dulwich") is not None

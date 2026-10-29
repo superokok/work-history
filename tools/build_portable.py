@@ -12,6 +12,10 @@ DLLs only) and an empty `llm/models` with instructions: model files are
 handed out separately and dropped in there. `--with-models` puts the
 `llm/models/*.gguf` files into the zip as well (a multi-GB zip).
 
+`--offline` builds the package for a closed network: it leaves out the Claude
+Code link (the `mcp` package and the ~30 libraries it pulls in), which needs
+the internet anyway; the app then offers only the local AI.
+
 Also writes THIRD_PARTY_NOTICES.md (in the zip and, with --notices, in the
 repository) from the installed packages' own metadata and license files.
 
@@ -19,6 +23,7 @@ Usage (needs `packaging`, or pip which vendors it):
     python tools/build_portable.py            # build the zip
     python tools/build_portable.py --notices  # only refresh THIRD_PARTY_NOTICES.md
     python tools/build_portable.py --with-models  # also put the local AI models into the zip
+    python tools/build_portable.py --offline --with-models  # closed network: no Claude Code link
 """
 
 import argparse
@@ -39,6 +44,7 @@ ROOT = Path(__file__).resolve().parent.parent
 DIST = ROOT / "dist"
 APP_PACKAGE = ROOT / "workhistory"
 TOP_LEVEL = ["dulwich", "mcp"]          # pyproject: dependencies + the "claude" extra
+OFFLINE_TOP_LEVEL = ["dulwich"]         # --offline: no Claude Code link
 LAUNCHER = "작업 기록.cmd"
 LLM = ROOT / "llm"
 # llama-server and what it loads; the other llama.cpp tools stay out.
@@ -94,9 +100,7 @@ README_TXT = """작업 기록 (WorkHistory) {version}
   - AI 보고서·질문 (둘 중 하나를 개인정보 탭 → AI 설정에서 고릅니다)
     · 내 PC의 AI: llm\\models 폴더에 .gguf 모델 파일을 넣으면 "내 PC · <모델>"이 나타납니다.
       기록이 PC 밖으로 나가지 않고 인터넷 없이 동작합니다. 그래픽카드가 없으면 느립니다.
-    · Claude Code: 설치하고 로그인하면 "Claude Code · Sonnet" 등이 나타납니다 (빠름, 외부 전송).
-      https://docs.claude.com/en/docs/claude-code
-
+{claude}
 데이터 위치
   %LOCALAPPDATA%\\WorkHistory  (이 폴더를 지우거나 새 버전으로 바꿔도 기록은 남습니다)
 
@@ -104,6 +108,11 @@ README_TXT = """작업 기록 (WorkHistory) {version}
   앱을 종료하고, 새 zip을 풀어 이 폴더를 통째로 바꾸면 됩니다.
 
 라이선스: LICENSE.txt, 포함된 오픈소스: THIRD_PARTY_NOTICES.md
+"""
+CLAUDE_TXT = """    · Claude Code: 설치하고 로그인하면 "Claude Code · Sonnet" 등이 나타납니다 (빠름, 외부 전송).
+      https://docs.claude.com/en/docs/claude-code
+"""
+OFFLINE_TXT = """    · 이 패키지는 폐쇄망용이라 Claude Code 연결이 빠져 있습니다. 내 PC의 AI만 쓸 수 있습니다.
 """
 
 
@@ -258,9 +267,11 @@ def copy_llm(out: Path, with_models: bool) -> bool:
     return True
 
 
-def smoke_test(out: Path) -> None:
+def smoke_test(out: Path, offline: bool) -> None:
     """Import everything with the bundled Python only (isolated from the build machine's packages)."""
-    code = ("import sys, workhistory, workhistory.server, workhistory.mcp_server, dulwich, mcp; "
+    imports = "workhistory.ai_service" if offline else "workhistory.mcp_server, mcp"
+    check = "assert not workhistory.ai_claude.bundled(); " if offline else ""
+    code = (f"import sys, workhistory, workhistory.server, dulwich, {imports}; {check}"
             "assert sys.prefix.lower().startswith(sys.argv[1].lower()), sys.prefix; print(workhistory.__version__)")
     result = subprocess.run([str(out / "runtime" / "python.exe"), "-I", "-c", code, str(out / "runtime")],
                             capture_output=True, text=True, cwd=str(out), timeout=120)
@@ -273,6 +284,7 @@ def main(argv=None) -> int:
     parser.add_argument("--venv", type=Path, default=ROOT / ".venv")
     parser.add_argument("--notices", action="store_true", help="only write THIRD_PARTY_NOTICES.md in the repository")
     parser.add_argument("--with-models", action="store_true", help="put llm/models/*.gguf into the zip too")
+    parser.add_argument("--offline", action="store_true", help="closed network: leave out the Claude Code link")
     args = parser.parse_args(argv)
     if sys.platform != "win32":
         raise SystemExit("The portable package is built on Windows (the app is Windows only).")
@@ -280,10 +292,14 @@ def main(argv=None) -> int:
     site, home, py_version = venv_paths(args.venv)
     dists = closure(site, TOP_LEVEL)
     text = notices(dists, py_version)
-    (ROOT / "THIRD_PARTY_NOTICES.md").write_text(text, encoding="utf-8")
+    (ROOT / "THIRD_PARTY_NOTICES.md").write_text(text, encoding="utf-8")  # the repository lists the full set
     print(f"THIRD_PARTY_NOTICES.md: {len(dists)} packages")
     if args.notices:
         return 0
+    if args.offline:
+        dists = closure(site, OFFLINE_TOP_LEVEL)
+        text = notices(dists, py_version)
+        print(f"offline package: {len(dists)} packages")
 
     sys.path.insert(0, str(ROOT))
     from workhistory import __version__
@@ -296,11 +312,13 @@ def main(argv=None) -> int:
     (out / LAUNCHER).write_text(LAUNCHER_CMD.replace("\n", "\r\n"), encoding="ascii")
     (out / "LICENSE.txt").write_text((ROOT / "LICENSE").read_text(encoding="utf-8"), encoding="utf-8-sig")
     (out / "THIRD_PARTY_NOTICES.md").write_text(text, encoding="utf-8")
-    (out / "사용법.txt").write_text(README_TXT.format(version=__version__), encoding="utf-8-sig")
+    (out / "사용법.txt").write_text(README_TXT.format(version=__version__,
+                                                   claude=OFFLINE_TXT if args.offline else CLAUDE_TXT),
+                                    encoding="utf-8-sig")
     copy_llm(out, args.with_models)
-    smoke_test(out)
+    smoke_test(out, args.offline)
 
-    suffix = "-local-ai" if args.with_models else ""
+    suffix = ("-offline" if args.offline else "") + ("-local-ai" if args.with_models else "")
     zip_path = DIST / f"WorkHistory-{__version__}-windows-x64{suffix}.zip"
     zip_path.unlink(missing_ok=True)
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:

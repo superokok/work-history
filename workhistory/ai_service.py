@@ -28,7 +28,8 @@ def default_model() -> str:
 
 def all_models(conn: Optional[sqlite3.Connection] = None) -> list[str]:
     """Claude Code models, the local models in the llm folder, and (with `conn`) the registered AI servers."""
-    return list(MODELS) + ai_local.available_models() + (ai_remote.available_models(conn) if conn else [])
+    claude = list(MODELS) if ai_claude.bundled() else []
+    return claude + ai_local.available_models() + (ai_remote.available_models(conn) if conn else [])
 
 
 def default_factory(name: str) -> Model:
@@ -75,7 +76,7 @@ def get_settings(conn: sqlite3.Connection, demo: bool) -> dict:
         "default_model": default_model(),
         "enabled": chosen_model(conn) is not None,
         # Cheap PATH lookup only; login is checked by '연결 확인' (check_connection).
-        "claude_installed": find_cli() is not None,
+        "claude_installed": ai_claude.bundled() and find_cli() is not None,
         "demo": demo,
     }
 

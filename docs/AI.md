@@ -85,6 +85,9 @@ or that have no internet (폐쇄망). The app ships llama.cpp's `llama-server`
   `unsloth/Qwen3.5-*-GGUF`, Apache-2.0, SHA-256 checked against Hugging Face.
   Model files are not in git (`llm/` is ignored); they are handed out next to
   the app zip, or built in with `tools/build_portable.py --with-models`.
+- Closed networks: `--offline` leaves the `mcp` package (and the ~30 libraries it
+  pulls in) out of the zip; without it the app lists no Claude Code models
+  (`ai_claude.bundled()`), so only local models and registered AI servers remain.
 
 Measured 2026-10-23 on the development PC (i5-12450H, 32 GB, RTX 2050 4 GB
 + Intel UHD), `evals/report_eval.py --runs 1`, 4 cases each (Claude: 8/8 at
