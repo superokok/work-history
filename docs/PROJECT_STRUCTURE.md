@@ -32,6 +32,7 @@ work-history/
 ├─ tests/                  unittest (helpers.py 공용 픽스처)
 ├─ evals/report_eval.py    데모 시나리오로 AI 보고서 품질 실측 (실제 데이터 미사용)
 ├─ tools/build_portable.py Windows 포터블 zip 빌드 → dist/ (git 제외)
+├─ tools/release_parts.py  배포 zip을 GitHub 릴리스용 1.9GB 조각 + 합치기 cmd로 나눔 → dist/release/
 ├─ tools/clean_check.py    개발 PC 흔적(사용자·경로·git 계정·데이터 파일) 검사: 빌드 전·테스트에서
 ├─ llm/                    (git 제외) 로컬 AI: bin/llama-server.exe + DLL, models/*.gguf, 라이선스 전문
 ├─ ppt/                    사용자의 발표 파일(.pptx, git 포함). 작업 중 만든 초안 덱은 docs/presentation/(git 제외)
@@ -98,7 +99,8 @@ uv pip install --python .venv/Scripts/python.exe -e .[claude]
 # Windows 포터블 zip
 python tools/build_portable.py                 # llm/bin이 있으면 로컬 AI 실행기도 포함 (모델은 제외)
 python tools/build_portable.py --with-models   # 모델 파일까지 넣은 큰 zip (-local-ai)
-python tools/build_portable.py --offline --with-models  # 행망(폐쇄망)용: Claude Code 연결(mcp 등) 제외 (-offline-local-ai)
+python tools/build_portable.py --offline --with-models  # 행망(폐쇄망)용: Claude Code 연결(mcp 등) 제외 (-offline-local-ai) = 배포본
+python tools/release_parts.py dist/WorkHistory-0.1.0-windows-x64-offline-local-ai.zip  # 릴리스용 조각 + WorkHistory-join.cmd
 
 # 로컬 모델로 품질 평가 (기기 고정: WORKHISTORY_LLM_DEVICE=none 은 CPU만)
 .venv/Scripts/python.exe -m evals.report_eval --model local:Qwen3.5-4B-Q4_K_M
@@ -128,4 +130,6 @@ python tools/build_portable.py --offline --with-models  # 행망(폐쇄망)용: 
 - 실행기는 pythonw로 창 없이 띄운다: 창을 실수로 닫아 기록이 끊기지 않게. 끄는 건 앱 안의 "앱 종료"만 (2026-10-30).
 - 저장소와 배포 zip에는 개발 PC에서 나온 것(사용자·경로·실제 프로젝트·기록·데이터 파일)을 넣지 않는다.
   `tests/test_clean.py`와 빌드 전 검사가 막는다 (2026-10-30).
+- 배포: 행망용 zip 하나를 GitHub Releases에 1.9GB 조각으로 올린다 (파일당 2GB 제한, git에는 넣지 않음).
+  인터넷용 zip은 배포하지 않는다 (2026-10-30).
 - 포트는 사용자가 고르지 않는다: 5730이 막혀 있으면 5739까지 빈 포트로 자동 이동, 앱 화면(개인정보 → 실행)에 주소 표시 (2026-10-30).

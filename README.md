@@ -10,16 +10,16 @@
 [결과물 기록](docs/RESULTS_TRACKING.md) · [실사용 검증](docs/VALIDATION.md) ·
 [구현 계획](docs/IMPLEMENTATION_PLAN.md)
 
-## 받을 파일
+## 받기
 
-| 파일 | 내용 | 이런 PC에 |
-|---|---|---|
-| `WorkHistory-<버전>-windows-x64-offline-local-ai.zip` (약 8.5GB) | 앱 + 내 PC AI 모델 2개 (Qwen3.5 4B·9B). Claude Code 연결은 뺌 | **행망·폐쇄망**, 인터넷 없이 AI까지 쓰려는 PC |
-| `WorkHistory-<버전>-windows-x64.zip` (약 54MB) | 앱만. Claude Code 연결 포함, 모델 없음 | 인터넷이 되는 PC (모델은 따로 `llm\models`에 넣음) |
+배포본은 **행망·폐쇄망용 zip** 하나입니다 (`WorkHistory-<버전>-windows-x64-offline-local-ai.zip`, 약 8.5GB).
+앱, 내 PC AI 모델 2개(Qwen3.5 4B·9B), Python과 Microsoft C++ 런타임이 모두 들어 있어, 아무것도
+설치되지 않은 인터넷 없는 Windows 10/11에서 그대로 돌아갑니다. Claude Code 연결은 빠져 있습니다.
 
-둘 다 Python 런타임과 AI 실행에 필요한 Microsoft C++ 런타임이 들어 있어, 아무것도 설치되지 않은
-인터넷 없는 Windows 10/11에서도 그대로 돌아가고 시스템에 아무것도 설치하지 않습니다. 8.5GB zip은 파일 하나가
-4GB를 넘으니 옮길 때 exFAT·NTFS USB를 쓰세요.
+1. 인터넷 PC에서 저장소의 **Releases**에 들어가 6개 파일(`….zip.001`~`.005`와 `WorkHistory-join.cmd`)을
+   한 폴더에 받습니다. GitHub은 파일 하나를 2GB까지만 받아서 zip을 조각으로 나눠 올렸습니다.
+2. `WorkHistory-join.cmd`를 더블클릭하면 조각을 합치고 온전한지 검사합니다 (`OK`가 나오면 성공).
+3. 합친 zip을 반입 절차에 따라 행망 PC로 옮깁니다. 4GB가 넘는 파일이라 exFAT·NTFS USB를 쓰세요.
 
 ## 설치와 처음 설정
 
@@ -136,9 +136,14 @@ Apache-2.0)와 `mcp`(MIT, Claude Code용)와 그 의존성뿐이며 모두 상�
 **배포 zip 빌드** (venv의 Python과 패키지를 복사하며 아무것도 내려받지 않습니다):
 
 ```bash
-python tools/build_portable.py                          # 인터넷용, 모델 없음
-python tools/build_portable.py --offline --with-models  # 행망용, 모델 포함
+python tools/build_portable.py --offline --with-models  # 배포본 (행망용, 모델 포함)
+python tools/build_portable.py                          # 인터넷용, 모델 없음 (배포하지 않음)
+python tools/release_parts.py dist/WorkHistory-<버전>-windows-x64-offline-local-ai.zip
+                                                        # → dist/release: 1.9GB 조각 + WorkHistory-join.cmd
 ```
+
+릴리스: `gh release create v<버전> dist/release/*` (조각과 합치기 스크립트를 올림). 합치기 스크립트는
+Windows 기본 기능(`copy /b`, `certutil`)만 써서 조각을 합치고 SHA-256을 확인합니다.
 
 `--with-models`는 `llm/models`의 모델까지 넣고, `--offline`은 Claude Code 연결(`mcp`와 의존성
 30여 개)을 뺍니다. 빌드는 압축하기 전에 번들 Python만으로 앱을 import해 보고, 개발 PC의
