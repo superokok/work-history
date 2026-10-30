@@ -58,7 +58,7 @@ pause/deletion, HTTP security.
 Setup for real use (2026-10-01): ActivityWatch autostarts at login
 (user Startup folder), desktop shortcut → `start-workhistory.cmd`, single
 instance (exclusive port bind on Windows; a second launch reopens the browser),
-faster reconnect while ActivityWatch is still starting, demo DB removed, and
+faster reconnect while ActivityWatch is still starting, and
 `python -m workhistory.stats` for correction rates.
 
 Remaining validation is human: about a week of real use, following

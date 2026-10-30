@@ -254,7 +254,7 @@ MIGRATIONS: list[str] = [
     """
     CREATE TABLE folder_areas (
         folder_id  INTEGER NOT NULL REFERENCES watched_folders(id) ON DELETE CASCADE,
-        subpath    TEXT NOT NULL,              -- relative, '/'-separated, e.g. 'knowlune' or '2026/plan'
+        subpath    TEXT NOT NULL,              -- relative, '/'-separated, e.g. 'project-a' or '2026/plan'
         project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
         created_at REAL NOT NULL,
         PRIMARY KEY (folder_id, subpath)

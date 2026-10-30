@@ -16,6 +16,9 @@ handed out separately and dropped in there. `--with-models` puts the
 Code link (the `mcp` package and the ~30 libraries it pulls in), which needs
 the internet anyway; the app then offers only the local AI.
 
+Before zipping, tools/clean_check.py makes sure nothing from the build PC is in
+the package (its user, paths, git identity, or anyone's data files).
+
 Also writes THIRD_PARTY_NOTICES.md (in the zip and, with --notices, in the
 repository) from the installed packages' own metadata and license files.
 
@@ -34,6 +37,8 @@ import subprocess
 import sys
 import zipfile
 from pathlib import Path
+
+from clean_check import markers, scan
 
 try:
     from packaging.requirements import Requirement
@@ -312,6 +317,10 @@ def main(argv=None) -> int:
                                     encoding="utf-8-sig")
     copy_llm(out, args.with_models)
     smoke_test(out, args.offline)
+    problems = scan(sorted(f for f in out.rglob("*") if f.is_file() and "__pycache__" not in f.parts),
+                    out, markers(ROOT))
+    if problems:  # the zip goes to other people: nothing from this PC may be in it
+        raise SystemExit("the package holds traces of this PC:\n  " + "\n  ".join(problems))
 
     suffix = ("-offline" if args.offline else "") + ("-local-ai" if args.with_models else "")
     zip_path = DIST / f"WorkHistory-{__version__}-windows-x64{suffix}.zip"

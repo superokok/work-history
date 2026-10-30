@@ -89,8 +89,8 @@ or that have no internet (폐쇄망). The app ships llama.cpp's `llama-server`
   pulls in) out of the zip; without it the app lists no Claude Code models
   (`ai_claude.bundled()`), so only local models and registered AI servers remain.
 
-Measured 2026-10-23 on the development PC (i5-12450H, 32 GB, RTX 2050 4 GB
-+ Intel UHD), `evals/report_eval.py --runs 1`, 4 cases each (Claude: 8/8 at
+Measured 2026-10-23 on a test laptop (12th-gen Core i5, 32 GB, entry-level 4 GB
+NVIDIA GPU + Intel integrated graphics), `evals/report_eval.py --runs 1`, 4 cases each (Claude: 8/8 at
 7–11 s per report):
 
 | Model · device | Passed | Weekly report | Daily report |

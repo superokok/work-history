@@ -14,7 +14,7 @@ _마지막 갱신: 2026-10-28_
 - 그 위에 타임라인, 일일 리뷰, 이어서 하기, 검색, 프로젝트, 개인정보 설정,
   AI 보고서·"AI에게 묻기"(Claude Code 헤드리스), Claude Code용 읽기 전용 MCP 서버.
 - 스택: Python 3.11+ (표준 라이브러리 위주) + 바닐라 HTML/JS, SQLite. 빌드 단계 없음. **Windows 전용.**
-- 저장소: https://github.com/superokok/work-history (private), 브랜치 `main`.
+- 저장소: GitHub (비공개), 브랜치 `main`.
 - 라이선스: 자체 코드는 PROPRIETARY. 의존성은 상업적 판매 가능한 것만.
 
 ## 디렉터리
@@ -30,6 +30,7 @@ work-history/
 ├─ tests/                  unittest (helpers.py 공용 픽스처)
 ├─ evals/report_eval.py    데모 시나리오로 AI 보고서 품질 실측 (실제 데이터 미사용)
 ├─ tools/build_portable.py Windows 포터블 zip 빌드 → dist/ (git 제외)
+├─ tools/clean_check.py    개발 PC 흔적(사용자·경로·git 계정·데이터 파일) 검사: 빌드 전·테스트에서
 ├─ llm/                    (git 제외) 로컬 AI: bin/llama-server.exe + DLL, models/*.gguf, 라이선스 전문
 ├─ ppt/                    사용자의 발표 파일(.pptx, git 포함). 작업 중 만든 초안 덱은 docs/presentation/(git 제외)
 └─ docs/
@@ -86,7 +87,7 @@ uv pip install --python .venv/Scripts/python.exe -e .[claude]
 .venv/Scripts/python.exe -m workhistory            # 콘솔에 로그. start-workhistory.cmd는 pythonw(창 없음, 로그는 데이터 폴더 workhistory.log)
 .venv/Scripts/python.exe -m workhistory --demo     # 데모 데이터
 
-# 테스트 (2026-10-30 기준 236개 통과)
+# 테스트 (2026-10-30 기준 238개 통과)
 .venv/Scripts/python.exe -m unittest discover -s tests -t .
 
 # AI 보고서 품질 평가 (Claude Code 로그인 필요)
@@ -123,4 +124,6 @@ python tools/build_portable.py --offline --with-models  # 행망(폐쇄망)용: 
 - 로컬 전용, 배포는 Windows 포터블 zip. 행망용은 `--offline` 빌드: `mcp`와 그 의존성 30여 개를 빼고,
   앱은 `mcp`가 없으면 Claude Code 모델을 목록에서 숨긴다 (`ai_claude.bundled()`, 2026-10-29).
 - 실행기는 pythonw로 창 없이 띄운다: 창을 실수로 닫아 기록이 끊기지 않게. 끄는 건 앱 안의 "앱 종료"만 (2026-10-30).
+- 저장소와 배포 zip에는 개발 PC에서 나온 것(사용자·경로·실제 프로젝트·기록·데이터 파일)을 넣지 않는다.
+  `tests/test_clean.py`와 빌드 전 검사가 막는다 (2026-10-30).
 - 포트는 사용자가 고르지 않는다: 5730이 막혀 있으면 5739까지 빈 포트로 자동 이동, 앱 화면(개인정보 → 실행)에 주소 표시 (2026-10-30).
