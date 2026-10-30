@@ -1010,6 +1010,7 @@ function renderLaunch(l) {
   $("launch-shortcut").textContent = `${l.shortcut.where} 바로가기 ${l.shortcut.exists ? "다시 만들기" : "만들기"}`;
   $("launch-status").textContent = l.demo ? "데모 모드에서는 바꿀 수 없습니다."
     : l.shortcut.exists ? `${l.shortcut.where}에 바로가기가 있습니다.` : "";
+  $("quit-row").hidden = !l.can_quit;
 }
 
 async function loadLaunch() {
@@ -1032,6 +1033,13 @@ $("launch-shortcut").addEventListener("click", () => guarded(async () => {
   const l = await api("POST", "/api/launch/shortcut", {});
   renderLaunch(l);
   toast(`${l.shortcut.where}에 바로가기를 만들었습니다.`);
+}));
+
+$("app-quit").addEventListener("click", () => guarded(async () => {
+  if (!confirm("작업 기록을 종료할까요? 다시 켤 때까지 창 기록과 작업 폴더 기록이 멈춥니다.")) return;
+  await api("POST", "/api/quit", {});
+  document.body.innerHTML = '<main style="padding:3rem;text-align:center"><h2>작업 기록을 종료했습니다</h2>'
+    + '<p class="muted">다시 켜려면 "작업 기록" 바로가기나 작업 기록.cmd를 실행하세요. 자동 실행을 켜 두었다면 PC를 다시 켤 때 자동으로 시작됩니다.</p></main>';
 }));
 
 $("ai-check").addEventListener("click", () => guarded(async () => {

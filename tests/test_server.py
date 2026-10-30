@@ -27,7 +27,8 @@ class ServerTests(unittest.TestCase):
         # Never the real Startup folder / desktop either.
         self.home = Path(self.db.path).parent / "home"
         launch = Launch([r"C:\app\작업 기록.cmd"], lambda name: self.home / name, _fake_shortcut)
-        self.server = create_server(App(self.db, Syncer(self.db), launch=launch), 0)
+        self.app = App(self.db, Syncer(self.db), launch=launch)
+        self.server = create_server(self.app, 0)
         self.port = self.server.server_address[1]
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
 
@@ -177,6 +178,17 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(self.request("POST", "/api/launch", {"autostart": "yes"})[0], 400)
         status, body, _ = self.request("POST", "/api/launch/shortcut", {})
         self.assertEqual((status, body["shortcut"]["exists"]), (200, True))
+
+    def test_quit(self):
+        # Without a quit hook (tests, embedding) the app can't be stopped from the page.
+        self.assertFalse(self.request("GET", "/api/launch")[1]["can_quit"])
+        self.assertEqual(self.request("POST", "/api/quit", {})[0], 409)
+        quit_event = threading.Event()
+        self.app.on_quit = quit_event.set
+        self.assertTrue(self.request("GET", "/api/launch")[1]["can_quit"])
+        status, body, _ = self.request("POST", "/api/quit", {})
+        self.assertEqual((status, body), (200, {"quitting": True}))
+        self.assertTrue(quit_event.wait(5))  # fires after the answer went out
 
     def test_errors_are_json(self):
         self.assertEqual(self.request("GET", "/api/nope")[0], 404)

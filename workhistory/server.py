@@ -5,6 +5,7 @@ import logging
 import mimetypes
 import re
 import socket
+import threading
 import time
 import urllib.request
 from dataclasses import asdict
@@ -55,8 +56,9 @@ class App:
     def __init__(self, db: Database, syncer: Optional[Syncer], demo: bool = False,
                  ai_factory: ai_service.ModelFactory = ai_service.default_factory,
                  snapshotter: Optional[Snapshotter] = None, repos_dir: Optional[Path] = None,
-                 launch: Optional[Launch] = None):
+                 launch: Optional[Launch] = None, on_quit: Optional[Callable[[], None]] = None):
         self.db = db
+        self.on_quit = on_quit  # stops the whole app (set by __main__)
         self.launch = launch or default_launch()
         self.syncer = syncer
         self.snapshotter = snapshotter
@@ -257,7 +259,15 @@ class App:
 
         @r("GET", "/api/launch")
         def get_launch(conn, query, body):
-            return {**self.launch.status(), "demo": self.demo}
+            return {**self.launch.status(), "demo": self.demo, "can_quit": self.on_quit is not None}
+
+        @r("POST", "/api/quit")
+        def quit_app(conn, query, body):
+            if self.on_quit is None:
+                raise ApiError(409, "이 실행 방식에서는 앱에서 종료할 수 없습니다")
+            # Answer first; the main thread then stops the server and the background work.
+            threading.Timer(0.5, self.on_quit).start()
+            return {"quitting": True}
 
         @r("POST", "/api/launch")
         def set_launch(conn, query, body):

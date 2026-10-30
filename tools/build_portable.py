@@ -75,16 +75,10 @@ if not exist "runtime\python.exe" (
   pause
   exit /b 1
 )
-rem Re-open minimized: the app runs in that window, and closing it stops the app.
-if not defined WORKHISTORY_MIN (
-  set "WORKHISTORY_MIN=1"
-  start "WorkHistory" /min cmd /c ""%~f0" %*"
-  exit /b
-)
 set "WORKHISTORY_LAUNCHER=%~f0"
+rem Runs in the background (pythonw: no console window to close by mistake); errors show in a message box.
 rem -I: ignore PYTHON* variables and the user's own site-packages.
-"runtime\python.exe" -I -m workhistory %*
-if errorlevel 1 pause
+start "" "runtime\pythonw.exe" -I -m workhistory %*
 """
 
 README_TXT = """작업 기록 (WorkHistory) {version}
@@ -93,7 +87,8 @@ README_TXT = """작업 기록 (WorkHistory) {version}
   1. 이 폴더를 원하는 곳(예: 문서 폴더)에 그대로 둡니다. 폴더 안 파일을 따로 옮기지 마세요.
      너무 깊은 폴더에 풀면 Windows 경로 길이 제한(260자)에 걸릴 수 있으니 짧은 경로를 쓰세요.
   2. "작업 기록.cmd"를 더블클릭하면 브라우저에 앱이 열립니다.
-     작업 표시줄에 최소화된 "WorkHistory" 창이 앱 본체입니다. 그 창을 닫으면 앱이 종료됩니다.
+     앱은 창 없이 뒤에서 기록합니다. 브라우저 탭을 닫아도 기록은 계속됩니다.
+     끄려면 앱의 개인정보 탭 → 실행 → "앱 종료"를 누르세요.
   3. 앱의 개인정보 탭 → 실행에서 "컴퓨터를 켤 때 자동 실행", "바탕화면 바로가기"를 켤 수 있습니다.
 
 선택 사항

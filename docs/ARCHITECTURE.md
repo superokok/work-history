@@ -230,6 +230,10 @@ Windows only (decision 2026-10-28; until then the app also ran on macOS/Linux wi
 ActivityWatch). Windows-specific pieces: the collector (`collector.py`, Win32 via ctypes),
 shortcuts (`autostart.py`, WScript.Shell), the data folder (`%LOCALAPPDATA%`), the launcher
 (`start-workhistory.cmd`, portable zip) and exclusive port binding (`server._ExclusiveServer`).
+The launchers start `pythonw.exe` (no console, since 2026-10-30: a closed console window used to
+stop the recording); the app then logs to `%LOCALAPPDATA%\WorkHistory\workhistory.log` (1 MB,
+one backup, no event content), shows startup errors in a message box, and stops only through
+"앱 종료" (`POST /api/quit`, guarded like every write by the `X-Work-History` header).
 `sessions.py` still knows a few macOS/Linux app names; they are harmless.
 
 ## 8. Security

@@ -24,7 +24,7 @@ work-history/
 ├─ CLAUDE.md               Claude 작업 지침 (세션 시작/종료 규칙)
 ├─ README.md               설치·사용법·명령행 옵션
 ├─ pyproject.toml          패키지 정의 (dulwich 필수; extras: claude=mcp, desktop=pywebview)
-├─ start-workhistory.cmd   Windows 실행기 (.venv 우선)
+├─ start-workhistory.cmd   Windows 실행기 (.venv 우선, pythonw로 창 없이 실행)
 ├─ workhistory/            앱 패키지 (아래 모듈 지도)
 │  └─ static/              UI: index.html, app.js, style.css (한국어)
 ├─ tests/                  unittest (helpers.py 공용 픽스처)
@@ -43,7 +43,7 @@ work-history/
 
 | 계층 | 모듈 | 역할 |
 |---|---|---|
-| 진입 | `__main__.py` | 명령행 옵션, 단일 인스턴스, 서버·동기화 시작 |
+| 진입 | `__main__.py` | 명령행 옵션, 단일 인스턴스, 서버·동기화 시작, "앱 종료"(`/api/quit`) 대기, 콘솔 없으면 로그 파일·오류 메시지 상자 |
 | 설정 | `config.py` | 상수 (세션 묶기 기준 등), 데이터 폴더 경로 |
 | 수집 | `collector.py` | 창·유휴 수집기 (앱 안 스레드, ctypes, 2초마다) → 원본 `collector_events` (35일) |
 | | `sync.py` | 원본을 1분마다 가져오기, 중복 제거, 개인정보 규칙 적용 |
@@ -82,10 +82,10 @@ uv venv .venv --python 3.12
 uv pip install --python .venv/Scripts/python.exe -e .[claude]
 
 # 실행 (기본 http://127.0.0.1:5730/)
-.venv/Scripts/python.exe -m workhistory            # 또는 start-workhistory.cmd
+.venv/Scripts/python.exe -m workhistory            # 콘솔에 로그. start-workhistory.cmd는 pythonw(창 없음, 로그는 데이터 폴더 workhistory.log)
 .venv/Scripts/python.exe -m workhistory --demo     # 데모 데이터
 
-# 테스트 (2026-10-29 기준 232개 통과)
+# 테스트 (2026-10-30 기준 233개 통과)
 .venv/Scripts/python.exe -m unittest discover -s tests -t .
 
 # AI 보고서 품질 평가 (Claude Code 로그인 필요)
@@ -121,3 +121,4 @@ python tools/build_portable.py --offline --with-models  # 행망(폐쇄망)용: 
   2026-10-27에 없앰.
 - 로컬 전용, 배포는 Windows 포터블 zip. 행망용은 `--offline` 빌드: `mcp`와 그 의존성 30여 개를 빼고,
   앱은 `mcp`가 없으면 Claude Code 모델을 목록에서 숨긴다 (`ai_claude.bundled()`, 2026-10-29).
+- 실행기는 pythonw로 창 없이 띄운다: 창을 실수로 닫아 기록이 끊기지 않게. 끄는 건 앱 안의 "앱 종료"만 (2026-10-30).
