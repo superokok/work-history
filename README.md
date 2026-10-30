@@ -17,7 +17,8 @@
 | `WorkHistory-<버전>-windows-x64-offline-local-ai.zip` (약 8.5GB) | 앱 + 내 PC AI 모델 2개 (Qwen3.5 4B·9B). Claude Code 연결은 뺌 | **행망·폐쇄망**, 인터넷 없이 AI까지 쓰려는 PC |
 | `WorkHistory-<버전>-windows-x64.zip` (약 54MB) | 앱만. Claude Code 연결 포함, 모델 없음 | 인터넷이 되는 PC (모델은 따로 `llm\models`에 넣음) |
 
-둘 다 Python 런타임이 들어 있어 시스템에 아무것도 설치하지 않습니다. 8.5GB zip은 파일 하나가
+둘 다 Python 런타임과 AI 실행에 필요한 Microsoft C++ 런타임이 들어 있어, 아무것도 설치되지 않은
+인터넷 없는 Windows 10/11에서도 그대로 돌아가고 시스템에 아무것도 설치하지 않습니다. 8.5GB zip은 파일 하나가
 4GB를 넘으니 옮길 때 exFAT·NTFS USB를 쓰세요.
 
 ## 설치와 처음 설정

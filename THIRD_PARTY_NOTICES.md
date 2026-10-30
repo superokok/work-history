@@ -55,4 +55,5 @@ use and redistribution. Full license texts ship in the portable package under
 |---|---|---|---|
 | llama.cpp / ggml (`llm/bin`) | MIT | runs the local model on this PC | `llm/LICENSE-llama.cpp.txt` |
 | LLVM OpenMP runtime (`llm/bin/libomp.dll`) | Apache-2.0 WITH LLVM-exception | used by llama.cpp | `llm/bin/LICENSE-LLVM-OpenMP` |
+| Microsoft Visual C++ runtime (`llm/bin/msvcp140.dll`, `vcruntime140.dll`, `vcruntime140_1.dll`) | Microsoft Visual Studio redistributable files (app-local deployment) | used by llama.cpp; copied from the build PC's Visual C++ Redistributable | https://learn.microsoft.com/cpp/windows/redistributing-visual-cpp-files |
 | Qwen3.5 models (`llm/models`, if included) | Apache-2.0 | local AI model | `llm/LICENSE-Qwen3.5.txt` |

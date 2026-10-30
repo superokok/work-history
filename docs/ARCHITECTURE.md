@@ -265,6 +265,10 @@ one backup, no event content), shows startup errors in a message box, and stops 
 |---|---|---|---|
 | pywebview (optional) | BSD-3-Clause | Optional desktop window | Keep notice if distributed. |
 | Python, SQLite | PSF / public domain | Runtime | Notice for Python if bundled. |
+| dulwich | Apache-2.0 (dual GPL, used under Apache) | Folder snapshots | Notice. |
+| llama.cpp / ggml, LLVM OpenMP | MIT / Apache-2.0 WITH LLVM-exception | Local AI (`llm/bin`) | License texts in `llm/`. |
+| Qwen3.5 models | Apache-2.0 | Local AI (`llm/models`) | License text in `llm/`. |
+| Microsoft Visual C++ runtime (`msvcp140`, `vcruntime140`, `vcruntime140_1`) | Visual Studio redistributable files | Needed by llama.cpp; shipped app-local in `llm/bin` so a bare Windows runs the local AI (2026-10-30) | Listed in THIRD_PARTY_NOTICES. |
 
 ActivityWatch (MPL-2.0; its Windows tray bundle contains GPL PyQt6) is no longer used
 (2026-10-28); no ActivityWatch code was ever copied.

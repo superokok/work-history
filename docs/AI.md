@@ -78,6 +78,9 @@ or that have no internet (폐쇄망). The app ships llama.cpp's `llama-server`
   and the app verifies the answer anyway.
 - Questions: no MCP; the app runs the tool loop itself (`run_tools`) with the
   same read-only `HistoryTools`, so reference checks work exactly as before.
+- Runtime: llama.cpp's DLLs need the Microsoft C++ runtime, which a bare Windows
+  lacks; the zip carries it in `llm/bin` (Windows loads DLLs from the program's
+  folder first), so nothing has to be installed.
 - Devices: llama.cpp's Vulkan build uses NVIDIA, AMD or Intel graphics when
   the driver is there, else the CPU. `WORKHISTORY_LLM_DEVICE` (e.g. `none`,
   `Vulkan0`) pins a device for measurements.

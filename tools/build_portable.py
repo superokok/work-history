@@ -31,6 +31,7 @@ Usage (needs `packaging`, or pip which vendors it):
 
 import argparse
 import importlib.metadata as md
+import os
 import re
 import shutil
 import subprocess
@@ -56,6 +57,10 @@ LLM = ROOT / "llm"
 LLM_FILES = re.compile(r"^(llama-server\.exe|llama-server-impl\.dll|llama\.dll|llama-common\.dll|mtmd\.dll|"
                        r"libomp\.dll|ggml.*\.dll|LICENSE.*)$", re.I)
 LLM_LICENSES = ("LICENSE-llama.cpp.txt", "LICENSE-Qwen3.5.txt")
+# The Microsoft C++ runtime llama.cpp's DLLs link to. A bare Windows has none of it (it comes with the
+# "Visual C++ Redistributable"), so it ships next to llama-server, where Windows looks first
+# (app-local deployment, allowed for these files by Microsoft's redistribution terms).
+VC_RUNTIME = ("msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll")
 MODELS_README = """로컬 AI 모델 넣는 곳
 
 여기에 .gguf 모델 파일을 넣으면 앱의 개인정보 → AI 설정에 "내 PC · <파일 이름>"으로 나타납니다.
@@ -206,6 +211,10 @@ def notices(dists: list[md.Distribution], python_version: str) -> str:
              "| llama.cpp / ggml (`llm/bin`) | MIT | runs the local model on this PC | `llm/LICENSE-llama.cpp.txt` |",
              "| LLVM OpenMP runtime (`llm/bin/libomp.dll`) | Apache-2.0 WITH LLVM-exception | used by llama.cpp | "
              "`llm/bin/LICENSE-LLVM-OpenMP` |",
+             "| Microsoft Visual C++ runtime (`llm/bin/msvcp140.dll`, `vcruntime140.dll`, `vcruntime140_1.dll`) "
+             "| Microsoft Visual Studio redistributable files (app-local deployment) | used by llama.cpp; "
+             "copied from the build PC's Visual C++ Redistributable | "
+             "https://learn.microsoft.com/cpp/windows/redistributing-visual-cpp-files |",
              "| Qwen3.5 models (`llm/models`, if included) | Apache-2.0 | local AI model | `llm/LICENSE-Qwen3.5.txt` |",
              ""]
     return "\n".join(rows)
@@ -252,6 +261,13 @@ def copy_llm(out: Path, with_models: bool) -> bool:
     for f in bin_dir.iterdir():
         if f.is_file() and LLM_FILES.match(f.name):
             shutil.copy2(f, out / "llm" / "bin" / f.name)
+    system = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32"
+    missing = [name for name in VC_RUNTIME if not (system / name).is_file()]
+    if missing:
+        raise SystemExit(f"Visual C++ runtime not found on this PC ({', '.join(missing)}): "
+                         "install the Visual C++ Redistributable (x64) to build the local AI")
+    for name in VC_RUNTIME:
+        shutil.copy2(system / name, out / "llm" / "bin" / name)
     for name in LLM_LICENSES:
         if (LLM / name).is_file():
             shutil.copy2(LLM / name, out / "llm" / name)
