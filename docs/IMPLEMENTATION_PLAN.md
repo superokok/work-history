@@ -68,6 +68,21 @@ Remaining validation is human: about a week of real use, following
 - Do auto titles help, or are they always renamed?
 - Is the follow-up keyword list useful or noisy?
 
+## Phase 5 — Ready for other PCs (2026-10-28 ~ 10-30)
+
+- Window activity recorded by the app itself (`collector.py`); ActivityWatch and
+  macOS/Linux support removed: Windows only.
+- Local AI as the default (llama.cpp + Qwen3.5), AI servers by address, Claude Code
+  optional. `--offline` package for closed networks (no Claude Code link, models inside).
+- Runs without a console window (`pythonw`), stops with "앱 종료" in the app; log file
+  and message box instead of a console.
+- Port 5730, else the next free one up to 5739; one app per database by a named mutex.
+- Repository and zip kept free of the developer PC's traces (`tools/clean_check.py`,
+  `tests/test_clean.py`, checked before every zip).
+- Effect measurement in the app (report writing time, kept AI lines, search-to-open time).
+
+Remaining: the measurement week ([VALIDATION.md](VALIDATION.md)), then the deck.
+
 ## Explicitly deferred
 
 Packaging into an installer, app tray icon, browser URL watcher, FTS5,

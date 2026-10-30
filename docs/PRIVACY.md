@@ -72,7 +72,9 @@ long-term use.
 ## Logging
 
 Logs record counts, timings and error types only. Window titles, app names
-from events, note text, and search queries are not logged.
+from events, note text, and search queries are not logged. Started without a console
+(the normal way), the app writes them to `%LOCALAPPDATA%\WorkHistory\workhistory.log`
+(at most 1 MB plus one older file); started from a console, they go to the console.
 
 ## Effect measurement
 

@@ -19,7 +19,7 @@ It is **not** a screen recorder, an app-usage dashboard, or an AI chatbot.
 폐쇄망 environments, carried in by USB, so the primary record is **results**:
 changes to files in the user's work folders, snapshotted into hidden local
 Git repositories (see RESULTS_TRACKING.md). Window activity is a secondary
-signal. AI (Claude Code for now, a 폐쇄망 LLM later) turns the record into
+signal. AI (a local model on the PC by default, a company LLM server or Claude Code by choice) turns the record into
 reports and answers, citing the exact changes, sessions and notes it used.
 Plain activity trackers already show app usage; this product's value is
 the layer on top: projects, work sessions, notes, reviews, search and resume.
