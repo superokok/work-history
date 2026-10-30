@@ -3,6 +3,7 @@
 import json
 import logging
 import mimetypes
+import os
 import re
 import socket
 import threading
@@ -12,7 +13,7 @@ from dataclasses import asdict
 from datetime import date
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Iterable, Optional
 from urllib.parse import parse_qs, urlparse
 
 from . import ai_agent, ai_remote, ai_service, service, sessionstore, snapshots, usage
@@ -59,6 +60,7 @@ class App:
                  launch: Optional[Launch] = None, on_quit: Optional[Callable[[], None]] = None):
         self.db = db
         self.on_quit = on_quit  # stops the whole app (set by __main__)
+        self.port: Optional[int] = None  # set when the server binds
         self.launch = launch or default_launch()
         self.syncer = syncer
         self.snapshotter = snapshotter
@@ -259,7 +261,8 @@ class App:
 
         @r("GET", "/api/launch")
         def get_launch(conn, query, body):
-            return {**self.launch.status(), "demo": self.demo, "can_quit": self.on_quit is not None}
+            return {**self.launch.status(), "demo": self.demo, "can_quit": self.on_quit is not None,
+                    "url": f"http://127.0.0.1:{self.port}/" if self.port else None}
 
         @r("POST", "/api/quit")
         def quit_app(conn, query, body):
@@ -548,16 +551,35 @@ def snapshots_dir(db: Database) -> Path:
 def create_server(app: App, port: int) -> ThreadingHTTPServer:
     """Bind 127.0.0.1:port exclusively (0 = any free port); OSError if taken."""
     server = _ExclusiveServer(("127.0.0.1", port), BaseHTTPRequestHandler)
-    server.RequestHandlerClass = make_handler(app, server.server_address[1])
+    app.port = server.server_address[1]
+    server.RequestHandlerClass = make_handler(app, app.port)
     return server
 
 
-def find_running_instance(port: int, timeout: float = 2) -> bool:
-    """True if this app (not some other program) is already serving on the port."""
+def create_server_in(app: App, ports: Iterable[int]) -> ThreadingHTTPServer:
+    """Bind the first free port of `ports`; the last OSError if every one is taken."""
+    error: Optional[OSError] = None
+    for port in ports:
+        try:
+            return create_server(app, port)
+        except OSError as e:
+            error = e
+    raise error or OSError("no port to try")
+
+
+def same_path(a: str, b: str) -> bool:
+    return os.path.normcase(os.path.abspath(a)) == os.path.normcase(os.path.abspath(b))
+
+
+def find_running_instance(port: int, timeout: float = 2, db_path: Optional[str] = None) -> bool:
+    """True if this app (not some other program) is already serving on the port; with `db_path`,
+    only an instance using that database counts (the demo is another one)."""
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     try:
         with opener.open(f"http://127.0.0.1:{port}/api/status", timeout=timeout) as resp:
             data = json.load(resp)
     except (OSError, ValueError):
         return False
-    return isinstance(data, dict) and "db_path" in data and "paused" in data
+    if not (isinstance(data, dict) and "db_path" in data and "paused" in data):
+        return False
+    return db_path is None or same_path(str(data["db_path"]), db_path)

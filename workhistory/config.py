@@ -19,6 +19,8 @@ DB_FILENAME = "workhistory.db"
 DEMO_DB_FILENAME = "demo.db"
 
 DEFAULT_PORT = 5730
+# Taken by another program? Try the next ones: 5730-5739.
+PORT_TRIES = 10
 
 # How often raw window/idle events are imported (sync.py).
 SYNC_INTERVAL_S = 60

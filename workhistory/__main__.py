@@ -1,5 +1,8 @@
 """Entry point: python -m workhistory [--demo] [--window] [--port N]
 
+Port: 5730, or the next free one up to 5739 when another program holds it (one app per
+database is ensured by instance.claim, not by the port).
+
 The launchers start it with pythonw.exe: no console window, so closing a window by mistake
 can't stop the recording. It stops with the app's own "앱 종료" button (POST /api/quit).
 """
@@ -22,11 +25,11 @@ except ImportError:
         "그다음 start-workhistory.cmd 로 실행하세요.",
     ]))
 
-from . import demo
+from . import demo, instance
 from .collector import Collector, default_probe
-from .config import DB_FILENAME, DEFAULT_PORT, DEMO_DB_FILENAME, default_data_dir
+from .config import DB_FILENAME, DEFAULT_PORT, DEMO_DB_FILENAME, PORT_TRIES, default_data_dir
 from .db import Database
-from .server import App, create_server, find_running_instance, snapshots_dir
+from .server import App, create_server_in, snapshots_dir
 from .snapshots import Snapshotter
 from .sync import Syncer
 
@@ -65,7 +68,7 @@ def _setup_logging(verbose: bool, data_dir: Path) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="workhistory", description="개인 작업 기록")
-    parser.add_argument("--port", type=int, default=DEFAULT_PORT)
+    parser.add_argument("--port", type=int, help=f"이 포트만 사용 (기본: {DEFAULT_PORT}부터 빈 포트)")
     parser.add_argument("--db", type=Path, help="데이터베이스 파일 경로")
     parser.add_argument("--demo", action="store_true", help="별도 DB에 샘플 데이터로 실행")
     parser.add_argument("--window", action="store_true", help="pywebview 창으로 열기")
@@ -79,6 +82,17 @@ def main(argv: list[str] | None = None) -> int:
 
     db_path = args.db or default_data_dir() / (DEMO_DB_FILENAME if args.demo else DB_FILENAME)
     _setup_logging(args.verbose, db_path.parent)
+    ports = [args.port] if args.port else list(range(DEFAULT_PORT, DEFAULT_PORT + PORT_TRIES))
+    if not instance.claim(db_path):
+        # Launched twice (e.g. double-clicked the shortcut): open the running app.
+        port = instance.find(ports, db_path)
+        if port is None:
+            return _fail("작업 기록이 이미 실행 중인데 응답하지 않습니다. 잠시 뒤에 다시 실행해 주세요.")
+        url = f"http://127.0.0.1:{port}/"
+        print(f"이미 실행 중입니다: {url}")
+        if not args.no_browser:
+            webbrowser.open(url)
+        return 0
     db = Database(db_path)
     try:
         db.migrate()
@@ -100,17 +114,13 @@ def main(argv: list[str] | None = None) -> int:
 
     quit_event = threading.Event()
     try:
-        server = create_server(App(db, syncer, demo=args.demo, snapshotter=snapshotter,
-                                   on_quit=quit_event.set), args.port)
+        server = create_server_in(App(db, syncer, demo=args.demo, snapshotter=snapshotter,
+                                      on_quit=quit_event.set), ports)
     except OSError as e:
-        if find_running_instance(args.port):
-            # Launched twice (e.g. double-clicked the shortcut): reuse the running app.
-            url = f"http://127.0.0.1:{args.port}/"
-            print(f"이미 실행 중입니다: {url}")
-            if not args.no_browser:
-                webbrowser.open(url)
-            return 0
-        return _fail(f"포트 {args.port}를 다른 프로그램이 쓰고 있어 작업 기록을 시작하지 못했습니다: {e}")
+        where = f"포트 {ports[0]}" if len(ports) == 1 else f"포트 {ports[0]}~{ports[-1]}"
+        return _fail(f"{where}를 모두 다른 프로그램이 쓰고 있어 작업 기록을 시작하지 못했습니다: {e}")
+    if server.server_address[1] != ports[0]:
+        log.warning("port %d is taken by another program; using %d", ports[0], server.server_address[1])
     url = f"http://127.0.0.1:{server.server_address[1]}/"
     log.info("listening on %s (DB: %s)", url, db_path)
     print(f"작업 기록: {url}  (DB: {db_path})")

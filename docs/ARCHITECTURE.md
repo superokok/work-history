@@ -229,7 +229,10 @@ local timezone.
 Windows only (decision 2026-10-28; until then the app also ran on macOS/Linux with
 ActivityWatch). Windows-specific pieces: the collector (`collector.py`, Win32 via ctypes),
 shortcuts (`autostart.py`, WScript.Shell), the data folder (`%LOCALAPPDATA%`), the launcher
-(`start-workhistory.cmd`, portable zip) and exclusive port binding (`server._ExclusiveServer`).
+(`start-workhistory.cmd`, portable zip), exclusive port binding (`server._ExclusiveServer`) and the
+single-instance mutex (`instance.py`). Port: 5730, else the next free one up to 5739 (since
+2026-10-30); one app per database is a named mutex, not the port, and a second launch asks each
+candidate port for the app with its database (`/api/status` db_path) and opens that one.
 The launchers start `pythonw.exe` (no console, since 2026-10-30: a closed console window used to
 stop the recording); the app then logs to `%LOCALAPPDATA%\WorkHistory\workhistory.log` (1 MB,
 one backup, no event content), shows startup errors in a message box, and stops only through

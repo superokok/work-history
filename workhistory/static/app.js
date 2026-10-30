@@ -1011,6 +1011,8 @@ function renderLaunch(l) {
   $("launch-status").textContent = l.demo ? "데모 모드에서는 바꿀 수 없습니다."
     : l.shortcut.exists ? `${l.shortcut.where}에 바로가기가 있습니다.` : "";
   $("quit-row").hidden = !l.can_quit;
+  $("launch-url").hidden = !l.url;
+  $("launch-url").textContent = l.url ? `이 앱의 주소: ${l.url} (다른 프로그램이 포트를 쓰고 있으면 번호가 바뀔 수 있으니, 바탕화면 바로가기로 여는 것이 가장 확실합니다)` : "";
 }
 
 async function loadLaunch() {
