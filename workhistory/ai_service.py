@@ -75,6 +75,8 @@ def get_settings(conn: sqlite3.Connection, demo: bool) -> dict:
         "servers": ai_remote.list_endpoints(conn),
         "default_model": default_model(),
         "enabled": chosen_model(conn) is not None,
+        # False in the released (offline) zip: the UI then says nothing about Claude Code at all.
+        "claude_bundled": ai_claude.bundled(),
         # Cheap PATH lookup only; login is checked by '연결 확인' (check_connection).
         "claude_installed": ai_claude.bundled() and find_cli() is not None,
         "demo": demo,

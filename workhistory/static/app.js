@@ -706,7 +706,9 @@ async function loadReport() {
 function renderReportNotice(ai) {
   const notes = [];
   const local = ai && isLocal(ai.model);
-  if (ai && !local && !ai.claude_installed && !(ai.local_models || []).length) notes.push("Claude Code가 설치되어 있지 않습니다. Claude Code를 설치하고 로그인하거나, 내 PC의 AI 모델을 llm 폴더에 넣으면 AI 초안을 만들 수 있습니다.");
+  if (ai && !local && !ai.claude_installed && !(ai.local_models || []).length) notes.push(ai.claude_bundled
+    ? "Claude Code가 설치되어 있지 않습니다. Claude Code를 설치하고 로그인하거나, 내 PC의 AI 모델을 llm 폴더에 넣으면 AI 초안을 만들 수 있습니다."
+    : "내 PC의 AI 모델이 없습니다. 앱 폴더의 llm\\models 에 .gguf 모델 파일을 넣거나, 개인정보 탭에서 AI 서버를 등록하세요.");
   else if (ai && !ai.demo && !ai.enabled) notes.push("AI가 꺼져 있습니다. 개인정보 탭의 AI 설정에서 모델을 고르면 실제 기록으로 초안을 만들 수 있습니다.");
   else if (local) notes.push("내 PC의 AI로 만듭니다. 기록은 이 PC 밖으로 나가지 않습니다. 그래픽카드가 없는 PC에서는 몇 분 걸릴 수 있습니다.");
   $("report-notice").replaceChildren(...notes.map((n) => h("div", { class: "warning" }, n)));
@@ -851,7 +853,8 @@ function renderModelList(s) {
     ...aiServers.map((srv) => item(`AI 서버 · ${srv.name}`, `${srv.model_id} · ${srv.url}${srv.has_key ? " · API 키 있음" : ""}`,
       h("button", { class: "small", onclick: () => checkServer(srv) }, "연결 확인"),
       h("button", { class: "small danger", onclick: () => deleteServer(srv) }, "삭제"))),
-    item("Claude Code", s.claude_installed ? "이 PC에 설치됨 · Anthropic으로 전송" : "설치되어 있지 않음"),
+    // Only where Claude Code is part of the install (development); the released zip has none.
+    ...(s.claude_bundled ? [item("Claude Code", s.claude_installed ? "이 PC에 설치됨 · Anthropic으로 전송" : "설치되어 있지 않음")] : []),
     ...(s.local_models.length ? [] : [h("li", { class: "muted" },
       "내 PC 모델이 없습니다. 앱 폴더의 llm\\models 에 .gguf 모델 파일을 넣으면 자동으로 등록됩니다.")]));
 }
@@ -906,9 +909,10 @@ async function loadAISettings() {
   $("ai-model").replaceChildren(...["", ...s.models].map((m) => h("option", { value: m },
     modelLabel(m) + (m === s.default_model ? " · 추천" : ""))));
   $("ai-model").value = aiModel = s.model;
+  $("ai-claude-note").hidden = !s.claude_bundled;
   const ok = (cond, yes, no) => h("span", { class: `chip ${cond ? "ok" : "err"}` }, cond ? yes : no);
   $("ai-status").replaceChildren(
-    ok(s.claude_installed, "Claude Code 설치됨", "Claude Code 없음"),
+    s.claude_bundled ? ok(s.claude_installed, "Claude Code 설치됨", "Claude Code 없음") : "",
     h("span", { class: `chip ${s.local_models.length ? "ok" : ""}` },
       s.local_models.length ? `내 PC AI 모델 ${s.local_models.length}개` : "내 PC AI 모델 없음"),
     s.demo ? h("span", { class: "chip" }, "데모 DB: 전송 허용")

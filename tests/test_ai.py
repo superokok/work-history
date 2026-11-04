@@ -274,7 +274,7 @@ class ServiceTests(AIDataTestCase):
             with mock.patch.object(ai_service.ai_claude, "bundled", return_value=False):
                 s = ai_service.get_settings(conn, demo=False)
                 self.assertFalse([m for m in s["models"] if m.startswith("claude-code")])
-                self.assertEqual((s["enabled"], s["claude_installed"]), (False, False))
+                self.assertEqual((s["enabled"], s["claude_bundled"], s["claude_installed"]), (False, False, False))
                 with self.assertRaises(store.Invalid):
                     ai_service.update_settings(conn, {"model": "claude-code:sonnet"}, False)
 

@@ -56,7 +56,9 @@ or that have no internet (폐쇄망). The app ships llama.cpp's `llama-server`
   the app zip, or built in with `tools/build_portable.py --with-models`.
 - Closed networks: `--offline` leaves the `mcp` package (and the ~30 libraries it
   pulls in) out of the zip; without it the app lists no Claude Code models
-  (`ai_claude.bundled()`), so only local models and registered AI servers remain.
+  (`ai_claude.bundled()`), so only local models and registered AI servers remain;
+  the settings screen then shows no Claude Code status, list entry or explanation either
+  (`claude_bundled` in `/api/ai/settings`).
 
 Measured 2026-10-23 on a test laptop (12th-gen Core i5, 32 GB, entry-level 4 GB
 NVIDIA GPU + Intel integrated graphics), `evals/report_eval.py --runs 1`, 4 cases each (Claude: 8/8 at
