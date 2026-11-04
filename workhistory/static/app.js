@@ -111,7 +111,7 @@ function showTab(name) {
   if (name === "review") loadReview();
   if (name === "report") loadReport();
   if (name === "resume") loadResume();
-  if (name === "projects") { renderProjects(); loadFolders(); }
+  if (name === "projects") { renderProjects(); loadFolders(); loadSuggestions(); }
   if (name === "privacy") { loadLaunch(); loadAISettings(); loadTracking(); loadExclusions(); }
 }
 
@@ -1132,6 +1132,7 @@ $("project-form").addEventListener("submit", (e) => {
 async function refreshProjects() {
   await loadProjects();
   renderProjects();
+  if (!$("tab-projects").hidden) loadSuggestions();
 }
 
 function renderProjects() {
@@ -1160,6 +1161,40 @@ function renderProjects() {
         h("button", { class: "small", onclick: () => guarded(async () => { await api("PATCH", `/api/projects/${p.id}`, { archived: !p.archived }); refreshProjects(); }) }, p.archived ? "보관 해제" : "보관"),
         h("button", { class: "small danger", onclick: () => { if (confirm(`'${p.name}' 프로젝트를 삭제할까요? 활동 기록은 남고 미분류가 됩니다.`)) guarded(async () => { await api("DELETE", `/api/projects/${p.id}`); refreshProjects(); }); } }, "삭제")));
   }));
+}
+
+// Keyword rules from what the user actually did: windows that took time without a project,
+// with words from their titles; one click adds the word as a rule of the chosen project.
+async function loadSuggestions() {
+  const sel = $("suggest-project"), keep = sel.value;
+  const active = state.projects.filter((p) => !p.archived);
+  sel.replaceChildren(...active.map((p) => h("option", { value: p.id }, p.name)));
+  if (active.some((p) => String(p.id) === keep)) sel.value = keep;
+  if (!active.length) {
+    return $("suggest-list").replaceChildren(h("p", { class: "muted" }, "먼저 아래에서 프로젝트를 만드세요. 그다음 여기서 단어를 눌러 규칙을 추가합니다."));
+  }
+  const items = await guarded(() => api("GET", "/api/projects/suggestions"));
+  if (!items) return;
+  if (!items.length) return $("suggest-list").replaceChildren(h("p", { class: "muted" }, "최근 2주 동안 프로젝트 없이 쓴 창이 없습니다."));
+  const chip = (label, field, pattern) => h("button", { class: "small kw-chip", title: `${field === "app" ? "앱 이름" : "창 제목"}에 '${pattern}'이(가) 있으면 이 프로젝트로`,
+    onclick: () => addSuggestedRule(field, pattern) }, label);
+  $("suggest-list").replaceChildren(...items.map((it) => h("div", { class: "suggest-row" },
+    h("div", { class: "suggest-head" },
+      h("span", { class: "meta" }, `${dur(it.seconds)} · ${it.app_label}`), " ", h("span", { class: "suggest-title" }, it.title || "(제목 없음)")),
+    h("div", { class: "row" },
+      ...it.candidates.map((w) => chip(w, "title", w)),
+      it.kind !== "web" ? chip(`앱: ${it.app_label}`, "app", appName(it.app)) : null))));
+}
+
+function addSuggestedRule(field, pattern) {
+  const pid = $("suggest-project").value;
+  const project = projectById(Number(pid));
+  if (!project) return toast("추가할 프로젝트를 고르세요.");
+  guarded(async () => {
+    await api("POST", `/api/projects/${pid}/rules`, { field, pattern });
+    toast(`'${project.name}'에 ${field === "app" ? "앱" : "키워드"} '${pattern}' 규칙을 추가했습니다. 지난 기록에도 적용됩니다.`);
+    await refreshProjects();
+  });
 }
 
 // ------------------------------------------------------------------ what to record
@@ -1309,7 +1344,7 @@ function renderKpis(r) {
     kpi("활동 시간", dur(t.active_s),
       p.active_s ? [h("span", { class: diff >= 0 ? "up" : "down" }, `${diff >= 0 ? "+" : "−"}${dur(Math.abs(diff))}`), compare] : "비교할 기록 없음"),
     kpi("업무 비율", `${pct(t.work_s, t.active_s)}%`,
-      `업무 ${dur(t.work_s)} · 서핑 ${pct(t.surf_s, t.active_s)}% · 업무 외 ${pct(t.offwork_s, t.active_s)}%`),
+      `업무 ${dur(t.work_s)} · 업무 외 ${dur(t.offwork_s)}`),
     kpi("고친 파일", `${r.files.toLocaleString()}개`, `+${r.lines_added.toLocaleString()} / −${r.lines_removed.toLocaleString()}줄`),
     kpi("가장 많이 한 일", top ? top.name : "없음", top ? dur(top.seconds) : "프로젝트별 시간이 없습니다", "name"));
 }
@@ -1409,13 +1444,16 @@ function renderDashProjects(r) {
   $("dash-projects").replaceChildren(...rows.map((p) => {
     const stat = [p.seconds ? dur(p.seconds) : null,
       p.files ? `파일 ${p.files}개 (+${p.lines_added} −${p.lines_removed})` : null].filter(Boolean).join(" · ");
-    const row = h("div", { class: "proj-row", title: r.span === "day" ? "타임라인에서 보기" : "이어서 하기에서 보기" },
+    const row = h("div", { class: "proj-row", title: p.project_id == null ? "프로젝트 탭에서 키워드 규칙 만들기"
+      : r.span === "day" ? "타임라인에서 보기" : "이어서 하기에서 보기" },
       h("div", { class: "proj-name" }, h("i", { class: "swatch", style: { background: p.color } }), p.name),
       h("div", { class: "proj-meter" }, h("div", { style: { width: `${(p.seconds / max) * 100}%`, background: p.color } })),
-      h("div", { class: "proj-titles" }, p.titles.map((s) => (s.length > 42 ? s.slice(0, 41) + "…" : s)).join("  ·  ")),
+      h("div", { class: "proj-titles" }, p.project_id == null ? "프로젝트가 정해지지 않은 시간입니다. 누르면 키워드 규칙을 추천합니다."
+        : p.titles.map((s) => (s.length > 42 ? s.slice(0, 41) + "…" : s)).join("  ·  ")),
       h("div", { class: "proj-stat" }, stat));
     row.addEventListener("click", () => {
-      if (r.span === "week" && p.project_id != null) { state.resumeProject = p.project_id; return showTab("resume"); }
+      if (p.project_id == null) { showTab("projects"); return $("suggest-card").scrollIntoView({ behavior: "smooth" }); }
+      if (r.span === "week") { state.resumeProject = p.project_id; return showTab("resume"); }
       $("filter-project").value = p.project_id == null ? "none" : String(p.project_id);
       gotoDay(r.span === "day" ? r.day : r.end);
     });

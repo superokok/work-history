@@ -45,7 +45,7 @@
         <button id="dash-next" class="small" title="다음">▶</button>
         <button id="dash-today" class="small">오늘</button>
         <span id="dash-period" class="muted"></span>
-        <span class="muted small-text dash-note">활동 분류는 앱 이름과 창 제목으로 <b>자동 추정</b>한 것입니다.</span>
+        <span class="muted small-text dash-note">활동 분류는 앱 이름으로 <b>자동 추정</b>한 것입니다.</span>
       </div>
       <div id="dash-kpis" class="dash-kpis"></div>
       <div class="dash-charts">
@@ -200,6 +200,14 @@
           <select id="folder-project"></select>
           <button type="submit">폴더 추가</button>
         </form>
+      </div>
+      <div class="card" id="suggest-card">
+        <div class="summary-head">
+          <h2>키워드 규칙 추천 <span class="badge inferred">최근 2주</span></h2>
+          <label class="small-text">추가할 프로젝트 <select id="suggest-project"></select></label>
+        </div>
+        <p class="muted small-text">프로젝트 없이 오래 쓴 창입니다. 단어를 누르면 고른 프로젝트의 키워드 규칙으로 추가되고, 지난 기록에도 바로 적용됩니다.</p>
+        <div id="suggest-list"></div>
       </div>
       <form id="project-form" class="toolbar">
         <input id="project-name" placeholder="새 프로젝트 이름 (예: Gov24 백엔드)" size="30">

@@ -1,7 +1,7 @@
 import unittest
 from datetime import date, timedelta
 
-from workhistory import categories, dashboard
+from workhistory import categories, dashboard, service
 from workhistory.classify import OFFWORK_APP
 
 from tests.helpers import TempDB, local_ts
@@ -20,11 +20,8 @@ class CategoryTests(unittest.TestCase):
             ("EXCEL.EXE", "일정.xlsx", "doc"),
             ("slack.exe", "#dev | Slack", "comm"),
             ("Zoom.exe", "Zoom 회의", "comm"),
-            ("chrome.exe", "[GOV-1418] 토큰 재발급 - Jira - Chrome", "web_work"),
-            ("msedge.exe", "REST API reference - Edge", "web_work"),
-            ("chrome.exe", "개발자 브이로그 - YouTube - Chrome", "surf"),
-            ("chrome.exe", "키보드 할인 - 쇼핑 - Chrome", "surf"),
-            ("chrome.exe", "Rapid capital growth - Chrome", "web"),  # 'api' only as a word
+            ("chrome.exe", "[GOV-1418] 토큰 재발급 - Jira - Chrome", "web"),
+            ("msedge.exe", "개발자 브이로그 - YouTube - Edge", "web"),
             ("mspaint2.exe", "x", "other"),
             (OFFWORK_APP, "", "offwork"),
         ]
@@ -57,15 +54,13 @@ class DashboardTests(unittest.TestCase):
             r = dashboard.dashboard(conn, DAY, "day", now=NOW)
         self.assertEqual((r["start"], r["end"]), (DAY.isoformat(), DAY.isoformat()))
         self.assertEqual(r["by_kind"]["dev"], 3600)
-        self.assertEqual(r["by_kind"]["web_work"], 1200)
-        self.assertEqual(r["by_kind"]["surf"], 600)
+        self.assertEqual(r["by_kind"]["web"], 1800)
         self.assertEqual(r["by_kind"]["comm"], 1800)
         t = r["totals"]
         self.assertEqual(t["active_s"], 7200)
-        self.assertEqual(t["work_s"], 3600 + 1200 + 1800)
-        self.assertEqual(t["surf_s"], 600)
+        self.assertEqual(t["work_s"], 7200)
         self.assertEqual(r["previous"]["active_s"], 1800)  # the day before
-        self.assertEqual([b["kind"] for b in r["blocks"]], ["dev", "web_work", "surf", "comm"])
+        self.assertEqual([b["kind"] for b in r["blocks"]], ["dev", "web", "comm"])
         self.assertEqual(sum(p["seconds"] for p in r["projects"]), 7200)
         self.assertEqual(len(r["week"]), 7)
         self.assertEqual(r["week"][0]["day"], (DAY - timedelta(days=2)).isoformat())  # Monday
@@ -85,6 +80,24 @@ class DashboardTests(unittest.TestCase):
             r = dashboard.dashboard(conn, DAY, "day", now=NOW)
         self.assertEqual(r["totals"]["active_s"], 0)
         self.assertEqual(r["blocks"], [])
+
+    def test_rule_suggestions(self):
+        with self.db.connect() as conn:
+            items = dashboard.unassigned(conn, days=3, now=NOW)
+            self.assertEqual((items[0]["app"], items[0]["seconds"]), ("idea64.exe", 3600))
+            self.assertIn("gov24-api", items[0]["candidates"])
+            pid = service.create_project(conn, {"name": "Gov24"})["id"]
+            service.add_rule(conn, pid, {"field": "title", "pattern": "gov24-api"})
+            left = dashboard.unassigned(conn, days=3, now=NOW)
+        self.assertNotIn("idea64.exe", [i["app"] for i in left])  # the rule took it
+        self.assertIn("chrome.exe", [i["app"] for i in left])
+
+    def test_keyword_candidates(self):
+        words = dashboard.keyword_candidates("chrome.exe", "[GOV-1418] 리프레시 토큰 재발급 - Jira - Chrome")
+        self.assertEqual(words[0], "GOV-1418")
+        self.assertIn("Jira", words)
+        self.assertNotIn("Chrome", words)
+        self.assertLessEqual(len(words), dashboard.MAX_CANDIDATES)
 
     def test_unknown_span(self):
         with self.db.connect() as conn, self.assertRaises(ValueError):

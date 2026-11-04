@@ -74,8 +74,8 @@ work-history/
 | | `mcp_server.py` | (개발·비교용) 내부 읽기 전용 MCP 서버: Claude Code 모델로 "AI에게 묻기"할 때만 앱이 띄움 (외부 연결 거부) |
 | 외부 연동 | `autostart.py` | 로그온 시 시작, 바로가기 생성 |
 | 서비스 | `service.py` | 타임라인, 검색, 메모, 프로젝트, 리뷰, 이어서 하기 쿼리 |
-| | `dashboard.py` | 대시보드: 일·주 단위 분류별 시간, 시간대 띠, 프로젝트별 한 일, 전날·지난주 비교 |
-| | `categories.py` | 활동 분류 규칙 (개발·문서·소통·업무 웹·웹·인터넷 서핑·기타·업무 외, 앱 이름과 창 제목으로, AI 없음) |
+| | `dashboard.py` | 대시보드: 일·주 단위 분류별 시간, 시간대 띠, 프로젝트별 한 일, 전날·지난주 비교. 키워드 규칙 추천(최근 2주 미분류 창 + 제목 단어) |
+| | `categories.py` | 활동 분류 규칙 (개발·문서·소통·회의·웹·기타·업무 외, 앱 이름으로, AI 없음) |
 | | `server.py` | JSON API + 정적 UI, 127.0.0.1 전용 |
 | 기타 | `stats.py` | 실사용 보정률 통계 (`python -m workhistory.stats`) |
 | | `demo.py`, `demo_files.py` | `--demo`용 가상 2주 시나리오 (별도 demo.db) |

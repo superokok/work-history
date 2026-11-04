@@ -113,6 +113,10 @@ class App:
                 raise ApiError(400, "span 값이 올바르지 않습니다")
             return dashboard.dashboard(conn, _day(query.get("date")), span)
 
+        @r("GET", "/api/projects/suggestions")
+        def project_suggestions(conn, query, body):
+            return dashboard.unassigned(conn)
+
         @r("POST", "/api/assign")
         def assign(conn, query, body):
             return {"changed": service.assign_project(conn, body.get("event_ids"), body.get("project_id"))}

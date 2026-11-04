@@ -4,6 +4,7 @@ Built from the same sessions as the timeline (excluded sessions do not count) an
 recorded file changes. Kinds of activity come from categories.py (rules, no AI).
 """
 
+import re
 import sqlite3
 import time
 from collections import defaultdict
@@ -12,6 +13,7 @@ from typing import Optional
 
 from . import categories, sessionstore, store
 from .classify import OFFWORK_APP
+from .sessions import TITLE_SEPARATOR, app_key, app_label, clean_title
 
 STRIP_MERGE_GAP_S = 120  # same-kind activities this close together form one block of the day strip
 STRIP_MIN_BLOCK_S = 180  # shorter blocks are folded into the one before (the strip only)
@@ -21,10 +23,11 @@ TOP_TITLES = 3
 def _day(conn: sqlite3.Connection, day: date, now: Optional[float]) -> dict:
     """Time by kind and by project, the day strip and the sessions behind them, for one day."""
     if day > store.local_day(time.time() if now is None else now):
-        return {"day": day, "by_kind": {}, "projects": {}, "blocks": [], "changes": []}  # not yet
+        return {"day": day, "by_kind": {}, "projects": {}, "blocks": [], "changes": [], "unassigned": {}}  # not yet
     activities, _ = store.day_activities(conn, day, now)
     sessionstore.ensure_day(conn, day, now, activities)
     by_kind: dict[str, float] = defaultdict(float)
+    unassigned: dict[tuple[str, str], float] = defaultdict(float)  # (app, title) outside any project
     projects: dict[Optional[int], dict] = {}
     blocks: list[list] = []
     for s in conn.execute("SELECT * FROM sessions WHERE day = ? AND excluded = 0 ORDER BY start_ts",
@@ -36,6 +39,8 @@ def _day(conn: sqlite3.Connection, day: date, now: Optional[float]) -> dict:
             by_kind[kind] += a.duration
             if a.app != OFFWORK_APP:
                 work += a.duration
+                if s["project_id"] is None and a.project_id is None:  # a rule may now match the window
+                    unassigned[(a.app, a.title)] += a.duration
             if blocks and blocks[-1][2] == kind and a.start - blocks[-1][1] <= STRIP_MERGE_GAP_S:
                 blocks[-1][1] = max(blocks[-1][1], a.end)
             else:
@@ -50,7 +55,8 @@ def _day(conn: sqlite3.Connection, day: date, now: Optional[float]) -> dict:
         "SELECT project_id, COUNT(*) AS n, SUM(files_added + files_modified + files_deleted) AS files, "
         "SUM(lines_added) AS added, SUM(lines_removed) AS removed FROM changes "
         "WHERE baseline = 0 AND ts >= ? AND ts < ? GROUP BY project_id", (start, end)).fetchall()
-    return {"day": day, "by_kind": by_kind, "projects": projects, "blocks": blocks, "changes": changes}
+    return {"day": day, "by_kind": by_kind, "projects": projects, "blocks": blocks, "changes": changes,
+            "unassigned": unassigned}
 
 
 def _smooth(blocks: list[list]) -> list[list]:
@@ -74,8 +80,7 @@ def _kinds(by_kind: dict[str, float]) -> dict[str, float]:
 def _totals(by_kind: dict[str, float]) -> dict:
     total = sum(by_kind.values())
     work = sum(v for k, v in by_kind.items() if k in categories.WORK)
-    return {"active_s": round(total), "work_s": round(work), "surf_s": round(by_kind.get("surf", 0.0)),
-            "offwork_s": round(by_kind.get("offwork", 0.0))}
+    return {"active_s": round(total), "work_s": round(work), "offwork_s": round(by_kind.get("offwork", 0.0))}
 
 
 def _merge(days: list[dict]) -> tuple[dict, dict, dict]:
@@ -149,3 +154,52 @@ def dashboard(conn: sqlite3.Connection, day: date, span: str = "day", now: Optio
     if span == "day":
         out["blocks"] = [{"start": b[0], "end": b[1], "kind": b[2]} for b in chosen[0]["blocks"]]
     return out
+
+
+# ------------------------------------------------------------- rule suggestions
+
+UNASSIGNED_DAYS = 14
+UNASSIGNED_LIMIT = 15
+UNREADABLE_APPS = {"unknown", "", "lockapp", "searchhost", "shellexperiencehost"}  # nothing to name a rule after
+MAX_CANDIDATES = 6
+_WORD = re.compile(r"[A-Za-z][A-Za-z0-9_.#+-]{2,}|[A-Za-z0-9]+-\d+|[가-힣]{2,}")
+_ISSUE_KEY = re.compile(r"[A-Za-z][A-Za-z0-9]*-\d+")  # GOV-1418: the most specific keyword there is
+_VERSION = re.compile(r"v?\d+(\.\d+)+")  # v2026.10.1 changes with every update
+_GENERIC = {"chrome", "chromium", "google", "edge", "microsoft", "firefox", "whale", "visual", "studio", "code",
+            "intellij", "idea", "windows", "terminal", "explorer", "new", "tab", "untitled", "home",
+            "the", "and", "for", "with", "새", "탭", "제목", "없음"}
+
+
+def keyword_candidates(app: str, title: str) -> list[str]:
+    """Words of a window title that would make a useful project keyword, most specific first:
+    issue keys and names with digits, then the title's parts, then single words."""
+    title = clean_title(title, app)
+    parts = [p.strip() for p in TITLE_SEPARATOR.split(title) if p.strip()]
+    words = [w for w in _WORD.findall(title) if not _VERSION.match(w)]
+    ranked = ([w for w in words if _ISSUE_KEY.fullmatch(w)]
+              + [p for p in parts if 3 <= len(p) <= 30 and not _VERSION.search(p)]
+              + sorted(words, key=len, reverse=True))
+    out: list[str] = []
+    for w in ranked:
+        w = w.strip("[]{}.,:;'\"")
+        if len(w) >= 2 and w.casefold() not in _GENERIC and w.casefold() not in {o.casefold() for o in out}:
+            out.append(w)
+        if len(out) == MAX_CANDIDATES:
+            break
+    return out
+
+
+def unassigned(conn: sqlite3.Connection, days: int = UNASSIGNED_DAYS, now: Optional[float] = None,
+               limit: int = UNASSIGNED_LIMIT) -> list[dict]:
+    """The windows that took the most time in the last `days` days without belonging to a project,
+    with keyword candidates for a project rule."""
+    today = store.local_day(time.time() if now is None else now)
+    totals: dict[tuple[str, str], float] = defaultdict(float)
+    for i in range(days):
+        for (app, title), sec in _day(conn, today - timedelta(days=i), now)["unassigned"].items():
+            if app_key(app) not in UNREADABLE_APPS:
+                totals[(app, clean_title(title, app))] += sec
+    top = sorted(totals.items(), key=lambda kv: -kv[1])[:limit]
+    return [{"app": app, "app_label": app_label(app), "title": title, "seconds": round(sec),
+             "kind": categories.category(app, title), "candidates": keyword_candidates(app, title)}
+            for (app, title), sec in top]
