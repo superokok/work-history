@@ -47,7 +47,18 @@ def find_cli() -> Optional[str]:
         native = Path(found).parent / "node_modules" / "@anthropic-ai" / "claude-code" / "bin" / "claude.exe"
         if native.is_file():
             return str(native)
-    return found
+    return found or _desktop_cli()
+
+
+def _desktop_cli() -> Optional[str]:
+    """The Claude Code copy that the Claude desktop app keeps (%APPDATA%\\Claude\\claude-code\\<version>\\<id>\\),
+    newest first; used when no `claude` is on PATH."""
+    appdata = os.environ.get("APPDATA")
+    if not appdata:
+        return None
+    found = sorted(Path(appdata, "Claude", "claude-code").glob("*/*/claude.exe"),
+                   key=lambda p: p.stat().st_mtime, reverse=True)
+    return str(found[0]) if found else None
 
 
 def is_claude_model(name: str) -> bool:

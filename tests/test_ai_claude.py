@@ -98,6 +98,26 @@ class ClaudeCodeModelTests(unittest.TestCase):
             ClaudeCodeModel("claude-code", cli="C:\\npm\\claude.cmd", runner=FakeCLI())
 
 
+class FindCLITests(unittest.TestCase):
+    def test_falls_back_to_the_desktop_apps_newest_copy(self):
+        import os
+        import tempfile
+        from unittest import mock
+        from workhistory import ai_claude
+        with tempfile.TemporaryDirectory() as appdata:
+            for version, mtime in (("2.1.309", 100), ("2.1.317", 200)):
+                exe = Path(appdata, "Claude", "claude-code", version, "abc", "claude.exe")
+                exe.parent.mkdir(parents=True)
+                exe.write_bytes(b"")
+                os.utime(exe, (mtime, mtime))
+            with mock.patch.dict(os.environ, {"APPDATA": appdata}), \
+                    mock.patch.object(ai_claude.shutil, "which", return_value=None):
+                self.assertIn("2.1.317", ai_claude.find_cli())
+            with mock.patch.dict(os.environ, {"APPDATA": str(Path(appdata, "none"))}), \
+                    mock.patch.object(ai_claude.shutil, "which", return_value=None):
+                self.assertIsNone(ai_claude.find_cli())
+
+
 class SettingsTests(unittest.TestCase):
     def test_choosing_a_model_is_what_allows_real_data(self):
         with TempDB() as db, db.connect() as conn:
