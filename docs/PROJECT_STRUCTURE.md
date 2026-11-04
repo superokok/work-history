@@ -89,7 +89,7 @@ uv pip install --python .venv/Scripts/python.exe -e .[claude] pip   # pip: 빌�
 .venv/Scripts/python.exe -m workhistory            # 콘솔에 로그. start-workhistory.cmd는 pythonw(창 없음, 로그는 데이터 폴더 workhistory.log)
 .venv/Scripts/python.exe -m workhistory --demo     # 데모 데이터
 
-# 테스트 (2026-11-05 기준 222개)
+# 테스트 (2026-11-05 기준 228개)
 .venv/Scripts/python.exe -m unittest discover -s tests -t .
 
 # AI 보고서 품질 평가 (기본: llm/의 가장 큰 로컬 모델. Claude Code 기준값은 --model claude-code:sonnet, 로그인 필요)
