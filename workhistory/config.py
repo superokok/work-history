@@ -52,8 +52,6 @@ OFFWORK_RUN_S = 10 * 60         # 업무 외 inside a work session (like a short
 MIN_KIND_RUN_S = 15 * 60        # coding / reading / chat must last this long to be its own session
 MIN_MEETING_RUN_S = 5 * 60      # a meeting is its own session even when short
 
-# Sessions shorter than this are left out of the daily review's main list.
-REVIEW_MIN_SESSION_S = 5 * 60
 
 
 def default_data_dir() -> Path:

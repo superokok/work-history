@@ -108,7 +108,7 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual([n["id"] for n in r["notes"]], [note["id"]])
 
-    def test_session_review_resume_endpoints(self):
+    def test_session_endpoints(self):
         yesterday = date.today() - timedelta(days=1)
         today = yesterday.isoformat()  # a full past day keeps the test independent of the clock
         start = local_ts(yesterday, 10)
@@ -124,15 +124,8 @@ class ServerTests(unittest.TestCase):
         self.assertEqual((status, m["title"], m["locked"]), (200, "리팩터링", 1))
         status, parts, _ = self.request("POST", f"/api/sessions/{m['id']}/split", {"at": start + 1000})
         self.assertEqual((status, len(parts)), (200, 2))
-        status, r, _ = self.request("GET", f"/api/review?date={today}")
-        self.assertIn("리팩터링", r["generated"])
-        status, saved, _ = self.request("POST", "/api/review", {"day": today, "body": "직접 쓴 리뷰"})
-        self.assertEqual(saved["saved"]["body"], "직접 쓴 리뷰")
-        status, project, _ = self.request("POST", "/api/projects", {"name": "P"})
-        status, overview, _ = self.request("GET", "/api/resume")
-        self.assertEqual([p["name"] for p in overview], ["P"])
-        status, detail, _ = self.request("GET", f"/api/resume/{project['id']}")
-        self.assertEqual((status, detail["last_session"]), (200, None))
+        self.assertEqual(self.request("GET", f"/api/review?date={today}")[0], 404)  # tab removed
+        self.assertEqual(self.request("GET", "/api/resume")[0], 405)  # tab removed; POST /api/resume = 기록 재개
         self.assertEqual(self.request("PATCH", "/api/sessions/99999", {"note": "x"})[0], 404)
 
     def test_port_is_exclusive(self):

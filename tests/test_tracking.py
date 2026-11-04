@@ -51,11 +51,10 @@ class TrackingSyncTests(unittest.TestCase):
             ("idea64.exe", "gov24-api – A.java"), ("", ""), ("chrome.exe", "PROJ-1 - Jira - Google Chrome"),
             ("LockApp.exe", "Windows 기본 잠금 화면"), ("", "")])
 
-    def test_timeline_and_review_separate_offwork(self):
+    def test_timeline_separates_offwork(self):
         sync_once(self.db)
         with self.db.connect() as conn:
             t = service.timeline(conn, self.day)
-            r = service.get_review(conn, self.day)
         self.assertEqual(t["offwork_s"], 50 * 60)
         self.assertEqual(t["total_active_s"], 110 * 60)  # lock screen is idle, not counted
         self.assertEqual(sum(p["seconds"] for p in t["by_project"]), 60 * 60)
@@ -63,10 +62,7 @@ class TrackingSyncTests(unittest.TestCase):
         offwork = [s for s in t["sessions"] if s["offwork"]]
         # YouTube (20 min) and KakaoTalk (30 min): each long enough to be its own session.
         self.assertEqual([s["title"] for s in offwork], ["업무 외", "업무 외"])
-        self.assertIn("- 업무 외 (기록 대상이 아닌 앱): 50분", r["generated"])
-        self.assertIn("- 합계: 업무 1시간 0분 / 전체 1시간 50분", r["generated"])
-        self.assertNotIn("업무 외", r["generated"].split("## 주요 작업 세션")[1].split("##")[1])
-        self.assertNotIn("가족방", r["generated"])
+        self.assertNotIn("가족방", str(t))  # untracked windows keep no title
 
     def test_reapply_recovers_forgotten_app_and_back_to_all(self):
         sync_once(self.db)

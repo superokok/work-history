@@ -11,7 +11,7 @@ from datetime import date, timedelta
 from . import sessionstore
 from .config import DB_FILENAME, default_data_dir
 from .db import Database
-from .review import duration
+from .sessions import duration
 
 
 def collect(db: Database, days: int) -> list[dict]:
@@ -28,14 +28,13 @@ def collect(db: Database, days: int) -> list[dict]:
             "FROM sessions WHERE day >= ? GROUP BY day", (since,))}
         notes = dict(conn.execute(
             "SELECT day, COUNT(*) FROM notes WHERE day >= ? GROUP BY day", (since,)).fetchall())
-        reviews = {r[0] for r in conn.execute("SELECT day FROM daily_reviews WHERE day >= ?", (since,))}
     out = []
     for i in range(days):
         d = (date.today() - timedelta(days=days - 1 - i)).isoformat()
         r = rows.get(d, {"sessions": 0, "active_s": 0, "offwork_s": 0, "classified_s": 0, "renamed": 0,
                          "project_fixed": 0,
                          "range_fixed": 0, "excluded": 0, "session_notes": 0})
-        out.append({"day": d, **r, "notes": notes.get(d, 0), "review_saved": d in reviews})
+        out.append({"day": d, **r, "notes": notes.get(d, 0)})
     return out
 
 
@@ -53,14 +52,14 @@ def main(argv: list[str] | None = None) -> int:
     days = collect(db, max(args.days, 1))
 
     print(f"{'날짜':<11}{'활동':>10}{'업무 외':>8}{'세션':>5}{'분류율':>7}{'제목수정':>6}{'프로젝트수정':>7}"
-          f"{'범위조정':>6}{'제외':>4}{'메모':>4}{'리뷰':>4}")
+          f"{'범위조정':>6}{'제외':>4}{'메모':>4}")
     for d in days:
         work = (d["active_s"] or 0) - (d["offwork_s"] or 0)
         rate = f"{d['classified_s'] / work:.0%}" if work > 0 else "-"  # share of work time
         print(f"{d['day']:<11}{duration(d['active_s'] or 0):>10}{duration(d['offwork_s'] or 0):>9}"
               f"{d['sessions']:>6}{rate:>8}"
               f"{d['renamed']:>9}{d['project_fixed']:>11}{d['range_fixed']:>9}{d['excluded']:>6}"
-              f"{d['notes'] + d['session_notes']:>6}{'O' if d['review_saved'] else '-':>6}")
+              f"{d['notes'] + d['session_notes']:>6}")
 
     total = sum(d["sessions"] for d in days)
     if total:

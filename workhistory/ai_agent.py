@@ -28,7 +28,7 @@ REF_IN_TEXT = re.compile(rf"\[({_REF}(?:\s*,\s*{_REF})*)\]")
 WEEKDAYS = "월화수목금토일"
 
 SYSTEM = """당신은 한 개발자의 업무 기록을 찾아보고 질문에 답하는 도우미입니다.
-도구로 이 사람의 기록(작업 세션 S, 파일 변경 C, 메모 N, 프로젝트 P, 하루 D, 일일 리뷰 R)을 찾아보고, 확인한 사실만으로 답합니다.
+도구로 이 사람의 기록(작업 세션 S, 파일 변경 C, 메모 N, 프로젝트 P, 하루 D)을 찾아보고, 확인한 사실만으로 답합니다.
 
 반드시 지킬 것:
 - 오늘은 {today}({weekday}요일)입니다. '어제', '지난주' 같은 말은 이 날짜를 기준으로 날짜 범위를 계산해 도구에 넘깁니다.
@@ -41,7 +41,7 @@ SYSTEM = """당신은 한 개발자의 업무 기록을 찾아보고 질문에 �
 
 TOOLS = [
     ToolSpec("search_history",
-             "업무 기록을 키워드로 검색합니다 (세션 제목·메모, 바뀐 파일 경로, 메모, 일일 리뷰, 창 제목). "
+             "업무 기록을 키워드로 검색합니다 (세션 제목·메모, 바뀐 파일 경로, 메모, 창 제목). "
              "이슈 번호(GOV-1418), 클래스·파일 이름, 한국어 낱말이 잘 맞습니다. 여러 낱말은 공백으로 구분합니다.",
              {"type": "object", "properties": {
                  "query": {"type": "string"},
@@ -139,10 +139,6 @@ class HistoryTools:
                 add(f"N{n['id']}", {"ref": f"N{n['id']}", "type": "메모", "date": n["day"],
                                     "project": self.project_name(n["project_id"]), "text": redact(n["body"])},
                     {"type": "note", "day": n["day"], "label": n["body"][:60]})
-            for v in r["reviews"]:
-                ref = f"R{v['day']}"
-                add(ref, {"ref": ref, "type": "일일 리뷰", "date": v["day"], "excerpt": redact(v["excerpt"])},
-                    {"type": "review", "day": v["day"], "label": f"{v['day']} 리뷰"})
             for e in r["events"]:
                 ref = f"D{e['day']}"
                 add(ref, {"ref": ref, "type": "창 기록", "date": e["day"],

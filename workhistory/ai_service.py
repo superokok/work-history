@@ -100,7 +100,7 @@ def check_allowed(conn: sqlite3.Connection, demo: bool) -> None:
     """Real work data goes to the AI only after the user turned it on; the demo data always may."""
     if demo or chosen_model(conn) is not None:
         return
-    raise AIError("AI가 꺼져 있습니다. 개인정보 탭의 AI 설정에서 모델을 고르면 사용할 수 있습니다.",
+    raise AIError("AI가 꺼져 있습니다. 설정 탭의 AI 설정에서 모델을 고르면 사용할 수 있습니다.",
                   "not_allowed")
 
 

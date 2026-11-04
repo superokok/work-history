@@ -1,7 +1,7 @@
 """Demo data: a fictional two-week developer scenario.
 
 Only ever written to the separate demo database, which the UI always marks as
-demo data. The scenario is realistic on purpose so that sessions, reviews and
+demo data. The scenario is realistic on purpose so that sessions and
 AI reports can be judged on it (and used for the AI eval set):
 
 - last week: token refresh bug GOV-1418 (analysis -> fix -> MR), a K8s PoC,

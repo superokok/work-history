@@ -11,8 +11,8 @@ _마지막 갱신: 2026-11-05_
 
 - 주 기록 = **결과물**: 등록한 작업 폴더의 파일 변경을 5분마다 숨김 Git 저장소(dulwich)에 스냅샷.
 - 보조 기록 = **창 활동**: 앱이 직접 기록한 앱/창 제목/유휴 상태를 작업 세션으로 묶음.
-- 그 위에 타임라인, 일일 리뷰, 이어서 하기, 검색, 프로젝트, 개인정보 설정,
-  AI 보고서·"AI에게 묻기" (내 PC AI: llama.cpp + Qwen3.5, 인터넷 불필요).
+- 화면은 탭 4개: 타임라인, 보고서(AI), 검색(+"AI에게 묻기"), 설정(프로젝트·규칙·작업 폴더·실행·AI·개인정보).
+- AI 보고서·"AI에게 묻기"는 내 PC AI (llama.cpp + Qwen3.5, 인터넷 불필요).
   Claude Code는 개발 환경에서만 쓰는 비교용 선택지이며 배포본에는 없다.
 - 배포: 행망용 Windows 포터블 zip 하나 (`-offline-local-ai`: 모델 포함·Claude Code 연결 제외, GitHub Releases에 조각으로).
   풀고 `작업 기록.cmd` → 창 없이 실행, 설정은 모두 앱 안에서.
@@ -55,12 +55,11 @@ work-history/
 | | `sync.py` | 원본을 1분마다 가져오기, 중복 제거, 개인정보 규칙 적용 |
 | | `snapshots.py` | 작업 폴더 스냅샷 (dulwich), 변경 기록, 하위 폴더별 프로젝트 (앱은 추천만, 사람이 확인) |
 | | `extract.py` | 코드/텍스트, HWP, DOCX/XLSX/PPTX 텍스트 추출 |
-| 저장 | `db.py` | SQLite 스키마 + 마이그레이션 (`PRAGMA user_version`, 현재 v11) |
+| 저장 | `db.py` | SQLite 스키마 + 마이그레이션 (`PRAGMA user_version`, 현재 v12) |
 | | `store.py` | 공용 로더, 하루 경계, 세션 재계산 표시 |
 | 처리 (순수 함수) | `normalize.py` | 창 − AFK − 차단 구간 − 제외, 하루 단위 자르기 |
 | | `classify.py` | 수동 지정 > 키워드 규칙 > 없음 |
 | | `sessions.py` | 결정적 세션 묶기 + 자동 제목 |
-| | `review.py` | 일일 리뷰 템플릿, 후속 작업 추출 |
 | | `redact.py` | 비밀값·개인 식별자 마스킹 |
 | 세션 저장 | `sessionstore.py` | 재묶기, 편집, 병합, 분할 |
 | AI | `ai_client.py` | 공급자 중립 `Model` 프로토콜 |
@@ -73,7 +72,7 @@ work-history/
 | | `ai_service.py` | AI 설정, 동의, 실행 로그, 저장된 보고서 |
 | | `mcp_server.py` | (개발·비교용) 내부 읽기 전용 MCP 서버: Claude Code 모델로 "AI에게 묻기"할 때만 앱이 띄움 (외부 연결 거부) |
 | 외부 연동 | `autostart.py` | 로그온 시 시작, 바로가기 생성 |
-| 서비스 | `service.py` | 타임라인(세션별 + 앱별 합산), 검색, 메모, 프로젝트, 리뷰, 이어서 하기 쿼리 |
+| 서비스 | `service.py` | 타임라인(세션별 + 앱별 합산), 검색, 메모, 프로젝트, 프로젝트 개요(AI 도구용) 쿼리 |
 | | `server.py` | JSON API + 정적 UI, 127.0.0.1 전용 |
 | 기타 | `stats.py` | 실사용 보정률 통계 (`python -m workhistory.stats`) |
 | | `demo.py`, `demo_files.py` | `--demo`용 가상 2주 시나리오 (별도 demo.db) |
@@ -89,7 +88,7 @@ uv pip install --python .venv/Scripts/python.exe -e .[claude]
 .venv/Scripts/python.exe -m workhistory            # 콘솔에 로그. start-workhistory.cmd는 pythonw(창 없음, 로그는 데이터 폴더 workhistory.log)
 .venv/Scripts/python.exe -m workhistory --demo     # 데모 데이터
 
-# 테스트 (2026-11-05 기준 233개)
+# 테스트 (2026-11-05 기준 219개)
 .venv/Scripts/python.exe -m unittest discover -s tests -t .
 
 # AI 보고서 품질 평가 (기본: llm/의 가장 큰 로컬 모델. Claude Code 기준값은 --model claude-code:sonnet, 로그인 필요)
@@ -131,4 +130,7 @@ python tools/release_parts.py dist/WorkHistory-0.1.0-windows-x64-offline-local-a
   `tests/test_clean.py`와 빌드 전 검사가 막는다 (2026-10-30).
 - 배포: 행망용 zip 하나를 GitHub Releases에 1.9GB 조각으로 올린다 (파일당 2GB 제한, git에는 넣지 않음).
   인터넷용 zip은 배포하지 않는다 (2026-10-30).
-- 포트는 사용자가 고르지 않는다: 5730이 막혀 있으면 5739까지 빈 포트로 자동 이동, 앱 화면(개인정보 → 실행)에 주소 표시 (2026-10-30).
+- 탭은 타임라인·보고서·검색·설정 4개. 템플릿 일일 리뷰와 이어서 하기 탭은 AI 업무일지·"AI에게 묻기"와 겹쳐 없앴고
+  (`daily_reviews`는 v12에서 삭제), 프로젝트·규칙·작업 폴더는 설정 탭으로 옮겼다. 프로젝트별 "다음 할 일"은
+  AI 보고서의 다음 계획 근거라 남겨 두고 설정의 프로젝트 카드에서 고친다 (2026-11-05).
+- 포트는 사용자가 고르지 않는다: 5730이 막혀 있으면 5739까지 빈 포트로 자동 이동, 앱 화면(설정 → 실행)에 주소 표시 (2026-10-30).

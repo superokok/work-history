@@ -60,7 +60,7 @@ document/file contents, browser URLs, network traffic, microphone or camera.
 | **Record only work apps** (기록 대상: 업무 앱만 기록) | Only windows matching a rule (app name contains X, optionally title contains Y) are imported with app and title. All other windows are stored as anonymous **업무 외** time: no app name, no title. The raw events keep them for 35 days so the app picker can list them and "최근 30일에 다시 적용" can re-import with the current rules. |
 | **Pause / resume** (일시정지) | Nothing is recorded while paused; paused time is removed from timelines. |
 | **Exclusion list** (제외 목록) | Windows whose app or title contains a listed keyword (case-insensitive) are never recorded or imported; adding a rule also purges existing matching events, raw ones included. |
-| **Delete data** (데이터 삭제) | Deletes imported and raw events, notes, sessions and daily reviews for a date range or everything. Deleted ranges are not re-imported. |
+| **Delete data** (데이터 삭제) | Deletes imported and raw events, notes and sessions for a date range or everything. Deleted ranges are not re-imported. |
 
 ## Sensitive data in window titles
 
@@ -78,12 +78,12 @@ from events, note text, and search queries are not logged. Started without a con
 
 ## Start at logon and shortcuts
 
-Off by default. 개인정보 → 실행 creates or removes only files with the app's
+Off by default. 설정 → 실행 creates or removes only files with the app's
 own name: `Startup\작업 기록.lnk` and `Desktop\작업 기록.lnk`. Not available in demo mode.
 
 ## Optional AI
 
-Off until the user picks a model in 개인정보 → AI 설정 (the app asks for
+Off until the user picks a model in 설정 → AI 설정 (the app asks for
 consent then) and runs a report or a question. With a "내 PC" model the
 records go only to the local model program the app started on this PC
 (127.0.0.1, random key); nothing leaves the PC. "사용 안 함" turns it off again. "보낼 내용 보기" shows the exact

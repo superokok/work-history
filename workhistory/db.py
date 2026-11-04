@@ -285,6 +285,10 @@ MIGRATIONS: list[str] = [
     """
     DROP TABLE IF EXISTS ai_endpoints;
     """,
+    # v12: the daily review tab is gone (the AI 업무일지 covers it).
+    """
+    DROP TABLE IF EXISTS daily_reviews;
+    """,
 ]
 
 SCHEMA_VERSION = len(MIGRATIONS)

@@ -72,9 +72,7 @@ const badge = (kind, text) => h("span", { class: `badge ${kind}` }, text);
 const state = {
   projects: [],
   day: isoDay(new Date()),
-  reviewDay: isoDay(new Date()),
   reportDay: isoDay(new Date()),
-  resumeProject: null,
   openSessions: new Set(),
   openApps: new Set(),
   timelineView: (() => { try { return localStorage.getItem("timelineView") || "apps"; } catch { return "apps"; } })(),
@@ -109,11 +107,8 @@ function showTab(name) {
   document.querySelectorAll("button.tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
   document.querySelectorAll(".tab-panel").forEach((p) => (p.hidden = p.id !== `tab-${name}`));
   if (name === "timeline") loadTimeline();
-  if (name === "review") loadReview();
   if (name === "report") loadReport();
-  if (name === "resume") loadResume();
-  if (name === "projects") { renderProjects(); loadFolders(); }
-  if (name === "privacy") { loadLaunch(); loadAISettings(); loadTracking(); loadExclusions(); }
+  if (name === "settings") { renderProjects(); loadFolders(); loadLaunch(); loadAISettings(); loadTracking(); loadExclusions(); }
 }
 
 // ------------------------------------------------------------------ status
@@ -335,7 +330,7 @@ function sessionCard(s, next) {
       } }, "제목 수정"),
       h("button", { class: "small", onclick: () => { noteBox.hidden = false; noteArea.focus(); } }, s.note ? "메모 수정" : "메모"),
       h("button", { class: "small", onclick: () => patchSession(s.id, { excluded: !s.excluded },
-        s.excluded ? "다시 집계에 포함합니다." : "집계·리뷰에서 제외했습니다.") }, s.excluded ? "포함" : "제외"),
+        s.excluded ? "다시 집계에 포함합니다." : "집계에서 제외했습니다.") }, s.excluded ? "포함" : "제외"),
       next ? h("button", { class: "small", onclick: () => mergeWith(s, next) }, "다음 세션과 병합") : null),
     changesLine(s),
     details);
@@ -371,8 +366,8 @@ function renderChanges(changes) {
         c.lines_added || c.lines_removed ? ` · +${c.lines_added} −${c.lines_removed}` : "")),
     h("div", { class: "change-files" }, ...c.files.flatMap((f, i) => [i ? ", " : "", fileButton(f)])))),
     changes.some((c) => c.files.some((f) => f.project_id === null)) ? h("li", { class: "meta" },
-      "미분류 파일 변경이 있습니다. ", h("button", { class: "small link", onclick: () => showTab("projects") },
-        "프로젝트 탭 → 작업 폴더에서 정하기")) : "");
+      "미분류 파일 변경이 있습니다. ", h("button", { class: "small link", onclick: () => showTab("settings") },
+        "설정 → 작업 폴더에서 정하기")) : "");
 }
 
 function diffLines(d) {
@@ -616,87 +611,6 @@ $("note-form").addEventListener("submit", (e) => {
   });
 });
 
-// ------------------------------------------------------------------ daily review
-let reviewData = null;
-
-function setReviewDay(day) {
-  state.reviewDay = day;
-  $("review-day").value = day;
-  loadReview();
-}
-$("review-day").addEventListener("change", (e) => e.target.value && setReviewDay(e.target.value));
-$("review-today").addEventListener("click", () => setReviewDay(isoDay(new Date())));
-$("review-prev").addEventListener("click", () => setReviewDay(shiftDay(state.reviewDay, -1)));
-$("review-next").addEventListener("click", () => setReviewDay(shiftDay(state.reviewDay, 1)));
-
-function setReviewState() {
-  const el = $("review-state");
-  const saved = reviewData?.saved;
-  const dirty = saved ? $("review-body").value !== saved.body : $("review-body").value !== reviewData?.generated;
-  if (saved && !dirty) {
-    el.className = "badge user";
-    el.textContent = `저장됨 · ${new Date(saved.updated_at * 1000).toLocaleString("ko-KR")}`;
-  } else if (saved) {
-    el.className = "badge plain";
-    el.textContent = "저장하지 않은 변경 있음";
-  } else {
-    el.className = "badge inferred";
-    el.textContent = dirty ? "초안 수정 중 · 아직 저장하지 않음" : "자동 초안 · 아직 저장하지 않음";
-  }
-}
-$("review-body").addEventListener("input", setReviewState);
-
-async function loadReview() {
-  const day = state.reviewDay;
-  $("review-day").value = day;
-  const r = await guarded(() => api("GET", `/api/review?date=${day}`));
-  if (!r || day !== state.reviewDay) return;
-  reviewData = r;
-  $("review-body").value = r.saved ? r.saved.body : r.generated;
-  setReviewState();
-  renderReviewSide(r);
-}
-
-function renderReviewSide(r) {
-  $("review-side").replaceChildren(
-    h("div", { class: "card" }, ...summaryBlock(r.total_active_s, r.by_project, r.offwork_s)),
-    h("div", { class: "card" },
-      h("h2", {}, "작업 세션 ", badge("inferred", "자동 추정")),
-      r.sessions.length ? h("ul", { class: "plain compact" }, r.sessions.map((s) => h("li", {},
-        h("span", {}, h("span", { class: "dot", style: { background: projectColor(s.project_id) } }),
-          `${hhmm(s.start)}–${hhmm(s.end)} ${s.title}`),
-        h("span", { class: "meta" }, dur(s.active_s)))))
-        : h("p", { class: "muted" }, "세션 없음"),
-      h("button", { class: "link", onclick: () => { showTab("timeline"); setDay(r.day); } }, "타임라인에서 세션 수정 →")),
-    h("div", { class: "card" },
-      h("h2", {}, "후속 확인 후보 ", badge("inferred", "메모에서 추출")),
-      r.followups.length ? h("ul", { class: "plain compact" }, r.followups.map((f) => h("li", {}, f)))
-        : h("p", { class: "muted" }, "없음 — 메모에 '확인', '해야', 'TODO' 등을 적으면 여기에 모입니다.")),
-    ...r.warnings.map((w) => h("div", { class: "warning" }, WARNINGS[w] || w)),
-  );
-}
-
-$("review-save").addEventListener("click", () => guarded(async () => {
-  const body = $("review-body").value;
-  if (!body.trim()) return toast("빈 리뷰는 저장할 수 없습니다.");
-  const r = await api("POST", "/api/review", { day: state.reviewDay, body });
-  reviewData.saved = r.saved;
-  setReviewState();
-  toast("리뷰를 저장했습니다.");
-}));
-
-$("review-regenerate").addEventListener("click", () => guarded(async () => {
-  if (reviewData?.saved && !confirm("편집 중인 내용을 최신 자동 초안으로 바꿉니다. 저장된 리뷰는 '저장'을 누르기 전까지 유지됩니다.")) return;
-  await loadReview();
-  $("review-body").value = reviewData.generated;
-  setReviewState();
-}));
-
-$("review-copy").addEventListener("click", () => guarded(async () => {
-  await navigator.clipboard.writeText($("review-body").value);
-  toast("클립보드에 복사했습니다.");
-}));
-
 // ------------------------------------------------------------------ AI reports
 const reportKind = () => document.querySelector('input[name="report-kind"]:checked').value;
 let reportSaved = null;
@@ -756,7 +670,7 @@ function renderReportNotice(ai) {
   if (ai && !local && !ai.claude_installed && !(ai.local_models || []).length) notes.push(ai.claude_bundled
     ? "Claude Code가 설치되어 있지 않습니다. Claude Code를 설치하고 로그인하거나, 내 PC의 AI 모델을 llm 폴더에 넣으면 AI 초안을 만들 수 있습니다."
     : "내 PC의 AI 모델이 없습니다. 앱 폴더의 llm\\models 에 .gguf 모델 파일을 넣으면 AI 초안을 만들 수 있습니다.");
-  else if (ai && !ai.demo && !ai.enabled) notes.push("AI가 꺼져 있습니다. 개인정보 탭의 AI 설정에서 모델을 고르면 실제 기록으로 초안을 만들 수 있습니다.");
+  else if (ai && !ai.demo && !ai.enabled) notes.push("AI가 꺼져 있습니다. 설정 탭의 AI 설정에서 모델을 고르면 실제 기록으로 초안을 만들 수 있습니다.");
   else if (local) notes.push("내 PC의 AI로 만듭니다. 기록은 이 PC 밖으로 나가지 않습니다. 그래픽카드가 없는 PC에서는 몇 분 걸릴 수 있습니다.");
   $("report-notice").replaceChildren(...notes.map((n) => h("div", { class: "warning" }, n)));
 }
@@ -800,15 +714,14 @@ $("report-generate").addEventListener("click", () => {
 
 // ---- Citations. What the AI wrote and what is in the records must never look alike:
 // AI text sits in a tinted "AI" box; records show their own content (the note, the files, the session title).
-const SOURCE_KINDS = { session: "세션", change: "파일 변경", note: "메모", project: "프로젝트", review: "리뷰", day: "타임라인" };
+const SOURCE_KINDS = { session: "세션", change: "파일 변경", note: "메모", project: "프로젝트", day: "타임라인" };
 
 const sourceWhen = (src) => (src.type === "session" || src.type === "change" ? `${src.day.slice(5)} ${hhmm(src.start)}`
   : src.day ? src.day.slice(5) : "");
 
 function openSource(src, ref) {
-  if (src.type === "project") { state.resumeProject = src.project_id; showTab("resume"); }
+  if (src.type === "project") gotoProject(src.project_id);
   else if (src.type === "change") showChange(Number(ref.slice(1)));
-  else if (src.type === "review") gotoReview(src.day);
   else gotoDay(src.day);
 }
 
@@ -989,67 +902,6 @@ $("ai-model").addEventListener("change", (e) => {
   });
 });
 
-// ------------------------------------------------------------------ resume work
-async function loadResume() {
-  const list = await guarded(() => api("GET", "/api/resume"));
-  if (!list) return;
-  if (!list.length) {
-    $("resume-list").replaceChildren(h("p", { class: "muted" }, "프로젝트가 없습니다. '프로젝트' 탭에서 만들고 규칙을 추가하세요."));
-    $("resume-detail").replaceChildren();
-    return;
-  }
-  if (!list.some((p) => p.id === state.resumeProject)) state.resumeProject = list[0].id;
-  $("resume-list").replaceChildren(...list.map((p) => h("button", {
-    class: `resume-item${p.id === state.resumeProject ? " active" : ""}`,
-    onclick: () => { state.resumeProject = p.id; loadResume(); },
-  },
-  h("div", {}, h("span", { class: "dot", style: { background: p.color } }), h("b", {}, p.name)),
-  h("div", { class: "meta" }, p.last_session ? `마지막 작업 ${ago(p.last_session.end)}` : "기록 없음",
-    p.week_active_s ? ` · 최근 7일 ${dur(p.week_active_s)}` : ""),
-  p.next_action ? h("div", { class: "meta" }, `다음: ${p.next_action}`) : null)));
-  await loadResumeDetail(state.resumeProject);
-}
-
-async function loadResumeDetail(id) {
-  const r = await guarded(() => api("GET", `/api/resume/${id}`));
-  if (!r || id !== state.resumeProject) return;
-  const next = h("textarea", { rows: 3, placeholder: "돌아왔을 때 가장 먼저 할 일을 직접 적어 두세요." });
-  next.value = r.project.next_action;
-  const goto = (day) => { showTab("timeline"); setDay(day); };
-  const last = r.last_session;
-  $("resume-detail").replaceChildren(
-    h("div", { class: "card" },
-      h("h2", {}, h("span", { class: "dot", style: { background: r.project.color } }), r.project.name),
-      h("h3", {}, "다음 할 일 ", badge("user", "직접 작성")),
-      next,
-      h("div", { class: "row" }, h("button", { class: "small primary", onclick: () => guarded(async () => {
-        await api("PATCH", `/api/projects/${id}`, { next_action: next.value });
-        toast("다음 할 일을 저장했습니다.");
-        await loadProjects();
-        loadResume();
-      }) }, "저장"))),
-    h("div", { class: "card" },
-      h("h3", {}, "마지막 작업 ", badge("inferred", "자동 추정")),
-      last ? h("div", {},
-        h("p", {}, h("button", { class: "link", onclick: () => goto(last.day) }, `${last.day} ${hhmm(last.start)}–${hhmm(last.end)}`),
-          ` · ${dur(last.active_s)} · `, h("b", {}, last.title)),
-        last.note ? h("div", { class: "session-note" }, last.note) : null,
-        r.last_activity ? h("p", { class: "muted" }, `마지막으로 본 창: ${appName(r.last_activity.app)} — ${r.last_activity.title || "(제목 없음)"} (${hhmm(r.last_activity.end)})`) : null)
-        : h("p", { class: "muted" }, "이 프로젝트로 분류된 세션이 아직 없습니다.")),
-    h("div", { class: "card" },
-      h("h3", {}, "최근 세션"),
-      r.recent_sessions.length ? h("ul", { class: "plain compact" }, r.recent_sessions.map((s) => h("li", {},
-        h("span", {}, h("button", { class: "link", onclick: () => goto(s.day) }, `${s.day} ${hhmm(s.start)}`), ` ${s.title}`),
-        h("span", { class: "meta" }, dur(s.active_s))))) : h("p", { class: "muted" }, "없음")),
-    h("div", { class: "card" },
-      h("h3", {}, "이전 메모 ", badge("user", "직접 작성")),
-      r.notes.length || r.session_notes.length ? h("ul", { class: "notes" },
-        r.notes.map((n) => h("li", {}, h("div", { class: "meta" }, n.day), n.body)),
-        r.session_notes.map((n) => h("li", {}, h("div", { class: "meta" }, `${n.day} ${hhmm(n.start)} 세션`), n.note)))
-        : h("p", { class: "muted" }, "없음")),
-  );
-}
-
 // ------------------------------------------------------------------ search
 $("search-form").addEventListener("submit", (e) => {
   e.preventDefault();
@@ -1067,9 +919,10 @@ function gotoDay(day) {
   setDay(day);
 }
 
-function gotoReview(day) {
-  state.reviewDay = day;
-  showTab("review");
+// The project's card in 설정.
+function gotoProject(id) {
+  showTab("settings");
+  $(`project-${id}`)?.scrollIntoView({ block: "center" });
 }
 
 // ------------------------------------------------------------------ ask the AI
@@ -1149,10 +1002,6 @@ function renderSearch(r) {
         fileButton(f), h("span", { class: "meta" }, ` · ${f.folder} · ${kindLabel[f.kind]}`)),
       h("span", { class: "meta" }, projectName(f.project_id)))))));
   }
-  if (r.reviews.length) {
-    groups.push(section("리뷰", r.reviews.length, h("ul", { class: "plain" }, r.reviews.map((v) => h("li", {},
-      h("span", {}, h("button", { class: "link", onclick: () => gotoReview(v.day) }, v.day), " ", v.excerpt))))));
-  }
   groups.push(section("창 기록", r.events.length, r.events.length ? h("table", { class: "rows" },
     h("thead", {}, h("tr", {}, h("th", {}, "날짜"), h("th", {}, "처음–마지막"), h("th", {}, "앱"), h("th", {}, "창 제목"), h("th", {}, "프로젝트"))),
     h("tbody", {}, r.events.map((ev) => h("tr", {},
@@ -1188,7 +1037,9 @@ function renderProjects() {
   $("project-list").replaceChildren(...state.projects.map((p) => {
     const field = h("select", {}, h("option", { value: "title" }, "창 제목"), h("option", { value: "app" }, "앱 이름"));
     const pattern = h("input", { placeholder: "키워드 (예: gov24)" });
-    return h("div", { class: `card project-card${p.archived ? " archived" : ""}` },
+    const next = h("textarea", { rows: 2, placeholder: "돌아왔을 때 가장 먼저 할 일 (AI 보고서의 '다음 계획' 근거로 쓰입니다)" });
+    next.value = p.next_action;
+    return h("div", { class: `card project-card${p.archived ? " archived" : ""}`, id: `project-${p.id}` },
       h("h2", {}, h("span", { class: "dot", style: { background: p.color } }), p.name, p.archived ? " (보관됨)" : ""),
       h("div", { class: "rules" },
         p.rules.length ? p.rules.map((r) => h("span", { class: "rule" },
@@ -1199,9 +1050,14 @@ function renderProjects() {
         await api("POST", `/api/projects/${p.id}/rules`, { field: field.value, pattern: pattern.value });
         refreshProjects();
       }); } }, field, pattern, h("button", { type: "submit" }, "규칙 추가")),
-      p.next_action ? h("p", { class: "meta" }, `다음 할 일: ${p.next_action}`) : null,
+      h("h3", {}, "다음 할 일 ", badge("user", "직접 작성")),
+      next,
       h("div", { class: "row" },
-        h("button", { class: "small", onclick: () => { state.resumeProject = p.id; showTab("resume"); } }, "이어서 하기"),
+        h("button", { class: "small primary", onclick: () => guarded(async () => {
+          await api("PATCH", `/api/projects/${p.id}`, { next_action: next.value });
+          toast("다음 할 일을 저장했습니다.");
+          await loadProjects();
+        }) }, "다음 할 일 저장"),
         h("button", { class: "small", onclick: () => { const name = prompt("프로젝트 이름", p.name); if (name) guarded(async () => { await api("PATCH", `/api/projects/${p.id}`, { name }); refreshProjects(); }); } }, "이름 변경"),
         h("button", { class: "small", onclick: () => guarded(async () => { await api("PATCH", `/api/projects/${p.id}`, { archived: !p.archived }); refreshProjects(); }) }, p.archived ? "보관 해제" : "보관"),
         h("button", { class: "small danger", onclick: () => { if (confirm(`'${p.name}' 프로젝트를 삭제할까요? 활동 기록은 남고 미분류가 됩니다.`)) guarded(async () => { await api("DELETE", `/api/projects/${p.id}`); refreshProjects(); }); } }, "삭제")));
@@ -1274,7 +1130,7 @@ $("track-reapply").addEventListener("click", () => {
   });
 });
 
-// ------------------------------------------------------------------ privacy
+// ------------------------------------------------------------------ privacy (설정)
 async function loadExclusions() {
   const list = await guarded(() => api("GET", "/api/exclusions"));
   if (!list) return;
@@ -1294,25 +1150,24 @@ $("exclusion-form").addEventListener("submit", (e) => {
   });
 });
 
-const deletedSummary = (r) => `삭제 완료: 창 기록 ${r.window_events}건, 세션 ${r.sessions}개, 메모 ${r.notes}건, 리뷰 ${r.reviews}건`;
+const deletedSummary = (r) => `삭제 완료: 창 기록 ${r.window_events}건, 세션 ${r.sessions}개, 메모 ${r.notes}건`;
 
 $("delete-form").addEventListener("submit", (e) => {
   e.preventDefault();
   const from = $("delete-from").value, to = $("delete-to").value;
   if (!from || !to) return toast("시작일과 종료일을 선택하세요.");
-  if (!confirm(`${from} ~ ${to} 기간의 활동·세션·메모·리뷰를 삭제합니다. 되돌릴 수 없습니다.`)) return;
+  if (!confirm(`${from} ~ ${to} 기간의 활동·세션·메모를 삭제합니다. 되돌릴 수 없습니다.`)) return;
   guarded(async () => toast(deletedSummary(await api("POST", "/api/delete-data", { from, to }))));
 });
 
 $("delete-all").addEventListener("click", () => {
-  if (!confirm("가져온 모든 활동 기록과 세션·메모·리뷰를 삭제합니다. 되돌릴 수 없습니다. 계속할까요?")) return;
+  if (!confirm("가져온 모든 활동 기록과 세션·메모를 삭제합니다. 되돌릴 수 없습니다. 계속할까요?")) return;
   guarded(async () => toast(deletedSummary(await api("POST", "/api/delete-data", { all: true }))));
 });
 
 // ------------------------------------------------------------------ boot
 (async function boot() {
   $("day").value = state.day;
-  $("review-day").value = state.reviewDay;
   $("report-day").value = state.reportDay;
   await guarded(loadStatus);
   await guarded(loadProjects);

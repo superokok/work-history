@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from .ai_context import Context
-from .review import duration
+from .sessions import duration
 
 KINDS = {"daily": "업무일지", "weekly": "주간보고"}
 SECTION_LABELS = {

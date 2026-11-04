@@ -59,6 +59,14 @@ manual override → note → search.
 - Repository and zip kept free of the developer PC's traces (`tools/clean_check.py`,
   `tests/test_clean.py`, checked before every zip).
 
+## Phase 6 — Fewer tabs (2026-11-05)
+
+- Removed the template daily review tab (`review.py`, `daily_reviews` dropped in
+  schema v12) and the 이어서 하기 tab; the AI 업무일지 and "AI에게 묻기" cover them.
+- Projects, keyword rules and work folders moved into 설정 (was 개인정보); each
+  project card edits its "다음 할 일".
+- Tabs: 타임라인, 보고서, 검색, 설정.
+
 ## Out of scope
 
 Installer, tray icon, browser URL watcher, multi-device.

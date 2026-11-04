@@ -50,6 +50,8 @@ class MigrationTests(unittest.TestCase):
             self.assertEqual(Database(db.path).migrate(), SCHEMA_VERSION)
             with db.connect() as conn:
                 self.assertEqual(conn.execute("PRAGMA user_version").fetchone()[0], SCHEMA_VERSION)
+                tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+                self.assertNotIn("daily_reviews", tables)  # v12: the daily review tab is gone
 
     def test_refuses_newer_schema(self):
         with TempDB() as db:
@@ -218,8 +220,7 @@ class PrivacyTests(ServiceTestCase):
             service.timeline(conn, DAY, now=local_ts(DAY, 23))
             counts = service.delete_data(conn, {"from": DAY.isoformat(), "to": DAY.isoformat()},
                                          now=local_ts(DAY, 23) + 86400 * 2)
-            self.assertEqual(counts, {"window_events": 3, "afk_events": 0, "notes": 1, "sessions": 2, "reviews": 0,
-                                      "changes": 0})
+            self.assertEqual(counts, {"window_events": 3, "afk_events": 0, "notes": 1, "sessions": 2, "changes": 0})
             self.assertEqual(len(all_rows(service.timeline(conn, DAY + timedelta(days=1)))), 1)
             self.assertEqual(conn.execute("SELECT kind FROM blocked_ranges").fetchone()[0], "deleted")
 

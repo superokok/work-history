@@ -209,7 +209,7 @@ class MergeSplitTests(SessionStoreTestCase):
         self.assertEqual((s[1]["start"], s[1]["locked"]), (local_ts(DAY, 10, 15), False))
 
 
-class ReviewResumeSearchTests(SessionStoreTestCase):
+class ProjectOverviewSearchTests(SessionStoreTestCase):
     def setUp(self):
         super().setUp()
         self.add(9, 0, 9, 40, "gov24-api – UserController.java")
@@ -219,41 +219,6 @@ class ReviewResumeSearchTests(SessionStoreTestCase):
             service.create_note(conn, {"day": DAY.isoformat(), "body": "페이징 이슈 내일 확인", "project_id": self.gov})
             service.create_note(conn, {"day": DAY.isoformat(), "body": "점심 맛있었음"})
             service.update_project(conn, self.gov, {"next_action": "UserService 리팩터링"})
-
-    def review(self):
-        with self.db.connect() as conn:
-            return service.get_review(conn, DAY, now=local_ts(DAY, 23, 59))
-
-    def test_generated_review_sections(self):
-        r = self.review()
-        text = r["generated"]
-        self.assertIn("2026-09-30 (수) 작업 리뷰", text)
-        self.assertIn("## 프로젝트별 시간 [자동 집계]", text)
-        self.assertIn("- Gov24: 40분", text)
-        self.assertIn("- 합계: 1시간 12분", text)
-        self.assertIn("[자동 추정", text)
-        self.assertIn("09:00–09:40 (40분) [Gov24] IntelliJ IDEA · gov24-api – UserController.java", text)
-        main_sessions = text.split("## 주요 작업 세션")[1].split("## 프로젝트별 마지막")[0]
-        self.assertNotIn("Slack", main_sessions)  # shorter than 5 minutes
-        self.assertIn("## 메모 [직접 작성]\n- [Gov24] 페이징 이슈 내일 확인\n- 점심 맛있었음", text)
-        self.assertEqual(r["followups"], ["(메모) 페이징 이슈 내일 확인", "(다음 할 일) [Gov24] UserService 리팩터링"])
-        self.assertIsNone(r["saved"])
-
-    def test_review_excludes_excluded_sessions(self):
-        with self.db.connect() as conn:
-            k = self.sessions()[-1]
-            sessionstore.update_session(conn, k["id"], {"excluded": True})
-        self.assertNotIn("kubernetes", self.review()["generated"])
-
-    def test_save_and_clear_review(self):
-        with self.db.connect() as conn:
-            saved = service.save_review(conn, {"day": DAY.isoformat(), "body": "# 내가 쓴 리뷰\n로그인 완료"})
-            self.assertEqual(saved["body"], "# 내가 쓴 리뷰\n로그인 완료")
-            service.save_review(conn, {"day": DAY.isoformat(), "body": "# 수정"})
-        self.assertEqual(self.review()["saved"]["body"], "# 수정")
-        with self.db.connect() as conn:
-            self.assertIsNone(service.save_review(conn, {"day": DAY.isoformat(), "body": ""}))
-        self.assertIsNone(self.review()["saved"])
 
     def test_resume_project(self):
         with self.db.connect() as conn:
@@ -279,15 +244,13 @@ class ReviewResumeSearchTests(SessionStoreTestCase):
             o = service.resume_overview(conn, now=local_ts(DAY, 23, 59))
         self.assertEqual([p["name"] for p in o], ["K8s", "Gov24"])
 
-    def test_search_sessions_and_reviews(self):
+    def test_search_sessions(self):
         with self.db.connect() as conn:
             s = self.sessions()[0]
             sessionstore.update_session(conn, s["id"], {"title": "로그인 토큰 버그"})
-            service.save_review(conn, {"day": DAY.isoformat(), "body": "오늘은 토큰 갱신 로직을 고쳤다"})
             r = service.search(conn, "토큰")
             self.assertEqual([x["title"] for x in r["sessions"]], ["로그인 토큰 버그"])
-            self.assertEqual([x["day"] for x in r["reviews"]], [DAY.isoformat()])
-            self.assertIn("토큰 갱신", r["reviews"][0]["excerpt"])
+            self.assertNotIn("reviews", r)
             self.assertEqual(r["projects"], [])
             self.assertEqual(len(service.search(conn, "토큰", project=str(self.k8s))["sessions"]), 0)
 
@@ -306,10 +269,9 @@ class StatsTests(SessionStoreTestCase):
         with self.db.connect() as conn:
             sessionstore.update_session(conn, a["id"], {"title": "직접"})
             sessionstore.update_session(conn, b["id"], {"excluded": True})
-            service.save_review(conn, {"day": DAY.isoformat(), "body": "리뷰"})
         days = {d["day"]: d for d in stats.collect(self.db, (date.today() - DAY).days + 1)}
         d = days[DAY.isoformat()]
-        self.assertEqual((d["sessions"], d["renamed"], d["excluded"], d["review_saved"]), (2, 1, 1, True))
+        self.assertEqual((d["sessions"], d["renamed"], d["excluded"]), (2, 1, 1))
         self.assertEqual(d["classified_s"], 30 * 60)  # excluded and unassigned time not counted
 
 

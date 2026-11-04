@@ -9,7 +9,6 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Optional
 
-from . import review as review_text
 from . import sessionstore, snapshots, store
 from .classify import FIELDS, OFFWORK_APP, Keyword, matches_any, resolve_project
 from .normalize import merge_rows
@@ -77,7 +76,7 @@ def _session_out(s: dict, activities: Optional[list] = None) -> dict:
     return {
         "id": s["id"], "day": s["day"], "start": s["start_ts"], "end": s["end_ts"],
         "active_s": active, "offwork_s": offwork,
-        # Mostly untracked apps: shown as "업무 외", left out of reviews.
+        # Mostly untracked apps: shown as "업무 외", left out of work totals.
         "offwork": active > 0 and offwork * 2 >= active,
         "title": s["title"], "title_edited": bool(s["title_edited"]), "project_id": s["project_id"],
         "project_manual": bool(s["project_manual"]), "note": s["note"],
@@ -332,44 +331,7 @@ def delete_note(conn: sqlite3.Connection, note_id: int) -> None:
         raise NotFound("메모를 찾을 수 없습니다")
 
 
-# ---------------------------------------------------------------- daily review
-
-def get_review(conn: sqlite3.Connection, day: date, now: Optional[float] = None) -> dict:
-    t = timeline(conn, day, now=now)
-    projects = {p["id"]: p for p in list_projects(conn)}
-    sessions = [s for s in t["sessions"] if not s["excluded"] and not s["offwork"]]
-    saved = conn.execute("SELECT * FROM daily_reviews WHERE day = ?", (day.isoformat(),)).fetchone()
-    return {
-        "day": day.isoformat(),
-        "generated": review_text.build_review(day, t["by_project"], sessions, t["notes"], projects,
-                                              offwork_s=t["offwork_s"]),
-        "saved": dict(saved) if saved else None,
-        "by_project": t["by_project"],
-        "total_active_s": t["total_active_s"],
-        "offwork_s": t["offwork_s"],
-        "sessions": sessions,
-        "notes": t["notes"],
-        "followups": review_text.followups(t["notes"], sessions, projects),
-        "warnings": t["warnings"],
-    }
-
-
-def save_review(conn: sqlite3.Connection, data: dict) -> Optional[dict]:
-    """Save the user's review text; an empty body deletes the saved review."""
-    day = parse_day(data.get("day"))
-    body = _text(data.get("body"), "리뷰", 100_000, allow_empty=True)
-    if not body:
-        conn.execute("DELETE FROM daily_reviews WHERE day = ?", (day.isoformat(),))
-        return None
-    now = time.time()
-    conn.execute(
-        "INSERT INTO daily_reviews (day, body, created_at, updated_at) VALUES (?, ?, ?, ?) "
-        "ON CONFLICT (day) DO UPDATE SET body = excluded.body, updated_at = excluded.updated_at",
-        (day.isoformat(), body, now, now))
-    return dict(conn.execute("SELECT * FROM daily_reviews WHERE day = ?", (day.isoformat(),)).fetchone())
-
-
-# ---------------------------------------------------------------- resume work
+# ---------------------------------------------------------------- project overview (AI tools)
 
 def _last_activity(conn: sqlite3.Connection, session: dict, now: Optional[float]) -> Optional[dict]:
     activities, _ = store.day_activities(conn, date.fromisoformat(session["day"]), now)
@@ -484,12 +446,6 @@ def search(conn: sqlite3.Connection, q: str, date_from: Optional[date] = None,
         "SELECT * FROM notes WHERE body LIKE ? ESCAPE '\\'" + sql
         + " ORDER BY day DESC, created_at DESC LIMIT ?", [like, *args, limit])]
 
-    sql, args = day_filter("day")
-    reviews = [] if filtering else [
-        {"day": r["day"], "excerpt": _excerpt(r["body"], q)} for r in conn.execute(
-            "SELECT day, body FROM daily_reviews WHERE body LIKE ? ESCAPE '\\'" + sql
-            + " ORDER BY day DESC LIMIT ?", [like, *args, limit])]
-
     projects = [dict(r) for r in conn.execute(
         "SELECT id, name, color, next_action FROM projects WHERE name LIKE ? ESCAPE '\\' "
         "OR next_action LIKE ? ESCAPE '\\' ORDER BY name", (like, like))]
@@ -512,14 +468,7 @@ def search(conn: sqlite3.Connection, q: str, date_from: Optional[date] = None,
                                                    [*files_args, *args, limit])]
 
     return {"query": q, "events": events, "sessions": sessions, "notes": notes,
-            "reviews": reviews, "projects": projects, "files": changed_files}
-
-
-def _excerpt(body: str, q: str, width: int = 60) -> str:
-    i = body.casefold().find(q.casefold())
-    start = max(i - width, 0)
-    text = body[start:i + len(q) + width].replace("\n", " ")
-    return ("…" if start else "") + text + ("…" if i + len(q) + width < len(body) else "")
+            "projects": projects, "files": changed_files}
 
 
 # ---------------------------------------------------------------- what to record
@@ -622,7 +571,7 @@ def resume(conn: sqlite3.Connection, now: Optional[float] = None) -> None:
 
 def delete_data(conn: sqlite3.Connection, data: dict, now: Optional[float] = None,
                 repos_dir: Optional[Path] = None) -> dict:
-    """Delete imported activity, notes, sessions and reviews for a day range, or everything.
+    """Delete imported activity, notes and sessions for a day range, or everything.
 
     A 'deleted' blocked range is recorded so later syncs do not re-import it.
     Projects, rules and exclusions are kept.
@@ -645,8 +594,6 @@ def delete_data(conn: sqlite3.Connection, data: dict, now: Optional[float] = Non
             "DELETE FROM notes WHERE day >= ? AND day <= ?", (day_lo, day_hi)).rowcount,
         "sessions": conn.execute(
             "DELETE FROM sessions WHERE day >= ? AND day <= ?", (day_lo, day_hi)).rowcount,
-        "reviews": conn.execute(
-            "DELETE FROM daily_reviews WHERE day >= ? AND day <= ?", (day_lo, day_hi)).rowcount,
     }
     # The collector's raw events too, so they are really gone.
     conn.execute("DELETE FROM collector_events WHERE start_ts >= ? AND end_ts <= ?", (lo, hi))

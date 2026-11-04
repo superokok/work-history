@@ -122,22 +122,6 @@ class App:
         def split_session(conn, query, body, sid):
             return sessionstore.split_session(conn, int(sid), body.get("at"))
 
-        @r("GET", "/api/review")
-        def get_review(conn, query, body):
-            return service.get_review(conn, _day(query.get("date")))
-
-        @r("POST", "/api/review")
-        def save_review(conn, query, body):
-            return {"saved": service.save_review(conn, body)}
-
-        @r("GET", "/api/resume")
-        def resume_overview(conn, query, body):
-            return service.resume_overview(conn)
-
-        @r("GET", r"/api/resume/(\d+)")
-        def resume_project(conn, query, body, pid):
-            return service.resume_project(conn, int(pid))
-
         @r("GET", "/api/projects")
         def projects(conn, query, body):
             return service.list_projects(conn)

@@ -197,3 +197,11 @@ def group_activities(activities: Sequence[Activity]) -> list[list[Activity]]:
         for project_run in smooth_runs(block, _project_key, _project_run_minimum):
             sessions.extend(smooth_runs(project_run, work_kind, _kind_run_minimum))
     return sessions
+
+
+def duration(seconds: float) -> str:
+    """'45분' / '2시간 5분' for reports and stats."""
+    minutes = round(seconds / 60)
+    if minutes < 60:
+        return f"{minutes}분"
+    return f"{minutes // 60}시간 {minutes % 60}분"

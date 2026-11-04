@@ -48,13 +48,12 @@ autostart.py  – start-at-logon and shortcut files, switched from the app
 ai_context.py – the exact payload for the AI with verifiable references (C/S/N/P)
 ai_report.py  – report schema, prompt, reference verification, rendering
 ai_service.py – settings, consent, run log, saved reports
-review.py     – pure: template daily review + follow-up extraction
    ▼
-service.py    – timeline, search, notes, projects, review, resume queries
+service.py    – timeline, search, notes, projects, project overview (AI tools)
    ▼
 server.py     – JSON API + static UI, bound to 127.0.0.1 only
    ▼
-static/       – timeline / review / search / project views (Korean)
+static/       – timeline / report / search / settings views (Korean)
 ```
 
 Collection, processing (pure functions), persistence and UI are separate
@@ -93,7 +92,7 @@ per kind, `bucket_id` `workhistory-window` / `workhistory-afk`, `bucket_created`
   long event that started before the cursor is still extended.
 - Privacy rules apply here (pause/deleted ranges, exclusions, "업무 앱만 기록").
 
-## 5. Data model (schema v11)
+## 5. Data model (schema v12)
 
 ```
 sources        id, bucket_id, bucket_created, kind('window'|'afk'), hostname,
@@ -115,7 +114,6 @@ sessions       id, day, start_ts, end_ts, active_s, title, title_edited,
                project_id, project_manual, note, excluded, locked, timestamps
 session_days   day PK, version   (-1 = new activity; else classification version)
 meta           key PK, value     ('session_version' bumps on rule/exclusion changes)
-daily_reviews  day PK, body, created_at, updated_at
 ```
 
 v5 (results, see RESULTS_TRACKING.md):
@@ -139,6 +137,9 @@ app, title, status), the raw events `sync.py` imports from on Windows; pruned af
 v7 added a `usage_events` counter table that v10 drops again.
 
 v6 added an `ai_endpoints` table (AI server registrations) that v11 drops again.
+
+v2 added a `daily_reviews` table (the template daily review tab) that v12 drops again:
+the AI 업무일지 covers it.
 
 v4 (AI): `reports` (saved daily/weekly drafts), `ai_runs` (token/latency log,
 no content).
@@ -171,7 +172,7 @@ local timezone.
   lock screen is kept as-is because it is idle time. The upsert replaces
   app/title on re-import, so resetting the window cursors
   (`reset_window_cursors`) re-applies the current rules from the collector's
-  raw events. Totals, reviews and stats report 업무 외 time separately; it never
+  raw events. Totals and stats report 업무 외 time separately; it never
   gets a project, and short 업무 외 detours are absorbed into work sessions
   like any other detour. The app picker reads app names from the raw
   events and does not store the list.
@@ -192,8 +193,8 @@ local timezone.
   Auto title = dominant app + its longest-viewed window title (app suffix
   like " - Google Chrome" removed). Session project = manual, else the
   dominant activity project by time. Totals use session projects; excluded
-  sessions are left out of totals and reviews.
-- **Timeline views:** sessions stay the unit for edits, totals, reviews and AI
+  sessions are left out of totals and AI reports.
+- **Timeline views:** sessions stay the unit for edits, totals and AI
   references. The timeline's default *per-app* view (`service.app_summary`) is
   display only: the activities of the listed, non-excluded sessions added up
   per app for the whole day (an app used again later joins its earlier time),
@@ -207,18 +208,18 @@ local timezone.
   locked ranges.
 - **Staleness:** sync marks touched days `-1`; rule/exclusion/archive changes
   bump a global version. Stale days are regrouped by the background syncer
-  every minute, by the timeline for the viewed day, and by search/resume
-  before they run (committing per day). Measured: 365 days x 600 events
+  every minute, by the timeline for the viewed day, and by search and the
+  AI tools before they run (committing per day). Measured: 365 days x 600 events
   regroup in about 8 s (only after a rule change); a 3,000-event day loads in
   about 25 ms cached / 60 ms regrouped.
-- **Daily review:** deterministic template, no AI. Section headers are tagged
-  [자동 집계], [자동 추정], [직접 작성]. Follow-up candidates are only lines
-  from the user's own notes containing markers (TODO, 확인, 해야, 필요, 내일,
-  ?) plus projects' user-written next actions, never invented items. The user
-  edits and saves the text; saved reviews are searchable.
-- **Resume work:** per project: user-written next action, last session and
-  the last window seen in it, recent sessions, notes. The app never claims to
-  know the next task.
+- **Next action:** each project has a user-written "다음 할 일", edited on its
+  card in 설정. AI reports may write a "next" item only from it or from notes;
+  the app never claims to know the next task. The "AI에게 묻기" tools read a
+  per-project overview (last session and window, recent sessions, notes) from
+  `service.resume_overview` / `resume_project`.
+- **Tabs (2026-11-05):** 타임라인, 보고서, 검색, 설정. The template daily review
+  and the 이어서 하기 tab were removed (the AI 업무일지 and "AI에게 묻기" cover
+  them); projects, rules and work folders moved into 설정.
 - **Search:** SQLite `LIKE` substring search. Korean words are often 2
   characters and not whitespace-separated, so token-based FTS would miss them;
   personal-scale data (≈10⁵–10⁶ rows) is fast enough with `LIKE`. FTS5
