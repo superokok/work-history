@@ -95,9 +95,7 @@ function projectOptions(select, { all = false, none = "미분류", selected = ""
 async function loadProjects() {
   state.projects = await api("GET", "/api/projects");
   const keep = (id) => $(id).value;
-  projectOptions($("filter-project"), { all: true, selected: keep("filter-project") });
   projectOptions($("search-project"), { all: true, selected: keep("search-project") });
-  projectOptions($("note-project"), { none: "프로젝트 없음", selected: keep("note-project") });
 }
 
 // ------------------------------------------------------------------ tabs
@@ -172,7 +170,6 @@ $("day").addEventListener("change", (e) => e.target.value && setDay(e.target.val
 $("today").addEventListener("click", () => setDay(isoDay(new Date())));
 $("prev-day").addEventListener("click", () => setDay(shiftDay(state.day, -1)));
 $("next-day").addEventListener("click", () => setDay(shiftDay(state.day, 1)));
-$("filter-project").addEventListener("change", () => loadTimeline());
 $("filter-app").addEventListener("change", () => loadTimeline());
 document.querySelectorAll("input[name=timeline-view]").forEach((input) => {
   input.checked = input.value === state.timelineView;
@@ -191,7 +188,6 @@ let timelineSeq = 0;
 async function loadTimeline() {
   const seq = ++timelineSeq;
   const params = new URLSearchParams({ date: state.day });
-  if ($("filter-project").value) params.set("project", $("filter-project").value);
   if ($("filter-app").value) params.set("app", $("filter-app").value);
   const t = await guarded(() => api("GET", `/api/timeline?${params}`));
   if (!t || seq !== timelineSeq) return;
@@ -204,35 +200,13 @@ async function loadTimeline() {
     ...t.by_app.map((a) => h("option", { value: a.app }, `${appName(a.app)} (${dur(a.seconds)})`)));
   appSel.value = t.by_app.some((a) => a.app === currentApp) ? currentApp : "";
 
-  $("summary").replaceChildren(...summaryBlock(t.total_active_s, t.by_project, t.offwork_s));
   state.dayChanges = t.changes || [];  // session cards show the file changes made during them
   const byApp = state.timelineView === "apps";
   $("view-hint-apps").hidden = !byApp;
   $("view-hint-sessions").hidden = byApp;
   if (byApp) renderApps(t.apps);
   else renderSessions(t.sessions);
-  renderNotes(t.notes);
   renderChanges(state.dayChanges);
-}
-
-const OFFWORK_COLOR = "#c8ccd4";
-
-function summaryBlock(total, byProject, offwork = 0) {
-  const max = Math.max(1, offwork, ...byProject.map((p) => p.seconds));
-  return [
-    h("div", { class: "summary-head" },
-      h("span", {}, "프로젝트별 활동 시간 ", badge("inferred", "자동 집계")),
-      h("span", { class: "total" }, dur(total))),
-    h("div", { class: "bars" }, byProject.flatMap((p) => [
-      h("span", {}, h("span", { class: "dot", style: { background: projectColor(p.project_id) } }), projectName(p.project_id)),
-      h("div", { class: "bar", style: { width: `${(p.seconds / max) * 100}%`, background: projectColor(p.project_id) } }),
-      h("span", { class: "num" }, dur(p.seconds)),
-    ]), offwork > 0 ? [
-      h("span", { class: "muted", title: "기록 대상이 아닌 앱에서 보낸 시간 (앱 이름·창 제목은 저장하지 않음)" }, "업무 외"),
-      h("div", { class: "bar offwork", style: { width: `${(offwork / max) * 100}%`, background: OFFWORK_COLOR } }),
-      h("span", { class: "num muted" }, dur(offwork)),
-    ] : []),
-  ];
 }
 
 async function patchSession(id, body, message) {
@@ -282,7 +256,7 @@ function appCard(a) {
   const windowRow = (w) => {
     const key = `${a.app}\n${w.title}`;
     const pathRow = h("tr", { class: "path-row", hidden: !state.openPaths.has(key) },
-      h("td", { colspan: 4 }, w.path ? pathBox(w) : h("span", { class: "muted" },
+      h("td", { colspan: 3 }, w.path ? pathBox(w) : h("span", { class: "muted" },
         "경로 없음 · 브라우저 주소와 작업 폴더 안의 파일만 경로가 남습니다.")));
     const row = h("tr", { class: "clickable", title: "눌러서 경로 보기", onclick: () => {
       pathRow.hidden = !pathRow.hidden;
@@ -290,8 +264,6 @@ function appCard(a) {
     } },
     h("td", { class: "title" }, w.title || h("span", { class: "muted" }, "(제목 없음)"),
       w.path_kind ? badge("plain", w.path_kind === "url" ? "주소" : "파일") : null),
-    h("td", { class: "project" }, h("span", { class: "dot", style: { background: projectColor(w.project_id) } }),
-      projectName(w.project_id)),
     h("td", { class: "time" }, `마지막 ${hhmm(w.last)}`),
     h("td", { class: "num" }, dur(w.seconds)));
     return [row, pathRow];
@@ -308,29 +280,12 @@ function appCard(a) {
 }
 
 function sessionCard(s, next) {
-  const projectSelect = h("select", {
-    title: "세션 프로젝트",
-    onchange: (e) => patchSession(s.id, { project_id: e.target.value },
-      e.target.value === "auto" ? "자동 분류로 되돌렸습니다." : "세션 프로젝트를 지정했습니다."),
-  },
-  h("option", { value: "auto" }, s.project_manual ? "자동 분류로 되돌리기" : `자동: ${projectName(s.project_id)}`),
-  h("option", { value: "" }, "미분류"),
-  ...state.projects.filter((p) => !p.archived || p.id === s.project_id).map((p) => h("option", { value: p.id }, p.name)));
-  projectSelect.value = s.project_manual ? String(s.project_id ?? "") : "auto";
-
-  const noteBox = h("div", { class: "session-note-edit", hidden: true });
-  const noteArea = h("textarea", { rows: 3, placeholder: "이 세션에서 한 일, 막힌 점, 다음에 할 일…" });
-  noteArea.value = s.note;
-  noteBox.append(noteArea, h("div", { class: "row" },
-    h("button", { class: "small primary", onclick: () => patchSession(s.id, { note: noteArea.value }, "메모를 저장했습니다.") }, "메모 저장"),
-    h("button", { class: "small", onclick: () => (noteBox.hidden = true) }, "취소")));
-
   const details = h("details", { open: state.openSessions.has(s.id) },
     h("summary", {}, `창 기록 ${s.rows.length}개 보기`), rowsTable(s));
   details.addEventListener("toggle", () =>
     details.open ? state.openSessions.add(s.id) : state.openSessions.delete(s.id));
 
-  if (s.offwork && !s.title_edited && !s.note) {
+  if (s.offwork && !s.title_edited) {
     return h("div", { class: "card session offwork-session" },
       h("div", { class: "session-head" },
         h("span", { class: "time" }, `${hhmm(s.start)}–${hhmm(s.end)}`),
@@ -339,7 +294,7 @@ function sessionCard(s, next) {
         h("span", { class: "num session-dur muted" }, dur(s.active_s))));
   }
 
-  return h("div", { class: `card session${s.excluded ? " excluded" : ""}`, style: { borderLeftColor: projectColor(s.project_id) } },
+  return h("div", { class: `card session${s.excluded ? " excluded" : ""}` },
     h("div", { class: "session-head" },
       h("span", { class: "time" }, `${hhmm(s.start)}–${hhmm(s.end)}`),
       h("span", { class: "session-title" }, s.title),
@@ -347,15 +302,11 @@ function sessionCard(s, next) {
       s.locked ? badge("plain", "범위 고정") : null,
       s.excluded ? badge("plain", "제외됨") : null,
       h("span", { class: "num session-dur" }, dur(s.active_s))),
-    s.note ? h("div", { class: "session-note" }, s.note) : null,
-    noteBox,
     h("div", { class: "row session-actions" },
-      projectSelect, s.project_manual ? badge("user", "직접 지정") : badge("inferred", "자동"),
       h("button", { class: "small", onclick: () => {
         const title = prompt("세션 제목 (비우면 자동 제목으로 돌아갑니다)", s.title_edited ? s.title : "");
         if (title !== null) patchSession(s.id, { title });
       } }, "제목 수정"),
-      h("button", { class: "small", onclick: () => { noteBox.hidden = false; noteArea.focus(); } }, s.note ? "메모 수정" : "메모"),
       h("button", { class: "small", onclick: () => patchSession(s.id, { excluded: !s.excluded },
         s.excluded ? "다시 집계에 포함합니다." : "집계에서 제외했습니다.") }, s.excluded ? "포함" : "제외"),
       next ? h("button", { class: "small", onclick: () => mergeWith(s, next) }, "다음 세션과 병합") : null),
@@ -389,12 +340,9 @@ function renderChanges(changes) {
   $("changes").replaceChildren(...changes.map((c) => h("li", { class: "change-item" },
     h("div", {},
       h("span", { class: "time" }, hhmm(c.ts)), " ", h("b", {}, c.folder),
-      h("span", { class: "meta" }, ` · ${projectName(c.project_id)} · 파일 ${c.files_added + c.files_modified + c.files_deleted}개`,
+      h("span", { class: "meta" }, ` · 파일 ${c.files_added + c.files_modified + c.files_deleted}개`,
         c.lines_added || c.lines_removed ? ` · +${c.lines_added} −${c.lines_removed}` : "")),
-    h("div", { class: "change-files" }, ...c.files.flatMap((f, i) => [i ? ", " : "", fileButton(f)])))),
-    changes.some((c) => c.files.some((f) => f.project_id === null)) ? h("li", { class: "meta" },
-      "미분류 파일 변경이 있습니다. ", h("button", { class: "small link", onclick: () => showTab("settings") },
-        "설정 → 작업 폴더에서 정하기")) : "");
+    h("div", { class: "change-files" }, ...c.files.flatMap((f, i) => [i ? ", " : "", fileButton(f)])))));
 }
 
 function diffLines(d) {
@@ -492,25 +440,14 @@ function mergeWith(s, next) {
 function rowsTable(s) {
   return h("table", { class: "rows" },
     h("thead", {}, h("tr", {}, h("th", {}, "시간"), h("th", {}, "앱"), h("th", {}, "창 제목"),
-      h("th", {}, "창 프로젝트"), h("th", { class: "num" }, "활동"), h("th", {}, ""))),
+      h("th", { class: "num" }, "활동"), h("th", {}, ""))),
     h("tbody", {}, s.rows.map((r) => {
-      const select = h("select", {
-        title: "이 창 기록의 프로젝트 (세션 자동 분류에 반영)",
-        onchange: (e) => guarded(async () => {
-          await api("POST", "/api/assign", { event_ids: r.event_ids, project_id: e.target.value || null });
-          toast(e.target.value ? "창 기록에 프로젝트를 지정했습니다." : "직접 지정을 해제했습니다 (규칙 적용).");
-          loadTimeline();
-        }),
-      });
-      projectOptions(select, { none: r.project_source === "manual" ? "미분류" : "미분류 / 규칙", selected: r.project_id ?? "" });
       const offwork = r.app === "";
       return h("tr", { class: offwork ? "offwork-row" : null },
         h("td", { class: "time" }, `${hhmm(r.start)}–${hhmm(r.end)}`),
         h("td", {}, offwork ? h("span", { class: "muted" }, "업무 외") : appName(r.app)),
         h("td", { class: "title" }, offwork ? h("span", { class: "muted" }, "(기록 대상이 아닌 앱)")
           : r.title || h("span", { class: "muted" }, "(제목 없음)")),
-        h("td", { class: "project" }, offwork ? null : [select, r.project_source === "manual" ? badge("user", "수동")
-          : r.project_source === "rule" ? badge("inferred", "규칙") : null]),
         h("td", { class: "num" }, dur(r.active_s)),
         h("td", {}, r.start > s.start + 1 ? h("button", { class: "link", title: "이 창 기록부터 새 세션으로 나눕니다",
           onclick: () => guarded(async () => {
@@ -520,34 +457,6 @@ function rowsTable(s) {
           }) }, "여기서 분할") : null));
     })));
 }
-
-function renderNotes(notes) {
-  $("notes").replaceChildren(...notes.map((n) => h("li", {},
-    h("div", { class: "meta" }, hhmm(n.created_at), projectById(n.project_id) ? ` · ${projectName(n.project_id)}` : "", " ",
-      h("button", { class: "link", onclick: () => editNote(n) }, "수정"), " ",
-      h("button", { class: "link", onclick: () => deleteNote(n) }, "삭제")),
-    n.body)));
-}
-
-function editNote(n) {
-  const body = prompt("메모 수정", n.body);
-  if (body === null) return;
-  guarded(async () => { await api("PATCH", `/api/notes/${n.id}`, { body }); loadTimeline(); });
-}
-
-function deleteNote(n) {
-  if (!confirm("이 메모를 삭제할까요?")) return;
-  guarded(async () => { await api("DELETE", `/api/notes/${n.id}`); loadTimeline(); });
-}
-
-$("note-form").addEventListener("submit", (e) => {
-  e.preventDefault();
-  guarded(async () => {
-    await api("POST", "/api/notes", { day: state.day, body: $("note-body").value, project_id: $("note-project").value || null });
-    $("note-body").value = "";
-    loadTimeline();
-  });
-});
 
 // ------------------------------------------------------------------ AI reports
 const reportKind = () => document.querySelector('input[name="report-kind"]:checked').value;
@@ -1064,8 +973,7 @@ $("delete-all").addEventListener("click", () => {
   setInterval(() => guarded(loadStatus), 30000);
   // Refresh today's timeline periodically while it is visible and nothing is being edited.
   setInterval(() => {
-    const editing = (document.activeElement && ["TEXTAREA", "INPUT", "SELECT"].includes(document.activeElement.tagName))
-      || [...document.querySelectorAll(".session-note-edit")].some((el) => !el.hidden);
+    const editing = document.activeElement && ["TEXTAREA", "INPUT", "SELECT"].includes(document.activeElement.tagName);
     if (!$("tab-timeline").hidden && state.day === isoDay(new Date()) && !editing) loadTimeline();
   }, 60000);
 })();

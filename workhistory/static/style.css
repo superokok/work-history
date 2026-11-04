@@ -53,8 +53,6 @@ table.rows td.title { word-break: break-all; }
 table.rows td.project { white-space: nowrap; }
 table.rows td select { max-width: 150px; }
 .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.bars { display: grid; grid-template-columns: 160px 1fr 70px; gap: 4px 10px; align-items: center; }
-.bar { height: 10px; border-radius: 5px; background: var(--accent); min-width: 2px; }
 .summary-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
 .summary-head .total { font-size: 20px; font-weight: 600; }
 ul.notes, ul.plain { list-style: none; padding: 0; margin: 0 0 8px; }
@@ -76,8 +74,6 @@ button.primary { background: var(--accent); color: #fff; border-color: var(--acc
 .session-title { font-weight: 600; word-break: break-all; }
 .session-dur { margin-left: auto; font-weight: 600; }
 .session-actions select { max-width: 200px; }
-.session-note { background: var(--user); border-left: 3px solid #3aa76d; border-radius: 0 6px 6px 0; padding: 4px 8px; margin: 6px 0; white-space: pre-wrap; }
-.session-note-edit { margin: 6px 0; }
 .card.session details { margin-top: 6px; }
 .card.session summary { cursor: pointer; color: var(--muted); font-size: 12px; }
 .card.session table.rows { margin-top: 6px; font-size: 13px; }
@@ -100,7 +96,6 @@ ul.plain .meta, ul.plain li > .meta { white-space: nowrap; }
 /* 업무 외 (untracked apps) */
 .card.session.offwork-session { border-left-color: #c8ccd4; padding: 6px 12px; opacity: .75; }
 tr.offwork-row td { color: var(--muted); }
-.bar.offwork { background-image: repeating-linear-gradient(45deg, transparent 0 4px, rgba(255,255,255,.35) 4px 8px); }
 
 /* AI */
 .badge.ai { background: linear-gradient(90deg, #4f7cff, #9b5cff); color: #fff; }

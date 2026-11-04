@@ -209,7 +209,9 @@ local timezone.
   per app for the whole day (an app used again later joins its earlier time),
   most recently used app first, window titles by total time; clicking a window shows
   its address or file path to copy. The session view
-  lists sessions newest first.
+  lists sessions newest first. Since 2026-11-05 the timeline shows no project
+  totals, project pickers or notes (the API still returns them; existing notes
+  and project data still feed the AI).
 - **Session edits are never lost:** sessions are regenerated, but an edited
   (title/project/note/excluded) session follows its regrouped counterpart by
   start time, so the session you are in keeps growing after you rename it.

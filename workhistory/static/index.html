@@ -39,7 +39,6 @@
         <input type="date" id="day">
         <button id="next-day" class="small" title="다음 날">▶</button>
         <button id="today" class="small">오늘</button>
-        <label>프로젝트 <select id="filter-project"></select></label>
         <label>앱 <select id="filter-app"></select></label>
         <span class="view-pick">
           <label><input type="radio" name="timeline-view" value="apps" checked> 앱별</label>
@@ -49,9 +48,8 @@
       <div id="warnings"></div>
       <div class="columns">
         <div class="col-main">
-          <div id="summary" class="card"></div>
-          <p id="view-hint-apps" class="muted small-text">앱마다 하루 동안 쓴 시간을 합쳤습니다 (최근에 쓴 앱이 위). 제목·프로젝트·메모를 고치려면 <b>세션별</b> 보기로 바꾸세요.</p>
-          <p id="view-hint-sessions" class="muted small-text" hidden>작업 세션은 창 기록으로 <b>자동 추정</b>한 것입니다 (최근 세션이 위). 제목·프로젝트·메모를 고치거나, 병합·분할·제외할 수 있습니다.</p>
+          <p id="view-hint-apps" class="muted small-text">앱마다 하루 동안 쓴 시간을 합쳤습니다 (최근에 쓴 앱이 위). 창을 누르면 경로를 복사할 수 있습니다. 제목을 고치거나 병합·분할·제외하려면 <b>세션별</b> 보기로 바꾸세요.</p>
+          <p id="view-hint-sessions" class="muted small-text" hidden>작업 세션은 창 기록으로 <b>자동 추정</b>한 것입니다 (최근 세션이 위). 제목을 고치거나 병합·분할·제외할 수 있습니다.</p>
           <div id="sessions"></div>
           <p id="rows-empty" class="muted" hidden>이 날짜에 기록된 활동이 없습니다.</p>
         </div>
@@ -59,17 +57,6 @@
           <div class="card" id="changes-card" hidden>
             <h2>결과물 변경 <span class="badge inferred">파일 기록</span></h2>
             <ul id="changes" class="plain compact"></ul>
-          </div>
-          <div class="card">
-            <h2>메모 <span class="badge user">직접 작성</span></h2>
-            <ul id="notes" class="notes"></ul>
-            <form id="note-form">
-              <textarea id="note-body" rows="3" placeholder="오늘 한 일, 막힌 점, 다음에 할 일…"></textarea>
-              <div class="row">
-                <select id="note-project"></select>
-                <button type="submit">메모 저장</button>
-              </div>
-            </form>
           </div>
         </aside>
       </div>
