@@ -12,7 +12,8 @@
   <header>
     <h1>작업 기록</h1>
     <nav>
-      <button data-tab="timeline" class="tab active">타임라인</button>
+      <button data-tab="dashboard" class="tab active">대시보드</button>
+      <button data-tab="timeline" class="tab">타임라인</button>
       <button data-tab="review" class="tab">리뷰</button>
       <button data-tab="report" class="tab">보고서 <span class="badge ai">AI</span></button>
       <button data-tab="resume" class="tab">이어서 하기</button>
@@ -35,8 +36,28 @@
   </div>
 
   <main>
+    <!-- Dashboard -->
+    <section id="tab-dashboard" class="tab-panel">
+      <div class="toolbar">
+        <span class="seg"><button id="dash-day" class="small">일</button><button id="dash-week" class="small">주</button></span>
+        <button id="dash-prev" class="small" title="이전">◀</button>
+        <input type="date" id="dash-date">
+        <button id="dash-next" class="small" title="다음">▶</button>
+        <button id="dash-today" class="small">오늘</button>
+        <span id="dash-period" class="muted"></span>
+        <span class="muted small-text dash-note">활동 분류는 앱 이름과 창 제목으로 <b>자동 추정</b>한 것입니다.</span>
+      </div>
+      <div id="dash-kpis" class="dash-kpis"></div>
+      <div class="dash-charts">
+        <div class="card"><h2 id="dash-week-title">이번 주 분류별 시간</h2><div id="dash-week-chart"></div></div>
+        <div class="card"><h2 id="dash-donut-title">분류</h2><div id="dash-donut"></div></div>
+      </div>
+      <div class="card" id="dash-strip-card"><h2>시간대별 활동</h2><div id="dash-strip"></div></div>
+      <div class="card"><h2 id="dash-projects-title">한 일 (프로젝트별)</h2><div id="dash-projects"></div></div>
+    </section>
+
     <!-- Timeline -->
-    <section id="tab-timeline" class="tab-panel">
+    <section id="tab-timeline" class="tab-panel" hidden>
       <div class="toolbar">
         <button id="prev-day" class="small" title="이전 날">◀</button>
         <input type="date" id="day">

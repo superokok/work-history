@@ -51,6 +51,8 @@ ai_service.py – settings, consent, run log, saved reports
 review.py     – pure: template daily review + follow-up extraction
    ▼
 service.py    – timeline, search, notes, projects, review, resume queries
+dashboard.py  – day/week dashboard: time by kind of activity and by project, the day strip
+categories.py – kind of activity from app name and window title (rules, no AI)
    ▼
 server.py     – JSON API + static UI, bound to 127.0.0.1 only
    ▼

@@ -106,6 +106,7 @@ document.querySelectorAll("button.tab").forEach((btn) =>
 function showTab(name) {
   document.querySelectorAll("button.tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
   document.querySelectorAll(".tab-panel").forEach((p) => (p.hidden = p.id !== `tab-${name}`));
+  if (name === "dashboard") loadDashboard();
   if (name === "timeline") loadTimeline();
   if (name === "review") loadReview();
   if (name === "report") loadReport();
@@ -1262,6 +1263,173 @@ $("delete-all").addEventListener("click", () => {
   guarded(async () => toast(deletedSummary(await api("POST", "/api/delete-data", { all: true }))));
 });
 
+// ------------------------------------------------------------------ dashboard
+// Where the time went: by kind of activity (inferred from app and window title) and by project.
+const dash = { span: "day", day: isoDay(new Date()) };
+const WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"];
+const weekdayOf = (day) => WEEKDAYS[(new Date(day + "T00:00:00").getDay() + 6) % 7];
+const pct = (part, whole) => (whole > 0 ? Math.round((part / whole) * 100) : 0);
+
+function svg(tag, attrs = {}, ...children) {
+  const el = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (const [k, v] of Object.entries(attrs)) if (v !== undefined && v !== null) el.setAttribute(k, v);
+  for (const c of children.flat()) if (c != null) el.append(typeof c === "string" ? document.createTextNode(c) : c);
+  return el;
+}
+
+async function loadDashboard() {
+  $("dash-date").value = dash.day;
+  $("dash-day").classList.toggle("on", dash.span === "day");
+  $("dash-week").classList.toggle("on", dash.span === "week");
+  const r = await guarded(() => api("GET", `/api/dashboard?date=${dash.day}&span=${dash.span}`));
+  if (r && r.day === dash.day && r.span === dash.span) renderDashboard(r);
+}
+
+function renderDashboard(r) {
+  const isDay = r.span === "day";
+  $("dash-period").textContent = isDay ? `${r.day} (${weekdayOf(r.day)})` : `${r.start} ~ ${r.end}`;
+  renderKpis(r);
+  renderWeekChart(r);
+  renderDonut(r);
+  $("dash-strip-card").hidden = !isDay;
+  if (isDay) renderStrip(r);
+  renderDashProjects(r);
+}
+
+function renderKpis(r) {
+  const t = r.totals, p = r.previous, diff = t.active_s - p.active_s;
+  // The biggest project; without projects, the biggest kind of activity.
+  const top = r.projects.find((x) => x.seconds > 0 && x.project_id != null)
+    || r.categories.filter((c) => c.key !== "offwork").map((c) => ({ name: c.label, seconds: r.by_kind[c.key] }))
+      .sort((a, b) => b.seconds - a.seconds).find((x) => x.seconds > 0);
+  const kpi =(label, value, sub, cls = "") => h("div", { class: "kpi" },
+    h("div", { class: "label" }, label), h("div", { class: `value ${cls}`, title: value }, value), h("div", { class: "sub" }, ...[].concat(sub)));
+  const compare = r.span === "day" ? " 전날보다" : " 지난주 같은 기간보다";
+  $("dash-kpis").replaceChildren(
+    kpi("활동 시간", dur(t.active_s),
+      p.active_s ? [h("span", { class: diff >= 0 ? "up" : "down" }, `${diff >= 0 ? "+" : "−"}${dur(Math.abs(diff))}`), compare] : "비교할 기록 없음"),
+    kpi("업무 비율", `${pct(t.work_s, t.active_s)}%`,
+      `업무 ${dur(t.work_s)} · 서핑 ${pct(t.surf_s, t.active_s)}% · 업무 외 ${pct(t.offwork_s, t.active_s)}%`),
+    kpi("고친 파일", `${r.files.toLocaleString()}개`, `+${r.lines_added.toLocaleString()} / −${r.lines_removed.toLocaleString()}줄`),
+    kpi("가장 많이 한 일", top ? top.name : "없음", top ? dur(top.seconds) : "프로젝트별 시간이 없습니다", "name"));
+}
+
+// Stacked bars, one per day of the week; clicking a day opens that day.
+function renderWeekChart(r) {
+  const W = 640, H = 220, left = 34, bottom = 34, top = 8;
+  const totals = r.week.map((d) => r.categories.reduce((s, c) => s + d.by_kind[c.key], 0));
+  const maxH = Math.max(1, Math.ceil(Math.max(...totals) / 3600));
+  const step = maxH > 8 ? 2 : 1, ceil = Math.ceil(maxH / step) * step;
+  const y = (sec) => H - bottom - (sec / (ceil * 3600)) * (H - bottom - top);
+  const colW = (W - left) / 7, barW = Math.min(44, colW * 0.55);
+  const chart = svg("svg", { class: "chart", viewBox: `0 0 ${W} ${H}`, role: "img",
+    "aria-label": "요일별 활동 시간을 분류별로 쌓은 막대 차트" });
+  for (let hr = 0; hr <= ceil; hr += step) {
+    chart.append(svg("line", { x1: left, x2: W, y1: y(hr * 3600), y2: y(hr * 3600), stroke: "var(--line)" }),
+      svg("text", { x: left - 6, y: y(hr * 3600) + 4, "text-anchor": "end" }, `${hr}h`));
+  }
+  r.week.forEach((d, i) => {
+    const x = left + colW * i + (colW - barW) / 2;
+    const selected = r.span === "day" ? d.day === r.day : true;
+    const g = svg("g", { class: "bar-day" });
+    let acc = 0;
+    const lines = [`${d.day.slice(5)} (${WEEKDAYS[i]}) ${dur(totals[i])}`];
+    for (const c of r.categories) {
+      const sec = d.by_kind[c.key];
+      if (!sec) continue;
+      const y1 = y(acc + sec), y0 = y(acc);
+      g.append(svg("rect", { class: "seg-bar", x, y: y1, width: barW, height: Math.max(0, y0 - y1 - 1), rx: 2,
+        fill: c.color, opacity: selected ? 1 : 0.5 }));
+      acc += sec;
+      lines.push(`${c.label} ${dur(sec)}`);
+    }
+    g.append(svg("rect", { x: left + colW * i, y: top, width: colW, height: H - top, fill: "transparent" }),
+      svg("title", {}, lines.join("\n")));
+    g.addEventListener("click", () => { dash.span = "day"; dash.day = d.day; loadDashboard(); });
+    chart.append(g, svg("text", { x: x + barW / 2, y: H - 14, "text-anchor": "middle", class: selected && r.span === "day" ? "sel" : null },
+      `${WEEKDAYS[i]} ${Number(d.day.slice(5, 7))}/${Number(d.day.slice(8))}`));
+    if (totals[i]) chart.append(svg("text", { x: x + barW / 2, y: y(acc) - 5, "text-anchor": "middle" }, `${Math.round(totals[i] / 360) / 10}h`));
+  });
+  $("dash-week-title").textContent = "이번 주 분류별 시간";
+  $("dash-week-chart").replaceChildren(chart, legend(r.categories.filter((c) => r.week.some((d) => d.by_kind[c.key] > 0))));
+}
+
+const legend = (cats) => h("div", { class: "legend" },
+  cats.map((c) => h("span", {}, h("i", { style: { background: c.color } }), c.label)));
+
+function renderDonut(r) {
+  const total = r.categories.reduce((s, c) => s + r.by_kind[c.key], 0);
+  $("dash-donut-title").textContent = r.span === "day" ? "오늘 분류" : "이번 주 분류";
+  if (r.span === "day" && r.day !== isoDay(new Date())) $("dash-donut-title").textContent = `${r.day.slice(5)} 분류`;
+  if (!total) return $("dash-donut").replaceChildren(h("p", { class: "muted" }, "이 기간에 기록된 활동이 없습니다."));
+  const R = 40, C = 2 * Math.PI * R;
+  const ring = svg("svg", { viewBox: "0 0 100 100", role: "img", "aria-label": "분류별 시간 비율 도넛 차트" },
+    svg("circle", { cx: 50, cy: 50, r: R, fill: "none", stroke: "var(--line)", "stroke-width": 14 }));
+  let offset = 0;
+  const used = r.categories.filter((c) => r.by_kind[c.key] > 0);
+  for (const c of used) {
+    const len = (r.by_kind[c.key] / total) * C;
+    ring.append(svg("circle", { cx: 50, cy: 50, r: R, fill: "none", stroke: c.color, "stroke-width": 14,
+      "stroke-dasharray": `${Math.max(0, len - 0.6)} ${C}`, "stroke-dashoffset": -offset, transform: "rotate(-90 50 50)" },
+      svg("title", {}, `${c.label} ${dur(r.by_kind[c.key])} (${pct(r.by_kind[c.key], total)}%)`)));
+    offset += len;
+  }
+  ring.append(svg("text", { x: 50, y: 49, "text-anchor": "middle", "font-size": 13, "font-weight": 600, fill: "var(--text)" },
+      `${Math.round(total / 360) / 10}시간`),
+    svg("text", { x: 50, y: 62, "text-anchor": "middle", "font-size": 8, fill: "var(--muted)" }, `업무 ${pct(r.totals.work_s, total)}%`));
+  $("dash-donut").replaceChildren(h("div", { class: "donut-wrap" }, ring,
+    h("div", { class: "donut-list" }, used.map((c) => h("div", {},
+      h("i", { class: "swatch", style: { background: c.color } }), c.label,
+      h("span", { class: "t" }, `${dur(r.by_kind[c.key])} · ${pct(r.by_kind[c.key], total)}%`))))));
+}
+
+// The day as one bar from the first to the last activity (at least 9 to 18 o'clock).
+function renderStrip(r) {
+  const kinds = Object.fromEntries(r.categories.map((c) => [c.key, c]));
+  const base = new Date(r.day + "T00:00:00").getTime() / 1000;
+  const hourOf = (ts) => (ts - base) / 3600;
+  const from = Math.min(9, ...r.blocks.map((b) => Math.floor(hourOf(b.start))));
+  const to = Math.max(18, ...r.blocks.map((b) => Math.ceil(hourOf(b.end))));
+  const pos = (ts) => ((hourOf(ts) - from) / (to - from)) * 100;
+  const strip = h("div", { class: "strip" }, r.blocks.map((b) => h("div", {
+    style: { left: `${pos(b.start)}%`, width: `${Math.max(0.3, pos(b.end) - pos(b.start))}%`, background: kinds[b.kind].color },
+    title: `${hhmm(b.start)}–${hhmm(b.end)} ${kinds[b.kind].label} (${dur(b.end - b.start)})`,
+  })));
+  const every = to - from > 12 ? 2 : 1;
+  const axis = h("div", { class: "strip-axis" });
+  for (let hr = from; hr <= to; hr += every) axis.append(h("span", { style: { left: `${((hr - from) / (to - from)) * 100}%` } }, `${hr}시`));
+  $("dash-strip").replaceChildren(r.blocks.length ? h("div", {}, strip, axis) : h("p", { class: "muted" }, "이 날짜에 기록된 활동이 없습니다."));
+}
+
+function renderDashProjects(r) {
+  $("dash-projects-title").textContent = r.span === "day" ? "한 일 (프로젝트별)" : "이번 주 한 일 (프로젝트별)";
+  const rows = r.projects.filter((p) => p.seconds > 0 || p.files > 0);
+  if (!rows.length) return $("dash-projects").replaceChildren(h("p", { class: "muted" }, "이 기간에 기록된 작업이 없습니다."));
+  const max = Math.max(...rows.map((p) => p.seconds), 1);
+  $("dash-projects").replaceChildren(...rows.map((p) => {
+    const stat = [p.seconds ? dur(p.seconds) : null,
+      p.files ? `파일 ${p.files}개 (+${p.lines_added} −${p.lines_removed})` : null].filter(Boolean).join(" · ");
+    const row = h("div", { class: "proj-row", title: r.span === "day" ? "타임라인에서 보기" : "이어서 하기에서 보기" },
+      h("div", { class: "proj-name" }, h("i", { class: "swatch", style: { background: p.color } }), p.name),
+      h("div", { class: "proj-meter" }, h("div", { style: { width: `${(p.seconds / max) * 100}%`, background: p.color } })),
+      h("div", { class: "proj-titles" }, p.titles.map((s) => (s.length > 42 ? s.slice(0, 41) + "…" : s)).join("  ·  ")),
+      h("div", { class: "proj-stat" }, stat));
+    row.addEventListener("click", () => {
+      if (r.span === "week" && p.project_id != null) { state.resumeProject = p.project_id; return showTab("resume"); }
+      $("filter-project").value = p.project_id == null ? "none" : String(p.project_id);
+      gotoDay(r.span === "day" ? r.day : r.end);
+    });
+    return row;
+  }));
+}
+
+$("dash-day").addEventListener("click", () => { dash.span = "day"; loadDashboard(); });
+$("dash-week").addEventListener("click", () => { dash.span = "week"; loadDashboard(); });
+$("dash-prev").addEventListener("click", () => { dash.day = shiftDay(dash.day, dash.span === "week" ? -7 : -1); loadDashboard(); });
+$("dash-next").addEventListener("click", () => { dash.day = shiftDay(dash.day, dash.span === "week" ? 7 : 1); loadDashboard(); });
+$("dash-today").addEventListener("click", () => { dash.day = isoDay(new Date()); loadDashboard(); });
+$("dash-date").addEventListener("change", (e) => { if (e.target.value) { dash.day = e.target.value; loadDashboard(); } });
+
 // ------------------------------------------------------------------ boot
 (async function boot() {
   $("day").value = state.day;
@@ -1269,12 +1437,13 @@ $("delete-all").addEventListener("click", () => {
   $("report-day").value = state.reportDay;
   await guarded(loadStatus);
   await guarded(loadProjects);
-  await loadTimeline();
+  await loadDashboard();
   setInterval(() => guarded(loadStatus), 30000);
   // Refresh today's timeline periodically while it is visible and nothing is being edited.
   setInterval(() => {
     const editing = (document.activeElement && ["TEXTAREA", "INPUT", "SELECT"].includes(document.activeElement.tagName))
       || [...document.querySelectorAll(".session-note-edit")].some((el) => !el.hidden);
     if (!$("tab-timeline").hidden && state.day === isoDay(new Date()) && !editing) loadTimeline();
+    if (!$("tab-dashboard").hidden && dash.day === isoDay(new Date()) && !editing) loadDashboard();
   }, 60000);
 })();
