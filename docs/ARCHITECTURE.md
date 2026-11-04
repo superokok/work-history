@@ -94,7 +94,7 @@ per kind, `bucket_id` `workhistory-window` / `workhistory-afk`, `bucket_created`
   long event that started before the cursor is still extended.
 - Privacy rules apply here (pause/deleted ranges, exclusions, "업무 앱만 기록").
 
-## 5. Data model (schema v9)
+## 5. Data model (schema v10)
 
 ```
 sources        id, bucket_id, bucket_created, kind('window'|'afk'), hostname,
@@ -137,9 +137,7 @@ v8 (projects for parts of a folder, see RESULTS_TRACKING.md): `folder_areas`
 v9 (collector, §4): `collector_events` (id, kind 'window'|'afk', start_ts, end_ts,
 app, title, status), the raw events `sync.py` imports from on Windows; pruned after 35 days.
 
-v7 (effect measurement): `usage_events` (id, ts, kind, data JSON): numbers only (report writing
-seconds, kept AI-draft lines, search-to-open seconds). The feature was removed on 2026-11-04;
-nothing writes the table any more, and it stays only so older rows are removed by "데이터 삭제".
+v7 added a `usage_events` counter table that v10 drops again.
 
 v6 (AI servers): `ai_endpoints` (id, name, url = API base ending in /v1, model_id, api_key, created_at):
 servers the user registered by address; model choice `remote:<id>`.
@@ -253,9 +251,6 @@ one backup, no event content), shows startup errors in a message box, and stops 
 - The MCP server is internal (the app starts it for one question with a Claude
   Code model) and refuses any other caller; its instructions still say that
   window titles, paths and diffs are untrusted text, never instructions.
-- Known, accepted (local-only): no per-launch token against other accounts on
-  the same PC; a local caller who passes `--trace` itself gets the MCP tools,
-  but could read the database file anyway.
 
 ## 9. Licensing
 
@@ -271,7 +266,7 @@ one backup, no event content), shows startup errors in a message box, and stops 
 ActivityWatch (MPL-2.0; its Windows tray bundle contains GPL PyQt6) is no longer used
 (2026-10-28); no ActivityWatch code was ever copied.
 
-## 10. Known collector limitations
+## 10. Collector scope
 
 - Window titles only; no URLs and no file paths unless the editor puts them in the title.
 - Away = 3 minutes without keyboard/mouse input; reading without input counts as idle.
@@ -279,6 +274,3 @@ ActivityWatch (MPL-2.0; its Windows tray bundle contains GPL PyQt6) is no longer
   windows are read.
 - The collector runs inside the app: while the app is closed, no window activity is
   recorded (file changes are caught up at the next scan).
-- Window activity imported from ActivityWatch before 2026-10-28 stays in the database
-  (its own `sources` rows); it is no longer re-applied ("다시 적용" works on the last 35 days
-  of the collector's raw events).

@@ -2,16 +2,14 @@
 
 ## Phase 1 — Inspect and plan ✅
 
-- Environment inspected, ActivityWatch obtained (portable v0.13.2), licenses
-  checked, stack chosen, data model defined. See ARCHITECTURE.md.
-- Blockers: none. ActivityWatch must be running for live data; the app degrades
-  to "stored history only" when it is not.
+- Environment inspected, licenses checked, stack chosen, data model defined.
+  See ARCHITECTURE.md.
 
 ## Phase 2 — Smallest end-to-end slice ✅ (2026-10-01)
 
 1. `db.py` — schema v1 + migration runner (`PRAGMA user_version`).
-2. `awclient.py` + `sync.py` — pull window/AFK buckets, upsert with dedupe,
-   exclusions and blocked (pause/deleted) ranges at ingest, per-source cursor.
+2. `sync.py` — import window/idle events, upsert with dedupe, exclusions and
+   blocked (pause/deleted) ranges at ingest, per-source cursor.
 3. `normalize.py` + `classify.py` — idle subtraction, day clipping, rule
    matching (pure functions, unit-tested).
 4. `service.py` + `server.py` — timeline, projects/rules, manual assignment,
@@ -19,21 +17,15 @@
 5. `static/` — Korean UI: timeline with filters, project assignment, notes,
    search, settings.
 6. `demo.py` — separate demo DB with clearly labeled sample data.
-7. Verify end-to-end against real ActivityWatch.
 
-Status: done. 65 unit/integration tests pass (normalization, idle handling,
-time ranges, rules, persistence/migrations, search/filters, duplicate and
-trimmed events, heartbeat extension, pause, exclusions, deletion, HTTP
-security). End-to-end verified against ActivityWatch v0.13.2 on this machine:
-sync → timeline → rule classification → manual override → note → search.
-Not yet verified: the optional `--window` pywebview shell (not installed).
+Verified end to end on real data: sync → timeline → rule classification →
+manual override → note → search.
 
 ## Phase 3 — Sessions, daily review, resume ✅ (2026-10-01)
 
 1. Migration v2: `sessions`, `session_days`, `meta`, `daily_reviews`.
 2. Deterministic grouping (`sessions.py`): 10 min gap / 3 min project run /
-   10 min app run; auto titles. Constants only; make them configurable only
-   if real use shows a need.
+   10 min app run; auto titles. Thresholds in `config.py`.
 3. Edits (title, project, note, exclude) follow a growing session; merge/split
    lock the range; edited sessions are frozen rather than dropped on regroup.
 4. Timeline shows session cards (expand for window rows, split at a row,
@@ -44,49 +36,29 @@ Not yet verified: the optional `--window` pywebview shell (not installed).
    last window, recent sessions, notes.
 7. Search covers session titles/notes and saved reviews.
 
-Verified: unit + integration tests, demo UI walkthrough (rename, note, merge,
-split, review, resume), and grouping on real ActivityWatch data.
+## Phase 4 — Results, AI and validation ✅ (2026-10-01 ~ 10-27)
 
-## Phase 4 — Validate
+- Work-folder snapshots as the primary record (RESULTS_TRACKING.md).
+- AI report drafts and "AI에게 묻기" with verified citations and the honesty
+  rules in code (AI.md).
+- Automated tests cover normalization, time ranges/day boundaries, idle
+  handling, session grouping and edit preservation, project rules,
+  persistence and migrations, search and filters, duplicate/trimmed events,
+  privacy exclusions, pause/deletion, AI reference checks and HTTP security
+  (`python -m unittest discover -s tests -t .`).
 
-Automated tests (105, `python -m unittest discover -s tests -t .`) cover every
-area the spec lists: normalization, time ranges/day boundaries, idle handling,
-session grouping and edit preservation, project rules, persistence and
-migrations, search and filters, duplicate/trimmed events, privacy exclusions,
-pause/deletion, HTTP security.
+## Phase 5 — Ready for other PCs ✅ (2026-10-28 ~ 11-04)
 
-Setup for real use (2026-10-01): ActivityWatch autostarts at login
-(user Startup folder), desktop shortcut → `start-workhistory.cmd`, single
-instance (exclusive port bind on Windows; a second launch reopens the browser),
-faster reconnect while ActivityWatch is still starting, and
-`python -m workhistory.stats` for correction rates.
-
-Remaining validation is human: about a week of real use, following
-[VALIDATION.md](VALIDATION.md), against the questions in PRODUCT.md. Things to watch:
-- Are sessions too coarse or too fine? (tune `SESSION_GAP_S`,
-  `MIN_PROJECT_RUN_S`, `UNASSIGNED_RUN_S`, `MIN_KIND_RUN_S` in `config.py`)
-- Do auto titles help, or are they always renamed?
-- Is the follow-up keyword list useful or noisy?
-
-## Phase 5 — Ready for other PCs (2026-10-28 ~ 10-30)
-
-- Window activity recorded by the app itself (`collector.py`); ActivityWatch and
-  macOS/Linux support removed: Windows only.
-- Local AI as the default (llama.cpp + Qwen3.5), AI servers by address. `--offline`
-  package for closed networks (no Claude Code link, models inside) is the only release;
-  Claude Code stays in the source for development and quality comparison (2026-11-04).
+- Window activity recorded by the app itself (`collector.py`); Windows only.
+- Local AI as the default (llama.cpp + Qwen3.5), AI servers by address. The
+  closed-network package (`--offline`, models inside) is the release; Claude
+  Code stays in the source for development and quality comparison.
 - Runs without a console window (`pythonw`), stops with "앱 종료" in the app; log file
   and message box instead of a console.
 - Port 5730, else the next free one up to 5739; one app per database by a named mutex.
 - Repository and zip kept free of the developer PC's traces (`tools/clean_check.py`,
   `tests/test_clean.py`, checked before every zip).
-- Effect measurement in the app (report writing time, kept AI lines, search-to-open time);
-  removed again on 2026-11-04 so the demo shows only the product (one week, one user was too
-  few numbers to mean anything; the presentation uses stated estimates instead, VALIDATION.md).
 
-Remaining: the deck and the demo.
+## Out of scope
 
-## Explicitly deferred
-
-Packaging into an installer, app tray icon, browser URL watcher, FTS5,
-weekly summary view, AI summaries, multi-device.
+Installer, tray icon, browser URL watcher, multi-device.

@@ -237,10 +237,7 @@ MIGRATIONS: list[str] = [
         created_at REAL NOT NULL
     );
     """,
-    # v7: effect measurement (how long reports take, how much of the AI draft survives, how fast
-    # search finds things). Numbers only: never report text, queries or titles.
-    # Removed from the app on 2026-11-04: nothing writes here any more; the table stays so rows
-    # recorded before that are still removed by "데이터 삭제".
+    # v7: usage counters (numbers only); dropped again in v10.
     """
     CREATE TABLE usage_events (
         id   INTEGER PRIMARY KEY,
@@ -279,6 +276,10 @@ MIGRATIONS: list[str] = [
         status   TEXT NOT NULL DEFAULT ''
     );
     CREATE INDEX idx_collector_events_end ON collector_events(kind, end_ts);
+    """,
+    # v10: the v7 usage counters are no longer used.
+    """
+    DROP TABLE IF EXISTS usage_events;
     """,
 ]
 

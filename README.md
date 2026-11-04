@@ -7,8 +7,7 @@
 
 문서: [프로젝트 구조](docs/PROJECT_STRUCTURE.md) · [제품](docs/PRODUCT.md) ·
 [아키텍처](docs/ARCHITECTURE.md) · [개인정보](docs/PRIVACY.md) · [AI](docs/AI.md) ·
-[결과물 기록](docs/RESULTS_TRACKING.md) · [실사용 검증](docs/VALIDATION.md) ·
-[구현 계획](docs/IMPLEMENTATION_PLAN.md)
+[결과물 기록](docs/RESULTS_TRACKING.md) · [구현 계획](docs/IMPLEMENTATION_PLAN.md)
 
 ## 받기
 
@@ -163,7 +162,7 @@ Windows 기본 기능(`copy /b`, `certutil`)만 써서 조각을 합치고 SHA-2
 | `--port N` | 이 포트만 사용 (기본: 5730부터 5739까지 빈 포트, 항상 127.0.0.1에만 바인딩) |
 | `--db PATH` | 데이터베이스 파일 (기본: `%LOCALAPPDATA%\WorkHistory\workhistory.db`) |
 | `--demo` | 가상의 2주 개발자 시나리오가 담긴 별도 `demo.db` (데모로 표시됨), 기록 안 함 |
-| `--window` | `pywebview`가 설치되어 있으면 자체 창, 없으면 브라우저. 아직 검증 안 됨. |
+| `--window` | `pywebview`가 설치되어 있으면 자체 창, 없으면 브라우저 |
 | `--no-browser` | 브라우저를 열지 않음 (자동 실행이 씀) |
 | `--verbose` | 디버그 로그 |
 

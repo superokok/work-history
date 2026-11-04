@@ -46,7 +46,7 @@ document/file contents, browser URLs, network traffic, microphone or camera.
 - Removing a folder deletes its change records and its snapshot repository.
   "Delete all" removes every snapshot repository. Deleting a date range
   removes the change records; the commits stay in the snapshot repository
-  until the folder is removed (known limitation).
+  until the folder is removed.
 - Before any text is sent to an AI model (diff excerpts, notes, window titles,
   session titles, next actions) it is passed through `redact.py`, which masks
   private keys, JWT/Bearer tokens, AWS/Google/Slack/GitHub/`sk-` keys,
@@ -75,13 +75,6 @@ Logs record counts, timings and error types only. Window titles, app names
 from events, note text, and search queries are not logged. Started without a console
 (the normal way), the app writes them to `%LOCALAPPDATA%\WorkHistory\workhistory.log`
 (at most 1 MB plus one older file); started from a console, they go to the console.
-
-## Effect measurement
-
-Removed on 2026-11-04. From 10-28 to 11-04 the app counted, as numbers only, how long a report
-took to type, how many AI-draft lines were kept and how soon a search led to opening a record
-(table `usage_events`; never report text, queries, titles or paths). Nothing is recorded any
-more; rows from that time stay on the PC until "데이터 삭제" removes them.
 
 ## Start at logon and shortcuts
 

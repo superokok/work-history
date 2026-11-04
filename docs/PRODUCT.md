@@ -32,7 +32,7 @@ One developer on Windows 10/11, Korean UI, working offline-first.
 
 | Area | MVP behaviour |
 |---|---|
-| Collection | Window (app + title) and idle periods, read by the app itself (Windows; ActivityWatch until 2026-10-28). No keystrokes, clipboard, screenshots, OCR, or document contents. |
+| Collection | Window (app + title) and idle periods, read by the app itself (Windows). No keystrokes, clipboard, screenshots, OCR, or document contents. |
 | Projects | User-created projects; keyword rules on app name / window title; manual override per activity and per session. No LLM. |
 | Work sessions | Deterministic grouping of activity into sessions; editable title, project, notes; merge, split, exclude. Labeled as *inferred*. |
 | Daily timeline | Time range, app, project, duration, session, notes; filters for date, project, app. |
@@ -41,10 +41,10 @@ One developer on Windows 10/11, Korean UI, working offline-first.
 | Resume work | Per-project view: last session, last activity, notes, recent sessions, user-written next action. |
 | Privacy | Pause/resume, exclusion list, data deletion, localhost-only server. |
 
-## Non-goals (until the local workflow proves useful)
+## Non-goals
 
-Accounts, cloud sync, team features, subscriptions, AI summaries, browser URL
-tracking, OCR/screenshots, mobile, multi-device merge.
+Accounts, cloud sync, team features, subscriptions, browser URL tracking,
+OCR/screenshots, mobile, multi-device merge.
 
 ## Honesty rules for the UI
 
@@ -53,11 +53,3 @@ tracking, OCR/screenshots, mobile, multi-device merge.
 - The app never claims what the user accomplished or what to do next unless the
   user wrote it.
 - Demo/sample data lives in a separate database and is always bannered.
-
-## Validation questions (after ~1 week of real use)
-
-1. Does the timeline match what actually happened?
-2. Are sessions grouped at a useful granularity (not every window switch)?
-3. Does the daily review save time vs. writing from memory?
-4. Did search recover forgotten work at least once?
-5. Is there value beyond a plain activity tracker's dashboard?

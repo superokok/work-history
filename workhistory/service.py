@@ -616,8 +616,6 @@ def delete_data(conn: sqlite3.Connection, data: dict, now: Optional[float] = Non
             "DELETE FROM sessions WHERE day >= ? AND day <= ?", (day_lo, day_hi)).rowcount,
         "reviews": conn.execute(
             "DELETE FROM daily_reviews WHERE day >= ? AND day <= ?", (day_lo, day_hi)).rowcount,
-        "usage_events": conn.execute(
-            "DELETE FROM usage_events WHERE ts >= ? AND ts <= ?", (lo, hi)).rowcount,
     }
     # The collector's raw events too, so they are really gone.
     conn.execute("DELETE FROM collector_events WHERE start_ts >= ? AND end_ts <= ?", (lo, hi))

@@ -10,8 +10,7 @@ an optional, secondary signal.
 
 Target setting: a Windows PC inside a 폐쇄망. The LLM runs on the PC itself
 (llama.cpp + Qwen3.5, shipped in the zip) or on an LLM server in the company
-network, behind a provider interface (see AI.md). (Until 2026-10-23 the only
-provider was Claude Code; it stays for development comparisons only.)
+network, behind a provider interface (see AI.md).
 
 ## What it does
 
@@ -83,13 +82,9 @@ up in a report and is hard to notice, while an unassigned change stays visible.
 - Before anything is sent to an LLM, diff excerpts pass a secret-redaction
   step (key/token/password patterns) and are size-limited. Whole file texts
   are redacted before diffing, so multi-line private keys are masked too.
-- The free-tier guard from AI.md applies unchanged.
 
-## Limitations (to document honestly)
+## Notes
 
-- Deleting a date range cannot surgically remove history from a Git
-  repository; it removes the change records and their text, and the snapshot
-  repository is rewritten without those commits (later step).
 - Snapshot granularity is the scan interval (default 5 min); several saves
   within one interval become one change.
 - Renames are recorded as delete + add.

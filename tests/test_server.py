@@ -54,14 +54,10 @@ class ServerTests(unittest.TestCase):
         ct = resp.getheader("Content-Type", "")
         return resp.status, (json.loads(raw) if ct.startswith("application/json") else raw), ct
 
-    def test_report_save_records_nothing_else(self):
-        # The effect measurement was removed (2026-11-04): saving stores the report only.
+    def test_save_report(self):
         day = date.today().isoformat()
-        status, _, _ = self.request("POST", "/api/reports", {"kind": "daily", "day": day, "body": "a\nb"})
-        self.assertEqual(status, 200)
-        self.assertEqual(self.request("GET", "/api/usage/summary?days=7")[0], 404)
-        with self.db.connect() as conn:
-            self.assertEqual(conn.execute("SELECT COUNT(*) FROM usage_events").fetchone()[0], 0)
+        status, body, _ = self.request("POST", "/api/reports", {"kind": "daily", "day": day, "body": "a\nb"})
+        self.assertEqual((status, body["saved"]["body"]), (200, "a\nb"))
 
     def test_static_index(self):
         status, body, ct = self.request("GET", "/")

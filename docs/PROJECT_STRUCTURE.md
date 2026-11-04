@@ -39,7 +39,7 @@ work-history/
 ├─ ppt/                    사용자의 발표 파일(.pptx, git 포함). 작업 중 만든 초안 덱은 docs/presentation/(git 제외)
 └─ docs/
    ├─ PROJECT_STRUCTURE.md 이 문서
-   └─ SELF_REVIEW / ARCHITECTURE / PRODUCT / IMPLEMENTATION_PLAN / AI / PRIVACY / RESULTS_TRACKING / VALIDATION
+   └─ ARCHITECTURE / PRODUCT / IMPLEMENTATION_PLAN / AI / PRIVACY / RESULTS_TRACKING
 ```
 
 ## 모듈 지도 (workhistory/)
@@ -55,7 +55,7 @@ work-history/
 | | `sync.py` | 원본을 1분마다 가져오기, 중복 제거, 개인정보 규칙 적용 |
 | | `snapshots.py` | 작업 폴더 스냅샷 (dulwich), 변경 기록, 하위 폴더별 프로젝트 (앱은 추천만, 사람이 확인) |
 | | `extract.py` | 코드/텍스트, HWP, DOCX/XLSX/PPTX 텍스트 추출 |
-| 저장 | `db.py` | SQLite 스키마 + 마이그레이션 (`PRAGMA user_version`, 현재 v9) |
+| 저장 | `db.py` | SQLite 스키마 + 마이그레이션 (`PRAGMA user_version`, 현재 v10) |
 | | `store.py` | 공용 로더, 하루 경계, 세션 재계산 표시 |
 | 처리 (순수 함수) | `normalize.py` | 창 − AFK − 차단 구간 − 제외, 하루 단위 자르기 |
 | | `classify.py` | 수동 지정 > 키워드 규칙 > 없음 |

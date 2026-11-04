@@ -37,14 +37,12 @@ GitHub 저장소와 배포 zip은 다른 사람에게 보여 주고 나눠 주�
 | 문서 | 내용 |
 |---|---|
 | [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md) | 한눈에 보는 구조, 모듈 지도, 명령, 주요 결정 |
-| [docs/SELF_REVIEW.md](docs/SELF_REVIEW.md) | 자기 평가, 개선 우선순위 |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 파이프라인, 데이터 모델(스키마), 세션 규칙, 보안 |
 | [docs/PRODUCT.md](docs/PRODUCT.md) | 제품 목표와 사용자 질문 |
 | [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) | 단계별 계획과 진행 상태 |
 | [docs/AI.md](docs/AI.md) | AI 보고서/질문 (Claude Code 헤드리스), 동의, 참조 검증 |
 | [docs/PRIVACY.md](docs/PRIVACY.md) | 기록 범위, 제외, 마스킹, 삭제 |
 | [docs/RESULTS_TRACKING.md](docs/RESULTS_TRACKING.md) | 작업 폴더 스냅샷 (파일 변경 기록) |
-| [docs/VALIDATION.md](docs/VALIDATION.md) | 실사용 검증 방법 |
 
 ## 지켜야 할 원칙
 

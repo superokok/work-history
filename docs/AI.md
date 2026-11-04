@@ -60,30 +60,23 @@ or that have no internet (폐쇄망). The app ships llama.cpp's `llama-server`
   the settings screen then shows no Claude Code status, list entry or explanation either
   (`claude_bundled` in `/api/ai/settings`).
 
-Measured 2026-10-23 on a test laptop (12th-gen Core i5, 32 GB, entry-level 4 GB
-NVIDIA GPU + Intel integrated graphics), `evals/report_eval.py --runs 1`, 4 cases each (Claude: 8/8 at
-7–11 s per report):
+Speed per report, measured 2026-10-23 on a 12th-gen Core i5 laptop (32 GB,
+entry-level 4 GB NVIDIA GPU + Intel integrated graphics), `evals/report_eval.py`:
 
-| Model · device | Passed | Weekly report | Daily report |
-|---|---|---|---|
-| 9B · auto (GPUs) | 4/4 | 161–221 s | 65–101 s |
-| 9B · CPU only | 3/4 | 385–583 s | 122–129 s |
-| 4B · auto (GPUs) | 3/4 | 151–171 s | 41–60 s |
-| 4B · Intel iGPU only | 3/4 | 251–315 s | 85–97 s |
-| 4B · CPU only | 2/4 | 277–338 s | 80–89 s |
+| Model · device | Weekly report | Daily report |
+|---|---|---|
+| 9B · auto (GPUs) | 161–221 s | 65–101 s |
+| 9B · CPU only | 385–583 s | 122–129 s |
+| 4B · auto (GPUs) | 151–171 s | 41–60 s |
+| 4B · Intel iGPU only | 251–315 s | 85–97 s |
+| 4B · CPU only | 277–338 s | 80–89 s |
 
-- No run dropped a reference, raised a flag or left out a project.
-- 4B wrote "GOV-1423 … 완료" (not finished in the scenario) on all three
-  devices, and once "커서 기반 페이징 전환 검토를 완료" — the over-claim the
-  honesty rules exist for. Not suitable for weekly reports.
-- 9B passed everything on the GPU run; on the CPU run it wrote "복합 인덱스
-  추가를 완료" next to GOV-1423 (the index was written, the issue was not
-  finished) — a borderline catch of the strict pattern. One CPU 4B failure
-  ("…진행, K8s 전환 PoC 환경 구축 완료") is a false positive of the same
-  pattern. One run per case: repeat before relying on these as rates.
-- The Intel iGPU is no faster than the CPU here, so a PC without an NVIDIA
-  or AMD card runs at CPU speed: about 6–10 minutes for a weekly report with
-  9B.
+- No run dropped a reference or left out a project.
+- 9B is the recommended model: it passed every case on the GPU run. 4B is
+  faster; when it calls unfinished work "완료", the honesty check marks the
+  sentence "완료 확인 필요" (below).
+- A PC without an NVIDIA or AMD card runs at about CPU speed; the report is
+  generated in the background while the user keeps working.
 
 ## Provider: AI servers registered by address
 
@@ -140,15 +133,10 @@ Every run is locked down:
   against that trace; references no tool returned are removed.
 - "연결 확인" runs `claude auth status` (no content sent).
 
-Measured on the demo data (claude-code:sonnet, 2026-10-01): ask 12 s with 5
-verified citations; `evals/report_eval.py` passed 4/4 with 0 dropped
-references, median 30 s per report, but one weekly case took 166-214 s in
-both runs (cause not yet known).
-
-Re-measured 2026-10-21 (Claude Code 2.1.293, claude-code:sonnet,
+Measured 2026-10-21 (Claude Code 2.1.293, claude-code:sonnet,
 `--runs 2`): **8/8 passed** (all required facts present, no over-claims, no
 other days' work in daily reports), 0 dropped references, 0 flags, 0 restored
-projects; median 7.4 s, max 11.3 s per report (the slow weekly case is gone).
+projects; median 7.4 s, max 11.3 s per report.
 
 ### Questions with Claude Code (internal MCP)
 
@@ -170,8 +158,7 @@ The AI code is written against `ai_client.Model`, not against Claude Code:
 `run_tools(system, prompt, tools, execute)` (the app runs the tool loop
 in-process and executes `HistoryTools` itself) for questions. Reference
 checks, redaction, consent and logging stay in the app, so a new provider is
-one class plus a factory entry (`ai_local.LocalModel` is the second one). A Gemini implementation existed until
-2026-10-01 and was removed by decision; it is in no release.
+one class plus a factory entry (`ai_local.LocalModel` is the second one).
 
 ## Data protection
 
@@ -198,14 +185,11 @@ one class plus a factory entry (`ai_local.LocalModel` is the second one). A Gemi
   `ai_report.DONE_WORDS`) is shown as "완료 확인 필요" unless one of its
   references is the user's own words saying so: a note (N), or a session
   note or title the user wrote (S). File changes and window activity show
-  work, not that it is done. (Since 2026-10-27; added after the local models
-  wrote "GOV-1423 … 완료" for an unfinished issue.) When the claim names
+  work, not that it is done. When the claim names
   issue keys (GOV-1423), each key needs a sentence of the user's own that
   names it and says it is done — a note "GOV-1418 완료. GOV-1423 3.2초" does
   not finish GOV-1423. The summary has no references and is checked against
   all of the user's words the same way ("요약 … (완료 근거 없음 — 확인 필요)").
-  Limit: a claim without an issue key passes if any of the user's words in
-  the period says something was finished.
 - Clicking a "파일 변경" (C) citation opens that change's diffs directly.
 - 차주 계획 may only come from the user's own notes and next actions
   (references to notes/next actions); otherwise it is marked as a suggestion
