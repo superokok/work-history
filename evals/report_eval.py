@@ -96,6 +96,7 @@ def main(argv=None) -> int:
     parser.add_argument("--model", default=ai_service.default_model(), choices=ai_service.all_models())
     parser.add_argument("--thinking", default=None, choices=[None, "low", "medium", "high"])
     parser.add_argument("--out", type=Path, help="write raw results as JSON")
+    parser.add_argument("--only", help="run only the cases whose name contains this text")
     args = parser.parse_args(argv)
     sys.stdout.reconfigure(encoding="utf-8")
 
@@ -115,7 +116,7 @@ def main(argv=None) -> int:
         # otherwise "this week" holds less data on a Tuesday morning than on a Thursday evening.
         clock = datetime.combine(monday + timedelta(days=4), dtime(19, 0)).timestamp()
         demo.seed(db, work / "snapshots", now=clock)
-        for case in CASES:
+        for case in [c for c in CASES if not args.only or args.only in c["name"]]:
             day = monday + timedelta(days=case["offset"])
             start, end = ((day, day) if case["kind"] == "daily"
                           else (day - timedelta(days=day.weekday()), day - timedelta(days=day.weekday()) + timedelta(days=6)))
