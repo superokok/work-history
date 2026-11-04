@@ -36,7 +36,7 @@ work-history/
 ├─ tools/release_parts.py  릴리스 파일: 앱 zip + 모델 1.9GB 조각 + WorkHistory-setup.cmd(풀기·합치기·검사·실행) → dist/release/
 ├─ tools/clean_check.py    개발 PC 흔적(사용자·경로·git 계정·데이터 파일) 검사: 빌드 전·테스트에서
 ├─ llm/                    (git 제외) 로컬 AI: bin/llama-server.exe + DLL, models/*.gguf, 라이선스 전문
-├─ ppt/                    사용자의 발표 파일(.pptx)과 시연 시나리오(.md), git 포함. 작업 중 만든 초안 덱은 docs/presentation/(git 제외)
+├─ ppt/                    사용자의 발표 파일(.pptx), 시연 시나리오·심사용 설명자료(.md), git 포함. 작업 중 만든 초안 덱은 docs/presentation/(git 제외)
 └─ docs/
    ├─ PROJECT_STRUCTURE.md 이 문서
    └─ ARCHITECTURE / PRODUCT / IMPLEMENTATION_PLAN / AI / PRIVACY / RESULTS_TRACKING
