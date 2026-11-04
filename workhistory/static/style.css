@@ -62,10 +62,6 @@ ul.notes li { border-left: 3px solid #3aa76d; background: var(--user); padding: 
 ul.notes .meta, ul.plain .meta { font-size: 12px; color: var(--muted); }
 ul.plain li { padding: 4px 0; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .link { background: none; border: none; color: var(--accent); padding: 0; cursor: pointer; text-decoration: underline; }
-.project-card .rules { margin: 6px 0; }
-.project-card .rule { display: inline-flex; gap: 4px; align-items: center; background: var(--bg); border: 1px solid var(--line); border-radius: 999px; padding: 1px 4px 1px 10px; margin: 2px 4px 2px 0; font-size: 12px; }
-.project-card .rule button { padding: 0 6px; border: none; }
-.project-card.archived { opacity: .6; }
 .danger-zone { border-color: var(--danger); }
 .result-group h3 { font-size: 14px; margin: 16px 0 6px; }
 
@@ -91,7 +87,6 @@ button.primary { background: var(--accent); color: #fff; border-color: var(--acc
 .view-pick { display: flex; gap: 8px; margin-left: auto; }
 .report-columns { grid-template-columns: 1fr 380px; }
 .settings-heading { margin: 20px 0 8px; }
-.project-card textarea { width: 100%; }
 ul.compact li { font-size: 13px; padding: 3px 0; }
 @media (max-width: 1000px) { .report-columns { grid-template-columns: 1fr; } }
 h3 { font-size: 14px; margin: 8px 0 6px; }
@@ -139,10 +134,6 @@ ul.report-items li { padding: 4px 0 6px; font-size: 13px; }
 .file-A { color: #3aa76d; }
 .file-D { color: var(--danger); text-decoration: line-through; }
 .folder-item { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
-.folder-item .unassigned { display: inline-block; font-size: 12px; background: var(--warn-bg); border: 1px solid var(--warn-line); border-radius: 6px; padding: 3px 8px; margin-top: 4px; }
-.folder-item .areas { flex-basis: 100%; border-left: 3px solid var(--line); padding: 4px 0 4px 10px; }
-.area-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 3px 0; flex-wrap: wrap; }
-.area-saved summary { cursor: pointer; font-size: 12px; color: var(--muted); margin-top: 4px; }
 .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 20; display: flex; align-items: center; justify-content: center; padding: 16px; }
 .overlay[hidden] { display: none; }
 .overlay-box { width: min(1000px, 100%); max-height: 90vh; display: flex; flex-direction: column; margin: 0; }

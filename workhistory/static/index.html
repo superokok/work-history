@@ -131,7 +131,7 @@
       <div id="search-results"></div>
     </section>
 
-    <!-- Settings: projects, work folders, privacy, AI, launch -->
+    <!-- Settings: work folders, privacy, AI, launch -->
     <section id="tab-settings" class="tab-panel" hidden>
       <div class="card">
         <div class="summary-head">
@@ -143,18 +143,9 @@
         <form id="folder-form" class="row">
           <input id="folder-path" placeholder="폴더 전체 경로 (예: C:\work\gov24-minwon-api)" size="44">
           <input id="folder-label" placeholder="이름 (선택)" size="14">
-          <select id="folder-project"></select>
           <button type="submit">폴더 추가</button>
         </form>
       </div>
-      <h2 class="settings-heading">프로젝트</h2>
-      <form id="project-form" class="toolbar">
-        <input id="project-name" placeholder="새 프로젝트 이름 (예: Gov24 백엔드)" size="30">
-        <input type="color" id="project-color" value="#4f7cff">
-        <button type="submit">프로젝트 추가</button>
-      </form>
-      <p class="muted">규칙: 앱 이름이나 창 제목에 키워드가 포함되면 해당 프로젝트로 자동 분류합니다 (대소문자 무시, 가장 긴 키워드 우선). 타임라인에서 직접 지정한 프로젝트가 규칙보다 우선합니다.</p>
-      <div id="project-list"></div>
       <h2 class="settings-heading">개인정보 · 실행</h2>
       <div class="card">
         <h2>실행</h2>

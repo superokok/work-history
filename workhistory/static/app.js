@@ -108,7 +108,7 @@ function showTab(name) {
   document.querySelectorAll(".tab-panel").forEach((p) => (p.hidden = p.id !== `tab-${name}`));
   if (name === "timeline") loadTimeline();
   if (name === "report") loadReport();
-  if (name === "settings") { renderProjects(); loadFolders(); loadLaunch(); loadAISettings(); loadTracking(); loadExclusions(); }
+  if (name === "settings") { loadFolders(); loadLaunch(); loadAISettings(); loadTracking(); loadExclusions(); }
 }
 
 // ------------------------------------------------------------------ status
@@ -404,105 +404,19 @@ async function showChange(changeId) {
 $("diff-close").addEventListener("click", () => ($("diff-overlay").hidden = true));
 $("diff-overlay").addEventListener("click", (e) => { if (e.target.id === "diff-overlay") $("diff-overlay").hidden = true; });
 
-// Projects for sub-folders of a registered folder. The app only suggests (same name as a project);
-// nothing is assigned until the user presses 확인. "프로젝트 없음" is a decision too: not asked again.
-const openAreas = new Map();  // folder id -> sub-folder being looked into ("" = the folder itself)
-
-function areaSelect(suggested) {
-  return h("select", {},
-    h("option", { value: "" }, "프로젝트 고르기"),
-    ...state.projects.filter((p) => !p.archived).map((p) =>
-      h("option", { value: p.id, selected: p.id === suggested }, p.id === suggested ? `${p.name} (이름이 같음)` : p.name)),
-    h("option", { value: "none" }, "프로젝트 없음 (묻지 않기)"));
-}
-
-const areaChoice = (select) => (select.value === "none" ? null : Number(select.value));
-
-async function confirmAreas(folderId, picks) {
-  for (const [subpath, projectId] of picks) {
-    await api("POST", `/api/folders/${folderId}/areas`, { subpath, project_id: projectId });
-  }
-  toast(`하위 폴더 ${picks.length}개의 프로젝트를 정했습니다. 지난 기록에도 적용했습니다.`);
-  loadFolders();
-}
-
-async function renderAreas(f, box) {
-  const under = openAreas.get(f.id) || "";
-  const a = await guarded(() => api("GET", `/api/folders/${f.id}/areas?under=${encodeURIComponent(under)}`));
-  if (!a) return;
-  const up = under.includes("/") ? under.slice(0, under.lastIndexOf("/")) : "";
-  const rows = a.groups.map((g) => {
-    const select = areaSelect(g.suggested_project_id);
-    return { g, select, el: h("div", { class: "area-row" },
-      h("div", {}, h("b", {}, g.name), h("span", { class: "meta" }, ` · 변경 ${g.changes}건 · 파일 ${g.files}개 · ${ago(g.last_ts)}`)),
-      h("div", { class: "row" }, select,
-        h("button", { class: "small", onclick: () => select.value
-          ? guarded(() => confirmAreas(f.id, [[g.subpath, areaChoice(select)]]))
-          : toast("프로젝트를 고르세요.") }, "확인"),
-        h("button", { class: "small link", title: "이 폴더 안을 더 나눠서 정합니다",
-          onclick: () => { openAreas.set(f.id, g.subpath); renderAreas(f, box); } }, "안쪽 폴더로 나누기"))) };
-  });
-  const suggested = rows.filter((r) => r.g.suggested_project_id);
-  let whole = null;
-  if (under && a.loose_files) {
-    const select = areaSelect(a.under_suggested_project_id);
-    whole = h("div", { class: "area-row" },
-      h("div", {}, h("b", {}, `'${under.split("/").pop()}' 전체`),
-        h("span", { class: "meta" }, ` · 이 폴더 바로 안의 파일 ${a.loose_files}개 포함`)),
-      h("div", { class: "row" }, select, h("button", { class: "small", onclick: () => select.value
-        ? guarded(() => confirmAreas(f.id, [[under, areaChoice(select)]])) : toast("프로젝트를 고르세요.") }, "확인")));
-  }
-  box.replaceChildren(
-    h("div", { class: "row" },
-      under ? h("button", { class: "small link", onclick: () => { openAreas.set(f.id, up); renderAreas(f, box); } }, "← 위로") : "",
-      h("span", { class: "meta" }, under ? `${f.label}/${under} 안` : "앱이 추천만 하고, 확인을 눌러야 저장됩니다."),
-      suggested.length > 1 ? h("button", { class: "small", onclick: () => guarded(() => confirmAreas(f.id,
-        suggested.map((r) => [r.g.subpath, r.g.suggested_project_id]))) }, `추천 ${suggested.length}개 모두 확인`) : ""),
-    ...rows.map((r) => r.el),
-    whole || "",
-    !under && a.loose_files ? h("div", { class: "meta" },
-      `폴더 바로 안의 파일 ${a.loose_files}개는 위에서 고른 폴더의 프로젝트를 따릅니다.`) : "",
-    !rows.length && !whole ? h("div", { class: "muted" }, "프로젝트를 정할 하위 폴더가 없습니다.") : "",
-    a.areas.length ? h("details", { class: "area-saved" }, h("summary", {}, `정해 둔 하위 폴더 ${a.areas.length}개`),
-      ...a.areas.map((x) => h("div", { class: "area-row" },
-        h("span", {}, x.subpath, h("span", { class: "meta" }, ` → ${x.project_id ? projectName(x.project_id) : "프로젝트 없음"}`)),
-        h("button", { class: "small link", onclick: () => guarded(async () => {
-          await api("DELETE", `/api/folders/${f.id}/areas`, { subpath: x.subpath });
-          loadFolders();
-        }) }, "취소")))) : "");
-}
-
 async function loadFolders() {
   const folders = await guarded(() => api("GET", "/api/folders"));
   if (!folders) return;
-  projectOptions($("folder-project"), { none: "프로젝트 없음", selected: $("folder-project").value });
-  $("folder-list").replaceChildren(...(folders.length ? folders.map((f) => {
-    const project = h("select", { onchange: (e) => guarded(async () => {
-      await api("PATCH", `/api/folders/${f.id}`, { project_id: e.target.value ? Number(e.target.value) : null });
-      toast("폴더의 프로젝트를 바꿨습니다.");
-    }) });
-    projectOptions(project, { none: "프로젝트 없음", selected: f.project_id ?? "" });
-    const areas = h("div", { class: "areas", hidden: !openAreas.has(f.id) });
-    if (openAreas.has(f.id)) renderAreas(f, areas);
-    const toggleAreas = () => {
-      if (openAreas.has(f.id)) { openAreas.delete(f.id); areas.hidden = true; return; }
-      openAreas.set(f.id, "");
-      areas.hidden = false;
-      renderAreas(f, areas);
-    };
-    return h("li", { class: "folder-item" },
+  $("folder-list").replaceChildren(...(folders.length ? folders.map((f) =>
+    h("li", { class: "folder-item" },
       h("div", {},
         h("b", {}, f.label), f.enabled ? null : badge("plain", "꺼짐"),
         h("div", { class: "meta" }, f.path),
         h("div", { class: "meta" }, `파일 ${f.files}개 · `,
           f.last_scan_at ? `마지막 확인 ${ago(f.last_scan_at)}` : "아직 기록 전",
           f.last_change_at ? ` · 마지막 변경 ${ago(f.last_change_at)}` : ""),
-        f.last_error ? h("div", { class: "warning" }, f.last_error) : null,
-        f.unassigned_changes ? h("div", { class: "unassigned" },
-          `프로젝트가 정해지지 않은 파일 변경 ${f.unassigned_changes}건 `,
-          h("button", { class: "small", onclick: toggleAreas }, "하위 폴더별로 정하기"))
-          : f.areas ? h("button", { class: "small link", onclick: toggleAreas }, `하위 폴더 프로젝트 ${f.areas}개 보기`) : null),
-      h("div", { class: "row" }, project,
+        f.last_error ? h("div", { class: "warning" }, f.last_error) : null),
+      h("div", { class: "row" },
         h("button", { class: "small", onclick: () => guarded(async () => {
           await api("PATCH", `/api/folders/${f.id}`, { enabled: !f.enabled });
           loadFolders();
@@ -510,9 +424,7 @@ async function loadFolders() {
         h("button", { class: "small danger", onclick: () => {
           if (!confirm(`'${f.label}' 폴더 기록을 삭제할까요? 이 폴더의 변경 기록과 숨은 Git 저장소가 지워집니다. 원래 폴더의 파일은 그대로입니다.`)) return;
           guarded(async () => { await api("DELETE", `/api/folders/${f.id}`); loadFolders(); });
-        } }, "삭제")),
-      areas);
-  }) : [h("li", { class: "muted" }, "등록한 폴더가 없습니다. 소스 코드나 문서 폴더를 추가하세요.")]));
+        } }, "삭제")))) : [h("li", { class: "muted" }, "등록한 폴더가 없습니다. 소스 코드나 문서 폴더를 추가하세요.")]));
 }
 
 $("folder-form").addEventListener("submit", (e) => {
@@ -520,7 +432,6 @@ $("folder-form").addEventListener("submit", (e) => {
   guarded(async () => {
     await api("POST", "/api/folders", {
       path: $("folder-path").value, label: $("folder-label").value,
-      project_id: $("folder-project").value ? Number($("folder-project").value) : null,
     });
     $("folder-path").value = "";
     $("folder-label").value = "";
@@ -1012,56 +923,6 @@ function renderSearch(r) {
       h("td", {}, projectById(ev.project_id) ? projectName(ev.project_id) : h("span", { class: "muted" }, "미분류"))))))
     : h("p", { class: "muted" }, "일치하는 창 기록이 없습니다.")));
   $("search-results").replaceChildren(...groups);
-}
-
-// ------------------------------------------------------------------ projects
-$("project-form").addEventListener("submit", (e) => {
-  e.preventDefault();
-  guarded(async () => {
-    await api("POST", "/api/projects", { name: $("project-name").value, color: $("project-color").value });
-    $("project-name").value = "";
-    await refreshProjects();
-  });
-});
-
-async function refreshProjects() {
-  await loadProjects();
-  renderProjects();
-}
-
-function renderProjects() {
-  if (!state.projects.length) {
-    $("project-list").replaceChildren(h("p", { class: "muted" }, "아직 프로젝트가 없습니다. 위에서 추가하세요."));
-    return;
-  }
-  $("project-list").replaceChildren(...state.projects.map((p) => {
-    const field = h("select", {}, h("option", { value: "title" }, "창 제목"), h("option", { value: "app" }, "앱 이름"));
-    const pattern = h("input", { placeholder: "키워드 (예: gov24)" });
-    const next = h("textarea", { rows: 2, placeholder: "돌아왔을 때 가장 먼저 할 일 (AI 보고서의 '다음 계획' 근거로 쓰입니다)" });
-    next.value = p.next_action;
-    return h("div", { class: `card project-card${p.archived ? " archived" : ""}`, id: `project-${p.id}` },
-      h("h2", {}, h("span", { class: "dot", style: { background: p.color } }), p.name, p.archived ? " (보관됨)" : ""),
-      h("div", { class: "rules" },
-        p.rules.length ? p.rules.map((r) => h("span", { class: "rule" },
-          `${r.field === "app" ? "앱" : "제목"}: ${r.pattern}`,
-          h("button", { title: "규칙 삭제", onclick: () => guarded(async () => { await api("DELETE", `/api/rules/${r.id}`); refreshProjects(); }) }, "×")))
-          : h("span", { class: "muted" }, "규칙 없음")),
-      h("form", { class: "row", onsubmit: (e) => { e.preventDefault(); guarded(async () => {
-        await api("POST", `/api/projects/${p.id}/rules`, { field: field.value, pattern: pattern.value });
-        refreshProjects();
-      }); } }, field, pattern, h("button", { type: "submit" }, "규칙 추가")),
-      h("h3", {}, "다음 할 일 ", badge("user", "직접 작성")),
-      next,
-      h("div", { class: "row" },
-        h("button", { class: "small primary", onclick: () => guarded(async () => {
-          await api("PATCH", `/api/projects/${p.id}`, { next_action: next.value });
-          toast("다음 할 일을 저장했습니다.");
-          await loadProjects();
-        }) }, "다음 할 일 저장"),
-        h("button", { class: "small", onclick: () => { const name = prompt("프로젝트 이름", p.name); if (name) guarded(async () => { await api("PATCH", `/api/projects/${p.id}`, { name }); refreshProjects(); }); } }, "이름 변경"),
-        h("button", { class: "small", onclick: () => guarded(async () => { await api("PATCH", `/api/projects/${p.id}`, { archived: !p.archived }); refreshProjects(); }) }, p.archived ? "보관 해제" : "보관"),
-        h("button", { class: "small danger", onclick: () => { if (confirm(`'${p.name}' 프로젝트를 삭제할까요? 활동 기록은 남고 미분류가 됩니다.`)) guarded(async () => { await api("DELETE", `/api/projects/${p.id}`); refreshProjects(); }); } }, "삭제")));
-  }));
 }
 
 // ------------------------------------------------------------------ what to record
