@@ -59,6 +59,14 @@ class ServerTests(unittest.TestCase):
         status, body, _ = self.request("POST", "/api/reports", {"kind": "daily", "day": day, "body": "a\nb"})
         self.assertEqual((status, body["saved"]["body"]), (200, "a\nb"))
 
+    def test_status_last_day_only_in_demo(self):
+        with self.db.connect() as conn:
+            conn.execute("INSERT INTO sessions (day, start_ts, end_ts, created_at, updated_at) "
+                         "VALUES ('2026-11-04', 0, 1, 0, 0)")
+        self.assertIsNone(self.request("GET", "/api/status")[1]["last_day"])
+        self.app.demo = True
+        self.assertEqual(self.request("GET", "/api/status")[1]["last_day"], "2026-11-04")
+
     def test_static_index(self):
         status, body, ct = self.request("GET", "/")
         self.assertEqual(status, 200)

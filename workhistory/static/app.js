@@ -1028,9 +1028,10 @@ $("delete-all").addEventListener("click", () => {
 
 // ------------------------------------------------------------------ boot
 (async function boot() {
+  const status = await guarded(loadStatus);
+  if (status?.last_day && status.last_day < state.day) state.day = status.last_day;
   $("day").value = state.day;
   $("report-day").value = state.reportDay;
-  await guarded(loadStatus);
   await guarded(loadProjects);
   await loadTimeline();
   setInterval(() => guarded(loadStatus), 30000);

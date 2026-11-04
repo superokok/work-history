@@ -85,6 +85,8 @@ class App:
             collector = self.syncer.collector if self.syncer else None
             return {
                 "demo": self.demo,
+                # The demo opens on its last recorded day: before 09:00 its "today" is still empty.
+                "last_day": conn.execute("SELECT MAX(day) FROM sessions").fetchone()[0] if self.demo else None,
                 "paused": service.is_paused(conn),
                 "db_path": self.db.path,
                 # False when window activity can't be recorded (only file changes then).
