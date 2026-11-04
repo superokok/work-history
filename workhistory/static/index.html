@@ -44,12 +44,17 @@
         <button id="today" class="small">오늘</button>
         <label>프로젝트 <select id="filter-project"></select></label>
         <label>앱 <select id="filter-app"></select></label>
+        <span class="view-pick">
+          <label><input type="radio" name="timeline-view" value="apps" checked> 앱별</label>
+          <label><input type="radio" name="timeline-view" value="sessions"> 세션별</label>
+        </span>
       </div>
       <div id="warnings"></div>
       <div class="columns">
         <div class="col-main">
           <div id="summary" class="card"></div>
-          <p class="muted small-text">작업 세션은 창 기록으로 <b>자동 추정</b>한 것입니다. 제목·프로젝트·메모를 고치거나, 병합·분할·제외할 수 있습니다.</p>
+          <p id="view-hint-apps" class="muted small-text">앱마다 하루 동안 쓴 시간을 합쳤습니다 (최근에 쓴 앱이 위). 제목·프로젝트·메모를 고치려면 <b>세션별</b> 보기로 바꾸세요.</p>
+          <p id="view-hint-sessions" class="muted small-text" hidden>작업 세션은 창 기록으로 <b>자동 추정</b>한 것입니다 (최근 세션이 위). 제목·프로젝트·메모를 고치거나, 병합·분할·제외할 수 있습니다.</p>
           <div id="sessions"></div>
           <p id="rows-empty" class="muted" hidden>이 날짜에 기록된 활동이 없습니다.</p>
         </div>

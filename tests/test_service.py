@@ -2,7 +2,7 @@ import sqlite3
 import unittest
 from datetime import date, timedelta
 
-from workhistory import service, store
+from workhistory import service, sessionstore, store
 from workhistory.db import SCHEMA_VERSION, Database
 
 from tests.helpers import TempDB, local_ts
@@ -80,6 +80,27 @@ class TimelineTests(ServiceTestCase):
         totals = {p["project_id"]: p["seconds"] for p in t["by_project"]}
         # The 10-minute unclassified Chrome read right after Gov24 work belongs to that session.
         self.assertEqual(totals, {self.gov: 2400, None: 1200})
+
+    def test_apps_add_up_across_sessions_newest_first(self):
+        with self.db.connect() as conn:
+            t = service.timeline(conn, DAY, now=local_ts(DAY, 23))
+            # Chrome at 09:30 and again at 10:00 is two sessions but one app entry.
+            self.assertEqual(len(t["sessions"]), 2)
+            self.assertEqual([(a["app"], a["seconds"]) for a in t["apps"]],
+                             [("chrome.exe", 1800), ("idea64.exe", 1800)])
+            chrome = t["apps"][0]
+            self.assertEqual((chrome["label"], chrome["first"], chrome["last"]),
+                             ("Chrome", local_ts(DAY, 9, 30), local_ts(DAY, 10, 20)))
+            self.assertEqual([w["seconds"] for w in chrome["windows"]], [1200, 600])
+            self.assertEqual(t["apps"][1]["windows"][0]["project_id"], self.gov)
+
+            excluded = t["sessions"][-1]["id"]
+            sessionstore.update_session(conn, excluded, {"excluded": True})
+            t = service.timeline(conn, DAY, now=local_ts(DAY, 23))
+            self.assertEqual([(a["app"], a["seconds"]) for a in t["apps"]],
+                             [("chrome.exe", 600), ("idea64.exe", 1800)])
+            t = service.timeline(conn, DAY, app="idea64.exe", now=local_ts(DAY, 23))
+            self.assertEqual([a["app"] for a in t["apps"]], ["idea64.exe"])
 
     def test_day_boundary(self):
         with self.db.connect() as conn:

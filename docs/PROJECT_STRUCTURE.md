@@ -3,7 +3,7 @@
 새 세션에서 가장 먼저 읽는 문서. 상세 설계는 [ARCHITECTURE.md](ARCHITECTURE.md)를 본다.
 구조가 바뀌면 이 문서를 함께 고친다.
 
-_마지막 갱신: 2026-11-04_
+_마지막 갱신: 2026-11-05_
 
 ## 무엇인가
 
@@ -73,7 +73,7 @@ work-history/
 | | `ai_service.py` | AI 설정, 동의, 실행 로그, 저장된 보고서 |
 | | `mcp_server.py` | (개발·비교용) 내부 읽기 전용 MCP 서버: Claude Code 모델로 "AI에게 묻기"할 때만 앱이 띄움 (외부 연결 거부) |
 | 외부 연동 | `autostart.py` | 로그온 시 시작, 바로가기 생성 |
-| 서비스 | `service.py` | 타임라인, 검색, 메모, 프로젝트, 리뷰, 이어서 하기 쿼리 |
+| 서비스 | `service.py` | 타임라인(세션별 + 앱별 합산), 검색, 메모, 프로젝트, 리뷰, 이어서 하기 쿼리 |
 | | `server.py` | JSON API + 정적 UI, 127.0.0.1 전용 |
 | 기타 | `stats.py` | 실사용 보정률 통계 (`python -m workhistory.stats`) |
 | | `demo.py`, `demo_files.py` | `--demo`용 가상 2주 시나리오 (별도 demo.db) |
@@ -89,7 +89,7 @@ uv pip install --python .venv/Scripts/python.exe -e .[claude]
 .venv/Scripts/python.exe -m workhistory            # 콘솔에 로그. start-workhistory.cmd는 pythonw(창 없음, 로그는 데이터 폴더 workhistory.log)
 .venv/Scripts/python.exe -m workhistory --demo     # 데모 데이터
 
-# 테스트 (2026-11-04 기준 232개 통과)
+# 테스트 (2026-11-05 기준 233개)
 .venv/Scripts/python.exe -m unittest discover -s tests -t .
 
 # AI 보고서 품질 평가 (기본: llm/의 가장 큰 로컬 모델. Claude Code 기준값은 --model claude-code:sonnet, 로그인 필요)

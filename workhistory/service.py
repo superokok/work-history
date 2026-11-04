@@ -13,7 +13,7 @@ from . import review as review_text
 from . import sessionstore, snapshots, store
 from .classify import FIELDS, OFFWORK_APP, Keyword, matches_any, resolve_project
 from .normalize import merge_rows
-from .sessions import offwork_seconds
+from .sessions import app_label, offwork_seconds
 from .store import Invalid, NotFound, day_bounds
 
 __all__ = ["Invalid", "NotFound"]  # re-exported for the HTTP layer
@@ -99,6 +99,7 @@ def timeline(conn: sqlite3.Connection, day: date, project: Any = None, app: Opti
     by_app: dict[str, float] = defaultdict(float)
     offwork_total = 0.0
     sessions = []
+    shown = []  # activities of the listed, counted sessions: the per-app view
     for s in conn.execute("SELECT * FROM sessions WHERE day = ? ORDER BY start_ts", (day.isoformat(),)):
         inside = sessionstore.activities_within(activities, s["start_ts"], s["end_ts"])
         out = _session_out(dict(s), inside)
@@ -119,6 +120,8 @@ def timeline(conn: sqlite3.Connection, day: date, project: Any = None, app: Opti
             continue
         out["rows"] = [r.__dict__ for r in rows]
         sessions.append(out)
+        if not s["excluded"]:
+            shown.extend(a for a in inside if not app or a.app == app)
 
     return {
         "day": day.isoformat(),
@@ -129,10 +132,38 @@ def timeline(conn: sqlite3.Connection, day: date, project: Any = None, app: Opti
         "by_app": [{"app": k, "seconds": v}
                    for k, v in sorted(by_app.items(), key=lambda kv: -kv[1])],
         "sessions": sessions,
+        "apps": app_summary(shown),
         "warnings": warnings,
         "notes": list_notes(conn, day),
         "changes": list_changes(conn, day),
     }
+
+
+def app_summary(activities: list) -> list[dict]:
+    """One entry per app with its time added up over the whole day, however often it came back.
+
+    Most recently used app first; inside an app, window titles by total time.
+    """
+    apps: dict[str, dict] = {}
+    for a in activities:
+        entry = apps.setdefault(a.app, {"app": a.app, "label": app_label(a.app), "seconds": 0.0,
+                                        "first": a.start, "last": a.end,
+                                        "windows": {}})
+        entry["seconds"] += a.duration
+        entry["first"], entry["last"] = min(entry["first"], a.start), max(entry["last"], a.end)
+        w = entry["windows"].setdefault(a.title, {"title": a.title, "seconds": 0.0, "last": a.end,
+                                                  "projects": defaultdict(float)})
+        w["seconds"] += a.duration
+        w["last"] = max(w["last"], a.end)
+        w["projects"][a.project_id] += a.duration
+    out = []
+    for entry in sorted(apps.values(), key=lambda e: -e["last"]):
+        windows = []
+        for w in sorted(entry["windows"].values(), key=lambda w: -w["seconds"]):
+            projects = w.pop("projects")
+            windows.append({**w, "project_id": max(projects, key=projects.get)})
+        out.append({**entry, "windows": windows})
+    return out
 
 
 _CHANGE_SQL = ("SELECT c.*, f.label AS folder FROM changes c "

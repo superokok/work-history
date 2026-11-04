@@ -35,7 +35,7 @@ One developer on Windows 10/11, Korean UI, working offline-first.
 | Collection | Window (app + title) and idle periods, read by the app itself (Windows). No keystrokes, clipboard, screenshots, OCR, or document contents. |
 | Projects | User-created projects; keyword rules on app name / window title; manual override per activity and per session. No LLM. |
 | Work sessions | Deterministic grouping of activity into sessions; editable title, project, notes; merge, split, exclude. Labeled as *inferred*. |
-| Daily timeline | Time range, app, project, duration, session, notes; filters for date, project, app. |
+| Daily timeline | Per-app view (default: one entry per app with its time added up over the day, window titles added up inside, most recently used first) or session view (newest first): time range, app, project, duration, session, notes; filters for date, project, app. |
 | Daily review | Template-generated, editable, saved per day. Inferred content is visually distinct from user-written notes. |
 | Search | Local search over session titles, project names, app/window titles, notes, reviews; date and project filters. |
 | Resume work | Per-project view: last session, last activity, notes, recent sessions, user-written next action. |

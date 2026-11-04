@@ -76,6 +76,8 @@ const state = {
   reportDay: isoDay(new Date()),
   resumeProject: null,
   openSessions: new Set(),
+  openApps: new Set(),
+  timelineView: (() => { try { return localStorage.getItem("timelineView") || "apps"; } catch { return "apps"; } })(),
 };
 const projectById = (id) => state.projects.find((p) => p.id === id);
 const projectColor = (id) => projectById(id)?.color || "#9aa3b5";
@@ -176,6 +178,14 @@ $("prev-day").addEventListener("click", () => setDay(shiftDay(state.day, -1)));
 $("next-day").addEventListener("click", () => setDay(shiftDay(state.day, 1)));
 $("filter-project").addEventListener("change", () => loadTimeline());
 $("filter-app").addEventListener("change", () => loadTimeline());
+document.querySelectorAll("input[name=timeline-view]").forEach((input) => {
+  input.checked = input.value === state.timelineView;
+  input.addEventListener("change", () => {
+    state.timelineView = input.value;
+    try { localStorage.setItem("timelineView", input.value); } catch { /* the choice just isn't remembered */ }
+    loadTimeline();
+  });
+});
 
 const WARNINGS = {
   afk_missing: "이 날짜에는 유휴(AFK) 감지 기록이 없어 모든 창 시간을 활동으로 계산했습니다. 실제보다 길 수 있습니다.",
@@ -200,7 +210,11 @@ async function loadTimeline() {
 
   $("summary").replaceChildren(...summaryBlock(t.total_active_s, t.by_project, t.offwork_s));
   state.dayChanges = t.changes || [];  // session cards show the file changes made during them
-  renderSessions(t.sessions);
+  const byApp = state.timelineView === "apps";
+  $("view-hint-apps").hidden = !byApp;
+  $("view-hint-sessions").hidden = byApp;
+  if (byApp) renderApps(t.apps);
+  else renderSessions(t.sessions);
   renderNotes(t.notes);
   renderChanges(state.dayChanges);
 }
@@ -235,7 +249,40 @@ async function patchSession(id, body, message) {
 
 function renderSessions(sessions) {
   $("rows-empty").hidden = sessions.length > 0;
-  $("sessions").replaceChildren(...sessions.map((s, i) => sessionCard(s, sessions[i + 1])));
+  // Newest first; "다음 세션과 병합" still means the session that came after it in time.
+  $("sessions").replaceChildren(...sessions.map((s, i) => sessionCard(s, sessions[i + 1])).reverse());
+}
+
+const APP_WINDOWS_SHOWN = 5;
+
+function renderApps(apps) {
+  $("rows-empty").hidden = apps.length > 0;
+  $("sessions").replaceChildren(...apps.map(appCard));
+}
+
+function appCard(a) {
+  const head = (title, ...rest) => h("div", { class: "session-head" },
+    h("span", { class: "time" }, `${hhmm(a.first)}–${hhmm(a.last)}`), title, ...rest,
+    h("span", { class: "num session-dur" }, dur(a.seconds)));
+  if (a.app === "") {
+    return h("div", { class: "card session offwork-session" },
+      head(h("span", { class: "session-title muted" }, "업무 외"), badge("plain", "기록 대상 아님")));
+  }
+  const windowRow = (w) => h("tr", {},
+    h("td", { class: "title" }, w.title || h("span", { class: "muted" }, "(제목 없음)")),
+    h("td", { class: "project" }, h("span", { class: "dot", style: { background: projectColor(w.project_id) } }),
+      projectName(w.project_id)),
+    h("td", { class: "time" }, `마지막 ${hhmm(w.last)}`),
+    h("td", { class: "num" }, dur(w.seconds)));
+  const table = (windows) => h("table", { class: "rows" }, h("tbody", {}, windows.map(windowRow)));
+  const rest = a.windows.slice(APP_WINDOWS_SHOWN);
+  const more = rest.length ? h("details", { open: state.openApps.has(a.app) },
+    h("summary", {}, `창 ${rest.length}개 더 보기`), table(rest)) : null;
+  more?.addEventListener("toggle", () => (more.open ? state.openApps.add(a.app) : state.openApps.delete(a.app)));
+  return h("div", { class: "card session app-card" },
+    head(h("span", { class: "session-title" }, a.label), h("span", { class: "meta" }, `창 ${a.windows.length}개`)),
+    table(a.windows.slice(0, APP_WINDOWS_SHOWN)),
+    more);
 }
 
 function sessionCard(s, next) {

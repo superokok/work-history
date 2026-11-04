@@ -193,6 +193,12 @@ local timezone.
   like " - Google Chrome" removed). Session project = manual, else the
   dominant activity project by time. Totals use session projects; excluded
   sessions are left out of totals and reviews.
+- **Timeline views:** sessions stay the unit for edits, totals, reviews and AI
+  references. The timeline's default *per-app* view (`service.app_summary`) is
+  display only: the activities of the listed, non-excluded sessions added up
+  per app for the whole day (an app used again later joins its earlier time),
+  most recently used app first, window titles by total time. The session view
+  lists sessions newest first.
 - **Session edits are never lost:** sessions are regenerated, but an edited
   (title/project/note/excluded) session follows its regrouped counterpart by
   start time, so the session you are in keeps growing after you rename it.

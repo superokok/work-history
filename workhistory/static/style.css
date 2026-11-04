@@ -85,6 +85,10 @@ button.primary { background: var(--accent); color: #fff; border-color: var(--acc
 .card.session details { margin-top: 6px; }
 .card.session summary { cursor: pointer; color: var(--muted); font-size: 12px; }
 .card.session table.rows { margin-top: 6px; font-size: 13px; }
+.card.app-card .session-head .meta { font-size: 12px; color: var(--muted); }
+.card.app-card table.rows td.title { width: 100%; }
+.card.app-card table.rows td.time { font-size: 12px; }
+.view-pick { display: flex; gap: 8px; margin-left: auto; }
 .review-columns { grid-template-columns: 1fr 380px; }
 #review-body { font: 13px/1.6 Consolas, "D2Coding", "Malgun Gothic", monospace; min-height: 420px; }
 ul.compact li { font-size: 13px; padding: 3px 0; }
