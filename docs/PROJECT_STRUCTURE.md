@@ -14,8 +14,8 @@ _마지막 갱신: 2026-11-05_
 - 화면은 탭 4개: 타임라인, 보고서(AI), 검색(+"AI에게 묻기"), 설정(프로젝트·규칙·작업 폴더·실행·AI·개인정보).
 - AI 보고서·"AI에게 묻기"는 내 PC AI (llama.cpp + Qwen3.5, 인터넷 불필요).
   Claude Code는 개발 환경에서만 쓰는 비교용 선택지이며 배포본에는 없다.
-- 배포: 행망용 Windows 포터블 zip 하나 (`-offline-local-ai`: 모델 포함·Claude Code 연결 제외, GitHub Releases에 조각으로).
-  풀고 `작업 기록.cmd` → 창 없이 실행, 설정은 모두 앱 안에서.
+- 배포: GitHub Releases에 행망용 앱 zip(`-offline`, Claude Code 연결 제외) + AI 모델 조각 + `WorkHistory-setup.cmd`.
+  setup을 더블클릭하면 앱을 풀고 모델을 합쳐 넣고 실행 → 창 없이 실행, 설정은 모두 앱 안에서.
 - 스택: Python 3.11+ (표준 라이브러리 위주) + 바닐라 HTML/JS, SQLite. 빌드 단계 없음. **Windows 전용.**
 - 저장소: GitHub (비공개), 브랜치 `main`.
 - 라이선스: 자체 코드는 PROPRIETARY. 의존성은 상업적 판매 가능한 것만.
@@ -33,7 +33,7 @@ work-history/
 ├─ tests/                  unittest (helpers.py 공용 픽스처)
 ├─ evals/report_eval.py    데모 시나리오로 AI 보고서 품질 실측 (실제 데이터 미사용)
 ├─ tools/build_portable.py Windows 포터블 zip 빌드 → dist/ (git 제외)
-├─ tools/release_parts.py  배포 zip을 GitHub 릴리스용 1.9GB 조각 + 합치기 cmd로 나눔 → dist/release/
+├─ tools/release_parts.py  릴리스 파일: 앱 zip + 모델 1.9GB 조각 + WorkHistory-setup.cmd(풀기·합치기·검사·실행) → dist/release/
 ├─ tools/clean_check.py    개발 PC 흔적(사용자·경로·git 계정·데이터 파일) 검사: 빌드 전·테스트에서
 ├─ llm/                    (git 제외) 로컬 AI: bin/llama-server.exe + DLL, models/*.gguf, 라이선스 전문
 ├─ ppt/                    사용자의 발표 파일(.pptx)과 시연 시나리오(.md), git 포함. 작업 중 만든 초안 덱은 docs/presentation/(git 제외)
@@ -88,19 +88,19 @@ uv pip install --python .venv/Scripts/python.exe -e .[claude] pip   # pip: 빌�
 .venv/Scripts/python.exe -m workhistory            # 콘솔에 로그. start-workhistory.cmd는 pythonw(창 없음, 로그는 데이터 폴더 workhistory.log)
 .venv/Scripts/python.exe -m workhistory --demo     # 데모 데이터
 
-# 테스트 (2026-11-05 기준 219개)
+# 테스트 (2026-11-05 기준 222개)
 .venv/Scripts/python.exe -m unittest discover -s tests -t .
 
 # AI 보고서 품질 평가 (기본: llm/의 가장 큰 로컬 모델. Claude Code 기준값은 --model claude-code:sonnet, 로그인 필요)
 .venv/Scripts/python.exe -m evals.report_eval
 
 # Windows 포터블 zip
+python tools/build_portable.py --offline       # 행망용 앱 zip (Claude Code 연결 제외, llm/bin 포함·모델 제외, 약 45MB) = 배포본
+python tools/release_parts.py dist/WorkHistory-<버전>-windows-x64-offline.zip
+                                               # → dist/release: 앱 zip + llm/models의 모델 1.9GB 조각 + WorkHistory-setup.cmd
+gh release create v<버전> dist/release/*        # 릴리스 (올리기 전에 사용자 확인)
+python tools/build_portable.py --offline --with-models  # 모델까지 든 zip 하나 (-offline-local-ai) — 배포하지 않음, 직접 전달용
 python tools/build_portable.py                 # 인터넷용(Claude Code 포함, 모델 제외) — 배포하지 않음, 개발 확인용
-python tools/build_portable.py --with-models   # 위 + 모델 (-local-ai) — 배포하지 않음
-python tools/build_portable.py --offline --with-models  # 행망(폐쇄망)용: Claude Code 연결(mcp 등) 제외 (-offline-local-ai) = 배포본
-python tools/build_portable.py --offline       # 행망용 앱 전용 업데이트 zip (-offline, llm/bin 포함·모델 제외, 약 45MB):
-                                               #   이미 받은 사람은 예전 폴더의 llm\models\*.gguf만 새 폴더로 옮김
-python tools/release_parts.py dist/WorkHistory-<버전>-windows-x64-offline-local-ai.zip  # 릴리스용 조각 + WorkHistory-join.cmd
 
 # 로컬 모델로 품질 평가 (기기 고정: WORKHISTORY_LLM_DEVICE=none 은 CPU만)
 .venv/Scripts/python.exe -m evals.report_eval --model local:Qwen3.5-4B-Q4_K_M
@@ -121,7 +121,7 @@ python tools/release_parts.py dist/WorkHistory-<버전>-windows-x64-offline-loca
 - 스냅샷은 dulwich(Apache-2.0)로, git.exe·GPL 의존 금지.
 - **Windows 전용**, 창 기록은 앱의 내장 수집기로. macOS/Linux 지원과 ActivityWatch는 뺐다 (2026-10-28).
 - AI는 **내 PC의 로컬 모델**만 쓴다 (llama.cpp + Qwen3.5, 외부 전송 없음, `ai_client.Model` 구현).
-  사내 AI 서버 연결 기능은 2026-11-04에 뺐다. 로컬 모델 파일은 `llm/`(git 제외), 배포본에는 들어 있음.
+  사내 AI 서버 연결 기능은 2026-11-04에 뺐다. 로컬 모델 파일은 `llm/`(git 제외), 릴리스에는 앱 zip과 따로 조각으로 올림.
   모델을 고르기 전(=동의 전)에는 AI 꺼짐.
 - Claude Code(헤드리스)는 소스에 남겨 두되 **개발·품질 비교용**으로만 쓴다 (배포본에는 없음, 2026-11-04 결정).
   Claude Code에 앱을 등록하는 "Claude Code 연결"은 2026-10-27에 없앰.
@@ -130,8 +130,10 @@ python tools/release_parts.py dist/WorkHistory-<버전>-windows-x64-offline-loca
 - 실행기는 pythonw로 창 없이 띄운다: 창을 실수로 닫아 기록이 끊기지 않게. 끄는 건 앱 안의 "앱 종료"만 (2026-10-30).
 - 저장소와 배포 zip에는 개발 PC에서 나온 것(사용자·경로·실제 프로젝트·기록·데이터 파일)을 넣지 않는다.
   `tests/test_clean.py`와 빌드 전 검사가 막는다 (2026-10-30).
-- 배포: 행망용 zip 하나를 GitHub Releases에 1.9GB 조각으로 올린다 (파일당 2GB 제한, git에는 넣지 않음).
-  인터넷용 zip은 배포하지 않는다 (2026-10-30).
+- 배포: 릴리스 하나에 앱 zip(약 45MB)과 모델(4B·9B, 각각 1.9GB 조각)을 따로 올리고, `WorkHistory-setup.cmd`가
+  Windows 기본 기능만으로 앱을 풀고 받은 모델을 합쳐 SHA-256을 검사해 넣는다. 모델은 고른 것만 받고,
+  업데이트는 앱 zip만 받아 같은 setup으로 `C:\WorkHistory`를 덮는다(모델 유지). 파일당 2GB 제한, git에는
+  넣지 않음. 인터넷용 zip은 배포하지 않는다 (2026-10-30, 앱·모델 분리는 2026-11-05).
 - 탭은 타임라인·보고서·검색·설정 4개. 템플릿 일일 리뷰와 이어서 하기 탭은 AI 업무일지·"AI에게 묻기"와 겹쳐 없앴고
   (`daily_reviews`는 v12에서 삭제), 프로젝트·규칙·작업 폴더는 설정 탭으로 옮겼다. 프로젝트별 "다음 할 일"은
   AI 보고서의 다음 계획 근거라 남겨 두고 설정의 프로젝트 카드에서 고친다 (2026-11-05).

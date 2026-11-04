@@ -11,29 +11,37 @@
 
 ## 받기
 
-배포본은 **행망·폐쇄망용 zip** 하나입니다 (`WorkHistory-<버전>-windows-x64-offline-local-ai.zip`, 약 8.5GB).
-앱, 내 PC AI 모델 2개(Qwen3.5 4B·9B), Python과 Microsoft C++ 런타임이 모두 들어 있어, 아무것도
-설치되지 않은 인터넷 없는 Windows 10/11에서 그대로 돌아갑니다. AI도 이 PC 안에서 돕니다.
+**Releases**에서 아래 파일을 **한 폴더에** 받습니다. GitHub은 파일 하나를 2GB까지만 받아서
+AI 모델은 조각으로 나눠 올렸습니다.
 
-1. 인터넷 PC에서 저장소의 **Releases**에 들어가 6개 파일(`….zip.001`~`.005`와 `WorkHistory-join.cmd`)을
-   한 폴더에 받습니다. GitHub은 파일 하나를 2GB까지만 받아서 zip을 조각으로 나눠 올렸습니다.
-2. `WorkHistory-join.cmd`를 더블클릭하면 조각을 합치고 온전한지 검사합니다 (`OK`가 나오면 성공).
-3. 합친 zip을 반입 절차에 따라 행망 PC로 옮깁니다. 4GB가 넘는 파일이라 exFAT·NTFS USB를 쓰세요.
+| 파일 | 크기 | |
+|---|---|---|
+| `WorkHistory-setup.cmd` | 수 KB | 필수 — 설치 스크립트 |
+| `WorkHistory-<버전>-windows-x64-offline.zip` | 약 45MB | 필수 — 앱, Python·C++ 런타임, AI 실행기 |
+| `Qwen3.5-9B-Q4_K_M.gguf.001`~`.003` | 5.7GB | AI 모델 (추천, 그래픽카드 없는 PC에서도 동작) |
+| `Qwen3.5-4B-Q4_K_M.gguf.001`~`.002` | 2.7GB | 작은 AI 모델 (선택, 느린 PC용) |
+
+모델은 원하는 것만 받으면 됩니다. 받지 않으면 AI 보고서·질문만 꺼지고 나머지는 그대로 됩니다.
+아무것도 설치되지 않은 인터넷 없는 Windows 10/11에서 돌아가고, AI도 이 PC 안에서 돕니다.
 
 ## 설치와 처음 설정
 
-1. **`C:\WorkHistory`에 풉니다.** zip을 오른쪽 클릭 → "압축 풀기" → 대상 폴더에 `C:\`만 입력하면
-   zip 안의 `WorkHistory` 폴더가 그대로 `C:\WorkHistory`가 됩니다. zip 파일 자체는 어디에 있어도 됩니다.
-   - 피할 곳: 깊은 폴더(경로 260자 제한), OneDrive와 동기화되는 바탕화면·문서(8.5GB가 업로드됨),
+1. **`WorkHistory-setup.cmd`를 더블클릭합니다.** 앱을 풀고, 받은 모델 조각을 합쳐 온전한지
+   검사한 뒤 `WorkHistory\llm\models`에 넣습니다 (모델이 크면 몇 분 걸림). 끝나면 바로 실행할지 묻습니다.
+   - Windows가 "PC 보호" 경고를 띄우면 "추가 정보" → "실행"을 누릅니다 (인터넷에서 받은 파일).
+   - 받은 폴더 안에 `WorkHistory` 폴더가 생깁니다. 모델을 합칠 동안 받은 조각만큼 빈 공간이 더 필요합니다.
+2. **행망 PC로 옮길 때**: 인터넷 PC에서 1을 한 뒤 `WorkHistory` 폴더를 통째로 반입 절차에 따라
+   행망 PC의 `C:\WorkHistory`로 복사합니다 (4GB가 넘는 모델 파일이 있어 exFAT·NTFS USB).
+   받은 파일을 그대로 옮겨 행망 PC에서 1을 해도 됩니다 (Windows 기본 기능만 씁니다).
+   - 피할 곳: 깊은 폴더(경로 260자 제한), OneDrive와 동기화되는 바탕화면·문서(수 GB가 업로드됨),
      네트워크 드라이브·USB, `C:\Program Files`(관리자 권한 필요).
-   - zip을 탐색기에서 열기만 한 채 안의 파일을 실행하지 말고, 반드시 다 푼 뒤 실행합니다.
-   - 풀린 폴더는 그 자리에 둡니다 (자동 실행과 바로가기가 그 폴더를 가리킵니다).
-2. **`C:\WorkHistory\작업 기록.cmd`** 를 더블클릭합니다. 검은 창이 잠깐 떴다 사라지고 브라우저에 앱이 열립니다.
-3. 앱 안에서 한 번만 설정합니다 (터미널 작업은 필요 없습니다).
+   - 폴더는 그 자리에 둡니다 (자동 실행과 바로가기가 그 폴더를 가리킵니다).
+3. 다음부터는 **`WorkHistory\작업 기록.cmd`** 로 켭니다. 검은 창이 잠깐 떴다 사라지고 브라우저에 앱이 열립니다.
+4. 앱 안에서 한 번만 설정합니다 (터미널 작업은 필요 없습니다).
    - **설정 → 실행**: "컴퓨터를 켤 때 자동 실행" 켜기, "바탕화면 바로가기 만들기"
-   - **프로젝트 → 작업 폴더**: 결과물을 만드는 폴더 등록. 상위 폴더 하나만 등록했다면
+   - **설정 → 작업 폴더**: 결과물을 만드는 폴더 등록. 상위 폴더 하나만 등록했다면
      "하위 폴더별로 정하기"에서 각 폴더의 프로젝트를 확인합니다.
-   - **프로젝트**: 실제 프로젝트와 키워드 규칙 2~3개
+   - **설정 → 프로젝트**: 실제 프로젝트와 키워드 규칙 2~3개
    - **설정 → 기록 대상**: 하루쯤 쓴 뒤 "최근 7일 동안 쓴 앱에서 고르기"로 업무 앱을 고르고
      "업무 앱만 기록"을 켭니다 (나머지 앱은 이름·제목 없이 "업무 외" 시간으로만 남음).
    - **설정 → AI 설정**: 모델을 고르면 AI가 켜집니다 (아래 "AI").
@@ -54,9 +62,14 @@
 
 ## 업데이트
 
-앱을 끄고(앱 종료), 새 zip을 풀어 앱 폴더를 통째로 바꾼 뒤 다시 켭니다. 기록과 설정은 앱 폴더가
-아니라 `%LOCALAPPDATA%\WorkHistory`에 있어서 그대로 이어집니다. 같은 위치에 풀면 바로가기도
-그대로 쓸 수 있습니다.
+1. 앱을 끕니다 (설정 → 실행 → **앱 종료**).
+2. 새 `WorkHistory-setup.cmd`와 앱 zip을 한 폴더에 받아 setup을 더블클릭합니다. 모델은 다시 받지 않습니다.
+   - `C:\WorkHistory`에 설치되어 있으면 "Update that one"에 **Y**를 누릅니다. 앱 파일만 바뀌고
+     `llm\models`의 모델은 그대로 둡니다.
+   - 다른 곳에 설치했다면 그 폴더의 바로 위 폴더(`WorkHistory`가 들어 있는 폴더)에 두 파일을 넣고 실행합니다.
+
+기록과 설정은 앱 폴더가 아니라 `%LOCALAPPDATA%\WorkHistory`에 있어서 그대로 이어지고,
+바로가기도 그대로 쓸 수 있습니다. 0.1.0 → 0.1.1: 리뷰 탭이 없어지면서 저장한 일일 리뷰는 지워집니다.
 
 ## 사용법
 
@@ -129,17 +142,19 @@ Apache-2.0)와 `mcp`(MIT, 개발용 Claude Code 연결)와 그 의존성뿐이�
 (`.venv/Scripts/python.exe -m evals.report_eval --model claude-code:sonnet`). 로컬 모델 평가는
 `--model local:Qwen3.5-9B-Q4_K_M`. 자세한 내용: [docs/AI.md](docs/AI.md).
 
-**배포 zip 빌드** (venv의 Python과 패키지를 복사하며 아무것도 내려받지 않습니다):
+**배포 파일 빌드** (venv의 Python과 패키지를 복사하며 아무것도 내려받지 않습니다):
 
 ```bash
-python tools/build_portable.py --offline --with-models  # 배포본 (행망용, 모델 포함)
-python tools/build_portable.py                          # 인터넷용, 모델 없음 (배포하지 않음)
-python tools/release_parts.py dist/WorkHistory-<버전>-windows-x64-offline-local-ai.zip
-                                                        # → dist/release: 1.9GB 조각 + WorkHistory-join.cmd
+python tools/build_portable.py --offline     # 행망용 앱 zip (llm/bin 포함, 모델 제외) = 배포본
+python tools/release_parts.py dist/WorkHistory-<버전>-windows-x64-offline.zip
+                                             # → dist/release: 앱 zip + 모델 1.9GB 조각 + WorkHistory-setup.cmd
+python tools/build_portable.py --offline --with-models  # 모델까지 든 zip 하나 (배포하지 않음, 직접 전달용)
+python tools/build_portable.py               # 인터넷용, 모델 없음 (배포하지 않음)
 ```
 
-릴리스: `gh release create v<버전> dist/release/*` (조각과 합치기 스크립트를 올림). 합치기 스크립트는
-Windows 기본 기능(`copy /b`, `certutil`)만 써서 조각을 합치고 SHA-256을 확인합니다.
+릴리스: `gh release create v<버전> dist/release/*`. setup 스크립트는 Windows 기본 기능
+(PowerShell `Expand-Archive`, `copy /b`, `certutil`)만 써서 앱을 풀고 모델 조각을 합쳐 SHA-256을 확인합니다.
+빌드용 `.venv`에는 pip가 있어야 합니다 (`uv pip install --python .venv/Scripts/python.exe pip`).
 
 `--with-models`는 `llm/models`의 모델까지 넣고, `--offline`은 Claude Code 연결(`mcp`와 의존성
 30여 개)을 뺍니다. 빌드는 압축하기 전에 번들 Python만으로 앱을 import해 보고, 개발 PC의
