@@ -6,13 +6,21 @@ By the app itself while it runs (Windows), on this computer only:
 
 - Foreground application executable name (e.g. `Code.exe`)
 - Foreground window title (e.g. `UserController.java - gov24-api - Visual Studio Code`)
+- For browsers (Chrome, Edge, Whale, Firefox) of apps that are recorded: the address in the
+  address bar, read through Windows UI Automation when the window changes, stored **without**
+  the query string, `#fragment` and `user:password@` (where tokens and session ids live).
+  A typed search in the address bar is not stored. Windows recorded as "업무 외" (not a
+  recorded app) never get their address read; excluded windows record nothing.
 - Start time and duration of each window focus period
 - AFK (idle) / not-AFK status periods
 
 ## What is never collected
 
 Keystrokes, clipboard, passwords, screenshots, screen recordings, OCR,
-document/file contents, browser URLs, network traffic, microphone or camera.
+document/file contents, page contents, browsing history, network traffic, microphone
+or camera. File paths are not collected: the timeline looks a file name from a window
+title up in the registered work folders' file list (already recorded) to show its path.
+Addresses are shown in the timeline only; they are not sent to the AI.
 
 ## Where data lives
 

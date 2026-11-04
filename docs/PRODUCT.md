@@ -32,7 +32,7 @@ One developer on Windows 10/11, Korean UI, working offline-first.
 
 | Area | MVP behaviour |
 |---|---|
-| Collection | Window (app + title) and idle periods, read by the app itself (Windows). No keystrokes, clipboard, screenshots, OCR, or document contents. |
+| Collection | Window (app + title), browser address without query string, and idle periods, read by the app itself (Windows). No keystrokes, clipboard, screenshots, OCR, or document contents. |
 | Projects | User-created projects; keyword rules on app name / window title; manual override per activity and per session. No LLM. |
 | Work sessions | Deterministic grouping of activity into sessions; editable title, project, notes; merge, split, exclude. Labeled as *inferred*. |
 | Daily timeline | Per-app view (default: one entry per app with its time added up over the day, window titles added up inside, most recently used first) or session view (newest first): time range, app, project, duration, session, notes; filters for date, project, app. |
@@ -43,7 +43,7 @@ One developer on Windows 10/11, Korean UI, working offline-first.
 
 ## Non-goals
 
-Accounts, cloud sync, team features, subscriptions, browser URL tracking,
+Accounts, cloud sync, team features, subscriptions, browsing history,
 OCR/screenshots, mobile, multi-device merge.
 
 ## Honesty rules for the UI

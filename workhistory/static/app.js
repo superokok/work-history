@@ -75,6 +75,7 @@ const state = {
   reportDay: isoDay(new Date()),
   openSessions: new Set(),
   openApps: new Set(),
+  openPaths: new Set(),  // "app\ntitle" of window rows showing their path
   timelineView: (() => { try { return localStorage.getItem("timelineView") || "apps"; } catch { return "apps"; } })(),
 };
 const projectById = (id) => state.projects.find((p) => p.id === id);
@@ -255,6 +256,21 @@ function renderApps(apps) {
   $("sessions").replaceChildren(...apps.map(appCard));
 }
 
+function pathBox(w) {
+  const input = h("input", { class: "path-text", readonly: true, value: w.path, onclick: (e) => e.target.select() });
+  return h("div", { class: "row path-box" },
+    h("span", { class: "meta" }, w.path_kind === "url" ? "주소" : "파일"), input,
+    h("button", { class: "small", onclick: async () => {
+      try {
+        await navigator.clipboard.writeText(w.path);
+      } catch {
+        input.select();
+        if (!document.execCommand("copy")) return toast("복사하지 못했습니다. 선택된 경로를 Ctrl+C로 복사하세요.");
+      }
+      toast("경로를 복사했습니다.");
+    } }, "복사"));
+}
+
 function appCard(a) {
   const head = (title, ...rest) => h("div", { class: "session-head" },
     h("span", { class: "time" }, `${hhmm(a.first)}–${hhmm(a.last)}`), title, ...rest,
@@ -263,13 +279,24 @@ function appCard(a) {
     return h("div", { class: "card session offwork-session" },
       head(h("span", { class: "session-title muted" }, "업무 외"), badge("plain", "기록 대상 아님")));
   }
-  const windowRow = (w) => h("tr", {},
-    h("td", { class: "title" }, w.title || h("span", { class: "muted" }, "(제목 없음)")),
+  const windowRow = (w) => {
+    const key = `${a.app}\n${w.title}`;
+    const pathRow = h("tr", { class: "path-row", hidden: !state.openPaths.has(key) },
+      h("td", { colspan: 4 }, w.path ? pathBox(w) : h("span", { class: "muted" },
+        "경로 없음 · 브라우저 주소와 작업 폴더 안의 파일만 경로가 남습니다.")));
+    const row = h("tr", { class: "clickable", title: "눌러서 경로 보기", onclick: () => {
+      pathRow.hidden = !pathRow.hidden;
+      pathRow.hidden ? state.openPaths.delete(key) : state.openPaths.add(key);
+    } },
+    h("td", { class: "title" }, w.title || h("span", { class: "muted" }, "(제목 없음)"),
+      w.path_kind ? badge("plain", w.path_kind === "url" ? "주소" : "파일") : null),
     h("td", { class: "project" }, h("span", { class: "dot", style: { background: projectColor(w.project_id) } }),
       projectName(w.project_id)),
     h("td", { class: "time" }, `마지막 ${hhmm(w.last)}`),
     h("td", { class: "num" }, dur(w.seconds)));
-  const table = (windows) => h("table", { class: "rows" }, h("tbody", {}, windows.map(windowRow)));
+    return [row, pathRow];
+  };
+  const table = (windows) => h("table", { class: "rows" }, h("tbody", {}, windows.flatMap(windowRow)));
   const rest = a.windows.slice(APP_WINDOWS_SHOWN);
   const more = rest.length ? h("details", { open: state.openApps.has(a.app) },
     h("summary", {}, `창 ${rest.length}개 더 보기`), table(rest)) : null;

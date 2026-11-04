@@ -289,6 +289,11 @@ MIGRATIONS: list[str] = [
     """
     DROP TABLE IF EXISTS daily_reviews;
     """,
+    # v13: where a window was: a browser's address (no query string), for the timeline.
+    """
+    ALTER TABLE collector_events ADD COLUMN path TEXT NOT NULL DEFAULT '';
+    ALTER TABLE window_events ADD COLUMN path TEXT NOT NULL DEFAULT '';
+    """,
 ]
 
 SCHEMA_VERSION = len(MIGRATIONS)

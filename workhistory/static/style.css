@@ -85,6 +85,11 @@ button.primary { background: var(--accent); color: #fff; border-color: var(--acc
 .card.app-card table.rows td.title { width: 100%; }
 .card.app-card table.rows td.time { font-size: 12px; }
 .view-pick { display: flex; gap: 8px; margin-left: auto; }
+.card.app-card tr.clickable { cursor: pointer; }
+.card.app-card tr.clickable:hover td { background: var(--bg); }
+.card.app-card tr.path-row td { background: var(--bg); }
+.path-box { flex-wrap: nowrap; }
+.path-box .path-text { flex: 1; min-width: 0; font: 12px Consolas, "D2Coding", monospace; }
 .report-columns { grid-template-columns: 1fr 380px; }
 .settings-heading { margin: 20px 0 8px; }
 ul.compact li { font-size: 13px; padding: 3px 0; }

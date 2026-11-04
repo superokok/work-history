@@ -69,4 +69,4 @@ manual override → note → search.
 
 ## Out of scope
 
-Installer, tray icon, browser URL watcher, multi-device.
+Installer, tray icon, multi-device. (The browser address is read since 2026-11-05.)

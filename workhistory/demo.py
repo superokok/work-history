@@ -72,6 +72,20 @@ W = {
     "youtube": (CHROME, "개발자 브이로그 - YouTube - Chrome"),
     "shop": (CHROME, "키보드 할인 - 쇼핑 - Chrome"),
 }
+# What the collector reads from the address bar (fictional hosts; no query strings, as recorded).
+URLS = {
+    "jira1418": "https://jira.example.com/browse/GOV-1418",
+    "jira1423": "https://jira.example.com/browse/GOV-1423",
+    "jira1430": "https://jira.example.com/browse/GOV-1430",
+    "so_refresh": "https://stackoverflow.com/questions/tagged/spring-security",
+    "so_count": "https://stackoverflow.com/questions/tagged/querydsl",
+    "cursor": "https://docs.spring.io/spring-data/jpa/reference/repositories/scrolling.html",
+    "mr312": "https://gitlab.example.com/gov24/gov24-minwon-api/-/merge_requests/312",
+    "mr318": "https://gitlab.example.com/gov24/gov24-minwon-api/-/merge_requests/318",
+    "k8s_docs": "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/",
+    "ingress_docs": "https://kubernetes.io/docs/concepts/services-networking/ingress/",
+    "helm_docs": "https://helm.sh/docs/chart_template_guide/values_files/",
+}
 
 # Day offset from this week's Monday -> list of (start, end, [(window, weight), ...]) or (start, end, "afk").
 SCRIPT = {
@@ -215,11 +229,12 @@ def seed(db: Database, repos_dir: Optional[Path] = None, now: Optional[float] = 
                     continue
                 for name, s, e in _chunks(rng, start, end, mix):
                     app, title = W[name]
+                    path = URLS.get(name, "")
                     if not is_tracked(track, app, title):
-                        app, title = OFFWORK_APP, ""  # what the real import stores
+                        app, title, path = OFFWORK_APP, "", ""  # what the real import stores
                     aw_id += 1
-                    conn.execute("INSERT INTO window_events (source_id, aw_id, start_ts, end_ts, app, title) "
-                                 "VALUES (?, ?, ?, ?, ?, ?)", (win, aw_id, s, e, app, title))
+                    conn.execute("INSERT INTO window_events (source_id, aw_id, start_ts, end_ts, app, title, path) "
+                                 "VALUES (?, ?, ?, ?, ?, ?, ?)", (win, aw_id, s, e, app, title, path))
         if days:
             mark_days_dirty(conn, _ts(days[0][1], "00:00"), now)
 

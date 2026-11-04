@@ -71,6 +71,12 @@ ActivityWatch, nothing GPL in the bundle). Every 2 s it reads, with standard-lib
   `QueryFullProcessImageNameW` (app = exe file name, e.g. `Code.exe`, the same format
   ActivityWatch used, so tracking rules made before keep matching). Limited rights also
   read most elevated (admin) windows.
+- browser address (`locate.py`): when the foreground window changes to a browser of a
+  recorded app, UI Automation (COM via ctypes, MTA per thread) finds the first Edit
+  descendant of the window, i.e. the address bar, and reads its Value (~50 ms). Stored
+  without query, fragment and user info; a typed search (spaces, no dot) is dropped.
+  Untracked windows in "업무 앱만 기록" mode are never read, so "다시 적용" cannot add
+  addresses for them later. Querying makes Chromium turn on its accessibility tree.
 - idle: `GetLastInputInfo` vs `GetTickCount` (32-bit wrap handled). Away after 3 min without
   input (`config.AFK_AFTER_S`); the away period starts at the last input.
 
@@ -92,13 +98,14 @@ per kind, `bucket_id` `workhistory-window` / `workhistory-afk`, `bucket_created`
   long event that started before the cursor is still extended.
 - Privacy rules apply here (pause/deleted ranges, exclusions, "업무 앱만 기록").
 
-## 5. Data model (schema v12)
+## 5. Data model (schema v13)
 
 ```
 sources        id, bucket_id, bucket_created, kind('window'|'afk'), hostname,
                cursor_ts, last_sync_at                 UNIQUE(bucket_id, bucket_created)
 window_events  id, source_id, aw_id, start_ts, end_ts, app, title,
-               project_id NULL (manual override)       UNIQUE(source_id, aw_id)
+               project_id NULL (manual override),
+               path (browser address, v13)             UNIQUE(source_id, aw_id)
 afk_events     id, source_id, aw_id, start_ts, end_ts, status
 projects       id, name UNIQUE, color, next_action, archived, created_at
 project_rules  id, project_id, field('app'|'title'), pattern, created_at
@@ -140,6 +147,8 @@ v6 added an `ai_endpoints` table (AI server registrations) that v11 drops again.
 
 v2 added a `daily_reviews` table (the template daily review tab) that v12 drops again:
 the AI 업무일지 covers it.
+
+v13: `collector_events.path` and `window_events.path` (browser address, see §4).
 
 v4 (AI): `reports` (saved daily/weekly drafts), `ai_runs` (token/latency log,
 no content).
@@ -198,7 +207,8 @@ local timezone.
   references. The timeline's default *per-app* view (`service.app_summary`) is
   display only: the activities of the listed, non-excluded sessions added up
   per app for the whole day (an app used again later joins its earlier time),
-  most recently used app first, window titles by total time. The session view
+  most recently used app first, window titles by total time; clicking a window shows
+  its address or file path to copy. The session view
   lists sessions newest first.
 - **Session edits are never lost:** sessions are regenerated, but an edited
   (title/project/note/excluded) session follows its regrouped counterpart by
@@ -273,7 +283,10 @@ ActivityWatch (MPL-2.0; its Windows tray bundle contains GPL PyQt6) is no longer
 
 ## 10. Collector scope
 
-- Window titles only; no URLs and no file paths unless the editor puts them in the title.
+- Window titles, plus the browser address (no query string) for recorded apps. Editors and
+  IDEs don't expose the open file, so its path is resolved at query time from the title's
+  file name and the work folders' file list (`locate.file_paths`, unique matches only; the
+  title's project name breaks ties). Explorer folders are not read.
 - Away = 3 minutes without keyboard/mouse input; reading without input counts as idle.
 - Protected processes show as `unknown` (their exe name can't be read); elevated (admin)
   windows are read.
