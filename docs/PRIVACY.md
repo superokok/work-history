@@ -78,12 +78,10 @@ from events, note text, and search queries are not logged. Started without a con
 
 ## Effect measurement
 
-To show before/after numbers (보고서 작성 시간, AI 초안을 고친 비율, 검색 후 기록을 여는 데
-걸린 시간), the app keeps a small table `usage_events` in its own database. It holds numbers
-only: seconds spent typing a report, line counts, how many AI-draft lines were kept, how many
-seconds after a search a result was opened. Report text, AI drafts, search queries, titles and
-paths are never stored there. It stays on this PC and is removed with "모든 데이터 삭제" (or the
-chosen date range). The summary is shown under the 보고서 tab ("효과 측정").
+Removed on 2026-11-04. From 10-28 to 11-04 the app counted, as numbers only, how long a report
+took to type, how many AI-draft lines were kept and how soon a search led to opening a record
+(table `usage_events`; never report text, queries, titles or paths). Nothing is recorded any
+more; rows from that time stay on the PC until "데이터 삭제" removes them.
 
 ## Start at logon and shortcuts
 

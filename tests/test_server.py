@@ -54,17 +54,14 @@ class ServerTests(unittest.TestCase):
         ct = resp.getheader("Content-Type", "")
         return resp.status, (json.loads(raw) if ct.startswith("application/json") else raw), ct
 
-    def test_usage_api(self):
+    def test_report_save_records_nothing_else(self):
+        # The effect measurement was removed (2026-11-04): saving stores the report only.
         day = date.today().isoformat()
-        status, _, _ = self.request("POST", "/api/reports", {"kind": "daily", "day": day, "body": "a\nb", "metrics": {
-            "sid": "x1", "method": "manual", "active_s": 300, "wall_s": 600}})
+        status, _, _ = self.request("POST", "/api/reports", {"kind": "daily", "day": day, "body": "a\nb"})
         self.assertEqual(status, 200)
-        self.assertEqual(self.request("POST", "/api/usage", {"kind": "search"})[0], 200)
-        self.assertEqual(self.request("POST", "/api/usage", {"kind": "keystrokes"})[0], 400)
-        self.assertEqual(self.request("GET", "/api/usage/summary?days=0")[0], 400)
-        status, s, _ = self.request("GET", "/api/usage/summary?days=7")
-        self.assertEqual(status, 200)
-        self.assertEqual((s["by_method"]["manual"]["count"], s["searches"]), (1, 1))
+        self.assertEqual(self.request("GET", "/api/usage/summary?days=7")[0], 404)
+        with self.db.connect() as conn:
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM usage_events").fetchone()[0], 0)
 
     def test_static_index(self):
         status, body, ct = self.request("GET", "/")

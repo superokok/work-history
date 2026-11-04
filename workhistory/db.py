@@ -239,6 +239,8 @@ MIGRATIONS: list[str] = [
     """,
     # v7: effect measurement (how long reports take, how much of the AI draft survives, how fast
     # search finds things). Numbers only: never report text, queries or titles.
+    # Removed from the app on 2026-11-04: nothing writes here any more; the table stays so rows
+    # recorded before that are still removed by "데이터 삭제".
     """
     CREATE TABLE usage_events (
         id   INTEGER PRIMARY KEY,

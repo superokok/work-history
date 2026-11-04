@@ -49,7 +49,6 @@ autostart.py  – start-at-logon and shortcut files, switched from the app
 ai_context.py – the exact payload for the AI with verifiable references (C/S/N/P)
 ai_report.py  – report schema, prompt, reference verification, rendering
 ai_service.py – settings, consent, run log, saved reports
-usage.py      – effect measurement: report writing time, kept AI lines, search-to-open time (numbers only)
 review.py     – pure: template daily review + follow-up extraction
    ▼
 service.py    – timeline, search, notes, projects, review, resume queries
@@ -138,10 +137,9 @@ v8 (projects for parts of a folder, see RESULTS_TRACKING.md): `folder_areas`
 v9 (collector, §4): `collector_events` (id, kind 'window'|'afk', start_ts, end_ts,
 app, title, status), the raw events `sync.py` imports from on Windows; pruned after 35 days.
 
-v7 (effect measurement): `usage_events` (id, ts, kind, data JSON): numbers only, for the
-before/after page. Kinds: `report` (one per save: sid, method `ai`|`manual`, active/wall seconds,
-lines, AI-draft lines kept/edited), `search`, `search_open` (seconds after the search),
-`source_open`. `usage.py` records and summarises; never report text or queries.
+v7 (effect measurement): `usage_events` (id, ts, kind, data JSON): numbers only (report writing
+seconds, kept AI-draft lines, search-to-open seconds). The feature was removed on 2026-11-04;
+nothing writes the table any more, and it stays only so older rows are removed by "데이터 삭제".
 
 v6 (AI servers): `ai_endpoints` (id, name, url = API base ending in /v1, model_id, api_key, created_at):
 servers the user registered by address; model choice `remote:<id>`.

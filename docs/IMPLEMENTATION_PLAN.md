@@ -80,9 +80,11 @@ Remaining validation is human: about a week of real use, following
 - Port 5730, else the next free one up to 5739; one app per database by a named mutex.
 - Repository and zip kept free of the developer PC's traces (`tools/clean_check.py`,
   `tests/test_clean.py`, checked before every zip).
-- Effect measurement in the app (report writing time, kept AI lines, search-to-open time).
+- Effect measurement in the app (report writing time, kept AI lines, search-to-open time);
+  removed again on 2026-11-04 so the demo shows only the product (one week, one user was too
+  few numbers to mean anything; the presentation uses stated estimates instead, VALIDATION.md).
 
-Remaining: the measurement week ([VALIDATION.md](VALIDATION.md)), then the deck.
+Remaining: the deck and the demo.
 
 ## Explicitly deferred
 
