@@ -179,16 +179,38 @@ def _chunks(rng: random.Random, start: float, end: float, mix: list[tuple[str, i
         t, previous = t + length, name
 
 
-def seed(db: Database, repos_dir: Optional[Path] = None, now: Optional[float] = None) -> bool:
+MEETINGS = {"scrum", "weekly", "dba"}
+
+
+def _morning(offset: int) -> tuple[dict, list]:
+    """SCRIPT and EDITS with day `offset` turned into a 07:00-09:00 morning of that day's work."""
+    entries = SCRIPT.get(offset) or SCRIPT[3]  # a weekend borrows Thursday's work
+    mix = next(e[2] for e in entries if e[2] != "afk" and any(name not in MEETINGS for name, _ in e[2]))
+    today = [i for i, e in enumerate(demo_files.EDITS) if e[0] == offset]
+    edits = list(demo_files.EDITS)
+    for n, i in enumerate(today):  # same order, just before 09:00
+        o, _, key, files = edits[i]
+        edits[i] = (o, f"08:{50 - 10 * (len(today) - 1 - n):02d}", key, files)
+    return {**SCRIPT, offset: [("07:00", "09:00", mix)]}, edits
+
+
+def seed(db: Database, repos_dir: Optional[Path] = None, now: Optional[float] = None,
+         morning: bool = False) -> bool:
     """Fill an empty demo database. Returns False if it already has data.
 
     With `repos_dir`, the fictional file history (demo_files.EDITS) is written
     as snapshot commits, exactly like the real folder scanner would.
+    With `morning` (a presentation in the real app), the scenario stops at 09:00
+    today and today's work runs 07:00-09:00, so live work carries on from there.
     """
     rng = random.Random(1418)
     now = time.time() if now is None else now  # a fixed clock makes the scenario reproducible (evals)
     today = date.fromtimestamp(now)
     monday = today - timedelta(days=today.weekday())
+    script, edits = SCRIPT, demo_files.EDITS
+    if morning:
+        now = _ts(today, "09:00")
+        script, edits = _morning(today.weekday())
     track = [TrackRule(a, t) for a, t in TRACK_RULES]
     with db.connect() as conn:
         if conn.execute("SELECT 1 FROM sources").fetchone():
@@ -212,12 +234,12 @@ def seed(db: Database, repos_dir: Optional[Path] = None, now: Optional[float] = 
 
         aw_id = 0
         days = []
-        for offset in sorted(SCRIPT):
+        for offset in sorted(script):
             day = monday + timedelta(days=offset)
             if day > today:
                 continue
             days.append((offset, day))
-            for start_s, end_s, mix in SCRIPT[offset]:
+            for start_s, end_s, mix in script[offset]:
                 start, end = _ts(day, start_s), min(_ts(day, end_s), now)
                 if start >= end:
                     continue
@@ -250,7 +272,7 @@ def seed(db: Database, repos_dir: Optional[Path] = None, now: Optional[float] = 
             activities, _ = store.day_activities(conn, day, now)
             sessionstore.refresh_day(conn, day, now, activities)
         if repos_dir is not None:
-            _seed_files(conn, Path(repos_dir), project_ids, monday, today, now)
+            _seed_files(conn, Path(repos_dir), project_ids, monday, today, now, edits)
 
         for offset, hhmm, title in SESSION_TITLES:
             if offset not in offsets:
@@ -262,7 +284,8 @@ def seed(db: Database, repos_dir: Optional[Path] = None, now: Optional[float] = 
     return True
 
 
-def _seed_files(conn, repos_dir: Path, project_ids: dict, monday: date, today: date, now: float) -> None:
+def _seed_files(conn, repos_dir: Path, project_ids: dict, monday: date, today: date, now: float,
+                edits: list) -> None:
     shutil.rmtree(repos_dir, ignore_errors=True)  # a fresh demo DB gets fresh snapshots
     folder_ids, trees, repos = {}, {}, {}
     try:
@@ -273,7 +296,7 @@ def _seed_files(conn, repos_dir: Path, project_ids: dict, monday: date, today: d
                 "VALUES (?, ?, ?, ?, ?)", (path, label, project_ids.get(project), now, now)).lastrowid
             repos[key] = snapshots._open_repo(snapshots.repo_path(repos_dir, folder_ids[key]))
             trees[key] = {}
-        for offset, hhmm, key, files in demo_files.EDITS:
+        for offset, hhmm, key, files in edits:
             day = monday + timedelta(days=offset)
             ts = _ts(day, hhmm)
             if day > today or ts > now:

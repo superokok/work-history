@@ -28,6 +28,7 @@ work-history/
 ├─ README.md               설치·사용법·명령행 옵션
 ├─ pyproject.toml          패키지 정의 (dulwich 필수; extras: claude=mcp, desktop=pywebview)
 ├─ start-workhistory.cmd   Windows 실행기 (.venv 우선, pythonw로 창 없이 실행)
+├─ seed-demo.cmd           시연용: 실제 앱 DB를 데모 시나리오로 바꿈 (tools/seed_demo.py, 기존 DB는 데이터 폴더 backup\로)
 ├─ workhistory/            앱 패키지 (아래 모듈 지도)
 │  └─ static/              UI: index.html, app.js, style.css (한국어)
 ├─ tests/                  unittest (helpers.py 공용 픽스처)
@@ -35,6 +36,7 @@ work-history/
 ├─ tools/build_portable.py Windows 포터블 zip 빌드 → dist/ (git 제외)
 ├─ tools/release_parts.py  릴리스 파일: 앱 zip + 모델 1.9GB 조각 + WorkHistory-setup.cmd(풀기·합치기·검사·실행) → dist/release/
 ├─ tools/clean_check.py    개발 PC 흔적(사용자·경로·git 계정·데이터 파일) 검사: 빌드 전·테스트에서
+├─ tools/seed_demo.py      시연 준비: 앱 끄기 → DB 백업 → 데모(오늘 07~09시까지) → Claude Sonnet·모든 앱 → 앱 켜기
 ├─ llm/                    (git 제외) 로컬 AI: bin/llama-server.exe + DLL, models/*.gguf, 라이선스 전문
 ├─ ppt/                    사용자의 발표 파일(.pptx), 시연 시나리오·심사용 설명자료(.md), git 포함. 작업 중 만든 초안 덱은 docs/presentation/(git 제외)
 └─ docs/
@@ -76,7 +78,7 @@ work-history/
 | 서비스 | `service.py` | 타임라인(세션별 + 앱별 합산), 검색, 메모, 프로젝트, 프로젝트 개요(AI 도구용) 쿼리 |
 | | `server.py` | JSON API + 정적 UI, 127.0.0.1 전용 |
 | 기타 | `stats.py` | 실사용 보정률 통계 (`python -m workhistory.stats`) |
-| | `demo.py`, `demo_files.py` | `--demo`용 가상 2주 시나리오 (별도 demo.db) |
+| | `demo.py`, `demo_files.py` | `--demo`용 가상 2주 시나리오 (별도 demo.db). `morning=True`: 오늘은 07:00~09:00까지 (시연용 실제 DB) |
 
 ## 자주 쓰는 명령
 
@@ -87,9 +89,10 @@ uv pip install --python .venv/Scripts/python.exe -e .[claude] pip   # pip: 빌�
 
 # 실행 (기본 http://127.0.0.1:5730/, 막혀 있으면 5731~5739)
 .venv/Scripts/python.exe -m workhistory            # 콘솔에 로그. start-workhistory.cmd는 pythonw(창 없음, 로그는 데이터 폴더 workhistory.log)
-.venv/Scripts/python.exe -m workhistory --demo     # 데모 데이터
+.venv/Scripts/python.exe -m workhistory --demo     # 데모 데이터 (별도 demo.db)
+seed-demo.cmd                                      # 시연: 실제 앱 DB를 데모 데이터로 (기존 DB는 %LOCALAPPDATA%\WorkHistory\backup\)
 
-# 테스트 (2026-11-05 기준 228개)
+# 테스트 (2026-11-05 기준 231개)
 .venv/Scripts/python.exe -m unittest discover -s tests -t .
 
 # AI 보고서 품질 평가 (기본: llm/의 가장 큰 로컬 모델. Claude Code 기준값은 --model claude-code:sonnet, 로그인 필요)
