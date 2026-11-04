@@ -85,16 +85,15 @@ class ContextTests(AIDataTestCase):
         self.assertNotIn("Slack", text)                        # under a minute
         self.assertNotIn("안 쓴 프로젝트", text)               # irrelevant project
         self.assertEqual(ctx.payload["offwork_minutes"], 30)
-        self.assertEqual([(s["ref"], s["project"], s["minutes"]) for s in ctx.payload["sessions"]],
-                         [(f"S{self.first}", "Gov24 백엔드", 50)])
-        self.assertEqual(ctx.payload["project_minutes"], {"Gov24 백엔드": 50})
+        self.assertNotIn("Gov24 백엔드", text)                  # no projects: the model groups the work
+        self.assertEqual([(s["ref"], s["minutes"]) for s in ctx.payload["sessions"]], [(f"S{self.first}", 50)])
+        self.assertEqual(ctx.payload["work_minutes"], 50)
         session = ctx.payload["sessions"][0]
         self.assertEqual(session["windows"][0], {"app": "IntelliJ IDEA", "title": "gov24-api – AuthService.java",
                                                  "minutes": 40})
-        self.assertEqual(session["user_note"], "리프레시 토큰 만료 버그 원인 확인 필요")
-        self.assertEqual(ctx.payload["projects"], [{"ref": f"P{self.gov}", "name": "Gov24 백엔드",
-                                                    "user_next_action": "토큰 갱신 API 테스트 작성"}])
-        self.assertEqual(ctx.refs, {f"S{self.first}", f"N{self.note}", f"P{self.gov}"})
+        self.assertNotIn("user_note", session)                 # notes are not sent any more
+        self.assertNotIn("QA 서버 배포 대기", text)
+        self.assertEqual(ctx.refs, {f"S{self.first}"})
 
     def test_period_limits(self):
         with self.db.connect() as conn:
@@ -106,14 +105,13 @@ class ContextTests(AIDataTestCase):
 
 class ValidationTests(AIDataTestCase):
     def raw(self):
-        s, n, p = f"S{self.first}", f"N{self.note}", f"P{self.gov}"
+        s = f"S{self.first}"
         return {"summary": "인증 모듈 작업", "projects": [{
             "project": "Gov24 백엔드",
             "done": [{"text": "리프레시 토큰 처리 분석", "refs": [s, "S999999", s]},
                      {"text": "근거 없는 성과", "refs": ["S424242"]}],
-            "next": [{"text": "토큰 갱신 API 테스트 작성", "refs": [p]},
-                     {"text": "AI가 지어낸 계획", "refs": [s]}],
-            "issues": [{"text": "QA 서버 배포 대기", "refs": [n]}, {"text": "", "refs": []}],
+            "next": [{"text": "AI가 지어낸 계획", "refs": [s]}],
+            "issues": [{"text": "QA 서버 배포 대기", "refs": [s]}, {"text": "", "refs": []}],
         }]}
 
     def test_refs_verified_and_flags(self):
@@ -121,38 +119,37 @@ class ValidationTests(AIDataTestCase):
         [block] = report.projects
         self.assertEqual([(i.text, i.refs, i.flag) for i in block.done],
                          [("리프레시 토큰 처리 분석", [f"S{self.first}"], None), ("근거 없는 성과", [], "no_evidence")])
-        self.assertEqual([i.flag for i in block.next], [None, "unconfirmed_plan"])
+        self.assertEqual([i.flag for i in block.next], ["unconfirmed_plan"])
         self.assertEqual([i.text for i in block.issues], ["QA 서버 배포 대기"])
         self.assertEqual(report.dropped_refs, 2)
         self.assertEqual(block.seconds, 50 * 60)
 
     def test_finished_claims_need_the_users_own_words(self):
-        with self.db.connect() as conn:
-            done_note = service.create_note(conn, {"day": DAY.isoformat(), "body": "GOV-1418 QA 확인 완료로 종료",
-                                                   "project_id": self.gov})["id"]
+        s = f"S{self.first}"
         raw = {"summary": "", "projects": [{"project": "Gov24 백엔드", "next": [], "issues": [], "done": [
-            {"text": "토큰 갱신 버그 수정 완료", "refs": [f"S{self.first}"]},          # session only: not proof
-            {"text": "GOV-1418 QA 확인 후 종료", "refs": [f"S{self.first}", f"N{done_note}"]},  # the user said so
-            {"text": "배포 대기 건 해결", "refs": [f"N{self.note}"]},                  # note says nothing is done
-            {"text": "해결 방안 검토", "refs": [f"S{self.first}"]},                   # not a claim
-            {"text": "토큰 갱신 로직 수정", "refs": [f"S{self.first}"]},
+            {"text": "토큰 갱신 버그 수정 완료", "refs": [s]},   # auto session title: not proof
+            {"text": "해결 방안 검토", "refs": [s]},             # not a claim
+            {"text": "토큰 갱신 로직 수정", "refs": [s]},
         ]}]}
         report = ai_report.validate("weekly", self.context(), raw)
         [block] = report.projects
-        self.assertEqual([i.flag for i in block.done],
-                         ["unconfirmed_done", None, "unconfirmed_done", None, None])
+        self.assertEqual([i.flag for i in block.done], ["unconfirmed_done", None, None])
         self.assertIn("토큰 갱신 버그 수정 완료 (완료 근거 없음 — 확인 필요)", ai_report.render_text(report))
+        with self.db.connect() as conn:  # the user's own session title says so
+            sessionstore.update_session(conn, self.first, {"title": "토큰 갱신 버그 수정 완료"})
+        [block] = ai_report.validate("weekly", self.context(), raw).projects
+        self.assertIsNone(block.done[0].flag)
 
-    def test_a_note_about_another_issue_does_not_finish_this_one(self):
-        """The demo note that fooled the first version: one note, two issues, only one of them done."""
+    def test_words_about_another_issue_do_not_finish_this_one(self):
+        """One title of the user's, two issues, only one of them done."""
         with self.db.connect() as conn:
-            note = service.create_note(conn, {"day": DAY.isoformat(), "project_id": self.gov,
-                                              "body": "GOV-1418 QA 확인 완료로 종료. GOV-1423: 응답 3.2초, 인덱스를 안 탐"})["id"]
+            sessionstore.update_session(conn, self.first, {"title": "GOV-1418 QA 확인 완료로 종료. GOV-1423 응답 3.2초"})
+        s = f"S{self.first}"
         raw = {"summary": "GOV-1418 버그 수정 및 GOV-1423 조회 성능 개선을 완료하고, K8s 전환을 진행함. "
                           "GOV-1418은 QA 확인 후 종료함.",
                "projects": [{"project": "Gov24 백엔드", "next": [], "issues": [], "done": [
-                   {"text": "GOV-1423 조회 성능 개선 완료", "refs": [f"N{note}"]},
-                   {"text": "GOV-1418 QA 확인 후 종료", "refs": [f"N{note}"]},
+                   {"text": "GOV-1423 조회 성능 개선 완료", "refs": [s]},
+                   {"text": "GOV-1418 QA 확인 후 종료", "refs": [s]},
                ]}]}
         report = ai_report.validate("weekly", self.context(), raw)
         self.assertEqual([i.flag for i in report.projects[0].done], ["unconfirmed_done", None])
@@ -171,16 +168,26 @@ class ValidationTests(AIDataTestCase):
         [block] = ai_report.validate("weekly", self.context(), raw).projects
         self.assertIsNone(block.done[0].flag)
 
-    def test_project_left_out_by_ai_is_restored(self):
-        report = ai_report.validate("weekly", self.context(), {"summary": "", "projects": []})
-        self.assertEqual([(b.project, b.missing_from_ai) for b in report.projects], [("Gov24 백엔드", True)])
-        self.assertIn("AI 초안에 항목이 없습니다", ai_report.render_text(report))
-
-    def test_unclassified_time_is_not_forced_into_the_report(self):
+    def test_work_folder_left_out_by_ai_is_restored(self):
         ctx = self.context()
-        ctx.project_seconds["미분류"] = 3 * 3600  # meetings, chat: fine to leave out
-        report = ai_report.validate("weekly", ctx, {"summary": "", "projects": []})
-        self.assertNotIn("미분류", [b.project for b in report.projects])
+        ctx.folder_changes = {"gov24-api": ["C77"], "docs": ["C78"]}
+        ctx.refs |= {"C77", "C78"}
+        raw = {"summary": "", "projects": [{"project": "문서", "done": [{"text": "x", "refs": ["C78"]}],
+                                            "next": [], "issues": []}]}
+        report = ai_report.validate("weekly", ctx, raw)
+        self.assertEqual([(b.project, b.missing_from_ai) for b in report.projects],
+                         [("문서", False), ("gov24-api (작업 폴더)", True)])
+        self.assertIn("파일 변경이 AI 초안에 빠졌습니다", ai_report.render_text(report))
+
+    def test_groups_are_named_by_the_model_and_timed_by_their_sessions(self):
+        s = f"S{self.first}"
+        raw = {"summary": "", "projects": [
+            {"project": "", "done": [{"text": "회의", "refs": []}], "next": [], "issues": []},
+            {"project": "GOV-1418 토큰 버그", "done": [{"text": "분석", "refs": [s]}, {"text": "수정", "refs": [s]}],
+             "next": [], "issues": []}]}
+        report = ai_report.validate("weekly", self.context(), raw)
+        self.assertEqual([(b.project, b.seconds) for b in report.projects],
+                         [("GOV-1418 토큰 버그", 50 * 60), ("기타", 0)])  # a session counts once
 
     def test_garbage_output_does_not_crash(self):
         for raw in (None, [], {"projects": "x"}, {"projects": [1, {"done": "x"}]}):
@@ -315,7 +322,7 @@ class ChangesContextTests(unittest.TestCase):
                          {"TokenRefreshFilter.java": "수정", "LegacyTokenTest.java": "삭제"})
         excerpt = "\n".join(fix["diff_excerpt"])
         self.assertIn("+            refreshTokens.delete(stored);", excerpt)
-        self.assertEqual(ctx.project_changes, {"Gov24 민원 API": 2})
+        self.assertEqual(ctx.folder_changes, {"gov24-minwon-api": [c["ref"] for c in changes]})
 
     def test_without_repositories_files_are_listed_without_diffs(self):
         day = self.monday - timedelta(days=6)
@@ -354,11 +361,11 @@ class ChangesContextTests(unittest.TestCase):
         self.assertNotIn("qa_tok_998877", text)
         self.assertIn("password: ***", text)
 
-    def test_project_with_only_file_changes_is_restored(self):
+    def test_folder_with_file_changes_is_restored(self):
         ctx = self.build(-6)
-        ctx.project_seconds.clear()  # e.g. window tracking switched off on a 폐쇄망 PC
         report = ai_report.validate("daily", ctx, {"summary": "", "projects": []})
-        self.assertEqual([(b.project, b.missing_from_ai) for b in report.projects], [("Gov24 민원 API", True)])
+        self.assertEqual([(b.project, b.missing_from_ai) for b in report.projects],
+                         [("gov24-minwon-api (작업 폴더)", True)])
 
     def test_change_refs_count_as_evidence(self):
         ctx = self.build(-6)

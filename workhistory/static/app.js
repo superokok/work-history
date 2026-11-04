@@ -616,7 +616,7 @@ function renderReportSide(r) {
       r.summary ? aiText(r.summary, r.summary_flag) : null,
       ...r.projects.map((p) => h("div", { class: "report-project" },
         h("h3", {}, p.project, p.seconds ? h("span", { class: "meta" }, ` · ${dur(p.seconds)}`) : null),
-        p.missing_from_ai ? h("p", { class: "warning" }, "기록된 작업이 있지만 AI 초안에 빠졌습니다. 직접 작성하세요.") : null,
+        p.missing_from_ai ? h("p", { class: "warning" }, "이 작업 폴더의 파일 변경이 AI 초안에 빠졌습니다. 직접 작성하세요.") : null,
         ...[[doneLabel, p.done], [nextLabel, p.next], [issueLabel, p.issues]].filter(([, items]) => items.length).map(([label, items]) =>
           h("div", {}, h("div", { class: "meta" }, label),
             h("ul", { class: "report-items" }, items.map((it) => h("li", {},
@@ -965,7 +965,7 @@ $("delete-all").addEventListener("click", () => {
 // ------------------------------------------------------------------ boot
 (async function boot() {
   const status = await guarded(loadStatus);
-  if (status?.last_day && status.last_day < state.day) state.day = status.last_day;
+  if (status?.last_day && status.last_day < state.day) state.day = state.reportDay = status.last_day;
   $("day").value = state.day;
   $("report-day").value = state.reportDay;
   await guarded(loadProjects);

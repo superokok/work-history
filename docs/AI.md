@@ -6,8 +6,11 @@ supports.
 
 ## Features
 
-1. **Work report drafts** (daily 업무일지 / weekly 주간보고): per project,
+1. **Work report drafts** (daily 업무일지 / weekly 주간보고): per group of work,
    금주 실적 / 차주 계획 / 이슈. Every bullet cites the records it came from.
+   There are no projects (2026-11-05): the model groups the records itself by
+   issue key, MR, work folder or topic and names each group from the records
+   ("기타" for the rest); a group's time is the sessions it cites.
 2. **Ask your history** ("지난주 로그인 버그 어디까지 했지?"): an agent that
    searches the local history with tools and answers with citations.
 
@@ -68,7 +71,7 @@ entry-level 4 GB NVIDIA GPU + Intel integrated graphics), `evals/report_eval.py`
 | 4B · Intel iGPU only | 251–315 s | 85–97 s |
 | 4B · CPU only | 277–338 s | 80–89 s |
 
-- No run dropped a reference or left out a project.
+- No run dropped a reference or left out a project (project-based prompt, before 2026-11-05).
 - 9B is the recommended model: it passed every case on the GPU run. 4B is
   faster; when it calls unfinished work "완료", the honesty check marks the
   sentence "완료 확인 필요" (below).
@@ -146,7 +149,9 @@ one class plus a factory entry (`ai_local.LocalModel` is the second one).
   database (synthetic data) is always allowed.
 - Only work data is sent: recorded file changes (C: files, line counts and
   a bounded excerpt of changed lines), sessions that are not excluded and not
-  "업무 외" (S), the user's notes (N) and projects with next actions (P).
+  "업무 외" (S). Projects, next actions and notes are not sent to the report
+  (2026-11-05: the app has no screens for them any more), nor are browser
+  addresses.
   "업무 외" time is sent as a total only.
 - Every free-text field passes `redact.py` (keys, tokens, passwords, resident
   registration and card numbers) before it is sent.
@@ -163,17 +168,20 @@ one class plus a factory entry (`ai_local.LocalModel` is the second one).
 - A 실적/이슈 bullet without a valid reference is shown as "근거 없음".
 - A 실적 bullet that says something is finished (완료, 해결, 종료, 마무리, …;
   `ai_report.DONE_WORDS`) is shown as "완료 확인 필요" unless one of its
-  references is the user's own words saying so: a note (N), or a session
-  note or title the user wrote (S). File changes and window activity show
-  work, not that it is done. When the claim names
+  references is the user's own words saying so: a session title the user
+  wrote (S). File changes and window activity show work, not that it is
+  done. When the claim names
   issue keys (GOV-1423), each key needs a sentence of the user's own that
   names it and says it is done — a note "GOV-1418 완료. GOV-1423 3.2초" does
   not finish GOV-1423. The summary has no references and is checked against
   all of the user's words the same way ("요약 … (완료 근거 없음 — 확인 필요)").
 - Clicking a "파일 변경" (C) citation opens that change's diffs directly.
-- 차주 계획 may only come from the user's own notes and next actions
-  (references to notes/next actions); otherwise it is marked as a suggestion
-  for the user to confirm.
+- 차주 계획 is not in the records: the model may suggest one or two next
+  steps per group that follow from them, and each is marked "AI 제안 — 확인
+  필요" (unless a session title the user wrote backs it).
+- Missing work: a work folder whose recorded file changes in the period are
+  not cited anywhere in the draft is added as "<folder> (작업 폴더)" with
+  "파일 변경이 AI 초안에 빠졌습니다".
 - AI text is always labelled as an AI draft and must be saved by the user to
   become a report.
 

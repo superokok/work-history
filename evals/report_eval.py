@@ -5,10 +5,10 @@ asks the chosen model for reports (default: the largest local model in llm/,
 else Claude Code), and checks each draft against
 facts we know from the scenario:
 
-- required facts must appear (in the project's items),
+- required facts must appear (anywhere in the items; the model names the groups),
 - over-claims must not appear anywhere (e.g. "GOV-1423 완료" while it is not),
 - a daily report must not contain other days' work,
-- references must all verify; flags and restored projects are reported.
+- references must all verify; flags and restored work folders are reported.
 
 Usage:
     .venv/Scripts/python.exe -m evals.report_eval [--runs 2] [--model local:Qwen3.5-9B-Q4_K_M]
@@ -31,30 +31,28 @@ from workhistory import ai_context, ai_report, ai_service, demo
 from workhistory.ai_client import AIError
 from workhistory.db import Database
 
-GOV, K8S = "Gov24 민원 API", "K8s 전환 PoC"
-
 # offset: day offset from this week's Monday (the demo scenario is defined the same way)
 CASES = [
     {
         "name": "last week (weekly)", "kind": "weekly", "offset": -7,
-        "require": {GOV: [r"GOV-1418|리프레시|토큰", r"GOV-1423|인덱스|조회"], K8S: [r"[Hh]elm|배포|차트"]},
+        "require": [r"GOV-1418|리프레시|토큰", r"GOV-1423|인덱스|조회", r"[Hh]elm|배포|차트"],
         # GOV-1423 was not finished last week (DBA review pending).
         "forbid": [r"GOV-1423[^\n]{0,40}(완료|해결)", r"(조회|성능)[^\n]{0,15}개선[^\n]{0,10}(완료|해결)"],
     },
     {
         "name": "this week (weekly)", "kind": "weekly", "offset": 0,
-        "require": {GOV: [r"count|카운트|MR !318|!318", r"DBA"]},
+        "require": [r"count|카운트|MR !318|!318", r"DBA"],
         # Cursor paging (GOV-1430) is only being explored.
         "forbid": [r"GOV-1430[^\n]{0,30}(완료|적용|해결)", r"커서[^\n]{0,20}(완료|적용 완료)"],
     },
     {
         "name": "fix day (daily)", "kind": "daily", "offset": -6,
-        "require": {GOV: [r"TokenRefreshFilter|무효화|토큰"]},
+        "require": [r"TokenRefreshFilter|무효화|토큰"],
         "forbid": [r"GOV-1423", r"[Hh]elm", r"인덱스"],  # none of this happened that day
     },
     {
         "name": "K8s day (daily)", "kind": "daily", "offset": -5,
-        "require": {K8S: [r"[Hh]elm|배포|values|Deployment|deployment"]},
+        "require": [r"[Hh]elm|배포|values|Deployment|deployment"],
         "forbid": [r"GOV-1423", r"인덱스"],
     },
 ]
@@ -64,14 +62,11 @@ def evaluate(case: dict, report: ai_report.Report) -> tuple[list[str], list[str]
     """(failures, caught): an over-claim in a line the app flagged as 'unconfirmed_done' is shown to the
     user with a warning, so it is counted as caught, not as a failure."""
     failures, caught = [], []
-    blocks = {b.project: b for b in report.projects}
-    for project, patterns in case["require"].items():
-        block = blocks.get(project)
-        text = "\n".join(i.text for s in (block.done, block.next, block.issues) for i in s) if block else ""
-        for p in patterns:
-            if not re.search(p, text):
-                failures.append(f"missing in {project}: /{p}/")
     items = [i for b in report.projects for s in (b.done, b.next, b.issues) for i in s]
+    text = "\n".join(i.text for i in items)
+    for p in case["require"]:
+        if not re.search(p, text):
+            failures.append(f"missing: /{p}/")
     for p in case["forbid"]:
         hits = [(text, flagged) for text, flagged in [(report.summary, report.summary_flag == "unconfirmed_done")]
                 + [(i.text, i.flag == "unconfirmed_done") for i in items] if re.search(p, text)]
