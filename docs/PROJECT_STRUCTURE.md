@@ -82,7 +82,7 @@ work-history/
 ```bash
 # 개발 환경
 uv venv .venv --python 3.12
-uv pip install --python .venv/Scripts/python.exe -e .[claude]
+uv pip install --python .venv/Scripts/python.exe -e .[claude] pip   # pip: 빌드 스크립트가 씀 (배포본에는 안 들어감)
 
 # 실행 (기본 http://127.0.0.1:5730/, 막혀 있으면 5731~5739)
 .venv/Scripts/python.exe -m workhistory            # 콘솔에 로그. start-workhistory.cmd는 pythonw(창 없음, 로그는 데이터 폴더 workhistory.log)
@@ -98,7 +98,9 @@ uv pip install --python .venv/Scripts/python.exe -e .[claude]
 python tools/build_portable.py                 # 인터넷용(Claude Code 포함, 모델 제외) — 배포하지 않음, 개발 확인용
 python tools/build_portable.py --with-models   # 위 + 모델 (-local-ai) — 배포하지 않음
 python tools/build_portable.py --offline --with-models  # 행망(폐쇄망)용: Claude Code 연결(mcp 등) 제외 (-offline-local-ai) = 배포본
-python tools/release_parts.py dist/WorkHistory-0.1.0-windows-x64-offline-local-ai.zip  # 릴리스용 조각 + WorkHistory-join.cmd
+python tools/build_portable.py --offline       # 행망용 앱 전용 업데이트 zip (-offline, llm/bin 포함·모델 제외, 약 45MB):
+                                               #   이미 받은 사람은 예전 폴더의 llm\models\*.gguf만 새 폴더로 옮김
+python tools/release_parts.py dist/WorkHistory-<버전>-windows-x64-offline-local-ai.zip  # 릴리스용 조각 + WorkHistory-join.cmd
 
 # 로컬 모델로 품질 평가 (기기 고정: WORKHISTORY_LLM_DEVICE=none 은 CPU만)
 .venv/Scripts/python.exe -m evals.report_eval --model local:Qwen3.5-4B-Q4_K_M
