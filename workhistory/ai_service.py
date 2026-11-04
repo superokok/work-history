@@ -6,7 +6,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from . import ai_claude, ai_context, ai_local, ai_remote, ai_report
+from . import ai_claude, ai_context, ai_local, ai_report
 from .ai_claude import ClaudeCodeModel, find_cli
 from .ai_client import AIError, Model, Usage
 from .store import Invalid
@@ -27,9 +27,9 @@ def default_model() -> str:
 
 
 def all_models(conn: Optional[sqlite3.Connection] = None) -> list[str]:
-    """Claude Code models, the local models in the llm folder, and (with `conn`) the registered AI servers."""
+    """The local models in the llm folder, plus Claude Code models where Claude Code is part of the install."""
     claude = list(MODELS) if ai_claude.bundled() else []
-    return claude + ai_local.available_models() + (ai_remote.available_models(conn) if conn else [])
+    return claude + ai_local.available_models()
 
 
 def default_factory(name: str) -> Model:
@@ -53,7 +53,7 @@ def _set_meta(conn: sqlite3.Connection, key: str, value: str) -> None:
 def chosen_model(conn: sqlite3.Connection) -> Optional[str]:
     """The model the user turned on, or None: AI is off until the user picks one (that is the consent)."""
     name = _meta(conn, "ai_model")
-    return name if name in all_models(conn) else None  # a removed local model or server counts as off
+    return name if name in all_models(conn) else None  # a removed local model counts as off
 
 
 def _model_name(conn: sqlite3.Connection, demo: bool) -> str:
@@ -61,10 +61,7 @@ def _model_name(conn: sqlite3.Connection, demo: bool) -> str:
 
 
 def _model(conn: sqlite3.Connection, demo: bool, factory: ModelFactory) -> Model:
-    name = _model_name(conn, demo)
-    if factory is default_factory and ai_remote.is_remote_model(name):
-        return ai_remote.model(conn, name)  # a registered server: its address and key are in the database
-    return factory(name)
+    return factory(_model_name(conn, demo))
 
 
 def get_settings(conn: sqlite3.Connection, demo: bool) -> dict:
@@ -72,7 +69,6 @@ def get_settings(conn: sqlite3.Connection, demo: bool) -> dict:
         "model": chosen_model(conn) or "",
         "models": all_models(conn),
         "local_models": ai_local.available_models(),
-        "servers": ai_remote.list_endpoints(conn),
         "default_model": default_model(),
         "enabled": chosen_model(conn) is not None,
         # False in the released (offline) zip: the UI then says nothing about Claude Code at all.

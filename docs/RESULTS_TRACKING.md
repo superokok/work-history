@@ -9,8 +9,7 @@ from **window time** to **results: file changes**. Window tracking stays as
 an optional, secondary signal.
 
 Target setting: a Windows PC inside a 폐쇄망. The LLM runs on the PC itself
-(llama.cpp + Qwen3.5, shipped in the zip) or on an LLM server in the company
-network, behind a provider interface (see AI.md).
+(llama.cpp + Qwen3.5, shipped in the zip), behind a provider interface (see AI.md).
 
 ## What it does
 

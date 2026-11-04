@@ -50,7 +50,7 @@ manual override → note → search.
 ## Phase 5 — Ready for other PCs ✅ (2026-10-28 ~ 11-04)
 
 - Window activity recorded by the app itself (`collector.py`); Windows only.
-- Local AI as the default (llama.cpp + Qwen3.5), AI servers by address. The
+- Local AI on the PC (llama.cpp + Qwen3.5). The
   closed-network package (`--offline`, models inside) is the release; Claude
   Code stays in the source for development and quality comparison.
 - Runs without a console window (`pythonw`), stops with "앱 종료" in the app; log file

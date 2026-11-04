@@ -1,13 +1,10 @@
-"""The OpenAI-compatible chat API as a `Model`: what the local model and registered AI servers share.
+"""The OpenAI-compatible chat API as a `Model`, spoken by llama.cpp's llama-server (ai_local).
 
-Almost every LLM server speaks it (llama.cpp, vLLM, Ollama, LM Studio, TGI,
-company gateways), so any model behind such a server can write reports and
-answer questions. Subclasses only say how to send a request (`_post`).
+Subclasses only say how to send a request (`_post`).
 
-Servers differ in what they accept, so reports degrade step by step: a JSON
-schema (`response_format: json_schema`), else JSON mode (`json_object`), else
-plain text with the schema in the prompt. Thinking is switched off where the
-server allows it (`chat_template_kwargs`; dropped for servers that reject it):
+Reports ask for a JSON schema (`response_format: json_schema`), falling back to
+JSON mode (`json_object`) and then to plain text with the schema in the prompt.
+Thinking is switched off (`chat_template_kwargs`):
 Qwen3-style models otherwise think for thousands of tokens, which takes many
 minutes on a CPU and can cut the answer off. Leftover thinking
 (`<think>…</think>`) is removed before the answer is read.
@@ -25,7 +22,7 @@ MAX_ANSWER_TOKENS = 8192
 _THINK = re.compile(r"<think>.*?</think>\s*", re.S)
 _FENCE = re.compile(r"^```(?:json)?\s*|\s*```$")
 
-# No system proxy: the records go to the server the user chose, never through a proxy.
+# No system proxy: requests go straight to the AI on this PC (127.0.0.1).
 _opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
@@ -53,13 +50,12 @@ def http_json(url: str, body: Optional[dict] = None, key: str = "", timeout: flo
     except urllib.error.HTTPError as e:
         detail = e.read().decode("utf-8", "replace")[:500]
         if e.code in (401, 403):
-            raise HTTPFailure(e.code, detail, "AI 서버가 접근을 거부했습니다. API 키를 확인하세요.") from None
-        raise HTTPFailure(e.code, detail, f"AI 서버가 요청을 처리하지 못했습니다 (HTTP {e.code}).") from None
+            raise HTTPFailure(e.code, detail, "AI 실행기가 요청을 거부했습니다. 앱을 다시 시작해 보세요.") from None
+        raise HTTPFailure(e.code, detail, f"AI 실행기가 요청을 처리하지 못했습니다 (HTTP {e.code}).") from None
     except json.JSONDecodeError:
-        raise AIError("AI 서버의 응답이 JSON이 아닙니다. 주소가 OpenAI 호환 API인지 확인하세요.", "invalid_output") from None
+        raise AIError("AI 실행기의 응답을 읽지 못했습니다.", "invalid_output") from None
     except (urllib.error.URLError, OSError, TimeoutError):
-        raise AIError("AI 서버에 연결하지 못했거나 제시간에 답하지 않았습니다. 주소와 네트워크를 확인하세요.",
-                      "network") from None
+        raise AIError("AI 실행기에 연결하지 못했거나 제시간에 답하지 않았습니다.", "network") from None
 
 
 def _clean(text: str) -> str:
@@ -158,7 +154,7 @@ class OpenAICompatModel:
                 message, usage = self._chat(messages, **({"tools": specs} if budget_left else {}))
             except HTTPFailure as e:
                 if budget_left and not calls and e.status in (400, 422) and "tool" in e.detail.lower():
-                    raise AIError("이 AI 서버는 도구 호출(tools)을 지원하지 않아 'AI에게 묻기'에 쓸 수 없습니다. "
+                    raise AIError("이 AI 모델은 도구 호출(tools)을 지원하지 않아 'AI에게 묻기'에 쓸 수 없습니다. "
                                   "보고서는 만들 수 있습니다.", "config") from None
                 raise
             total.add(usage)

@@ -12,7 +12,7 @@ _마지막 갱신: 2026-11-04_
 - 주 기록 = **결과물**: 등록한 작업 폴더의 파일 변경을 5분마다 숨김 Git 저장소(dulwich)에 스냅샷.
 - 보조 기록 = **창 활동**: 앱이 직접 기록한 앱/창 제목/유휴 상태를 작업 세션으로 묶음.
 - 그 위에 타임라인, 일일 리뷰, 이어서 하기, 검색, 프로젝트, 개인정보 설정,
-  AI 보고서·"AI에게 묻기" (내 PC AI: llama.cpp + Qwen3.5가 기본, 행망·사내 AI 서버도 선택 가능).
+  AI 보고서·"AI에게 묻기" (내 PC AI: llama.cpp + Qwen3.5, 인터넷 불필요).
   Claude Code는 개발 환경에서만 쓰는 비교용 선택지이며 배포본에는 없다.
 - 배포: 행망용 Windows 포터블 zip 하나 (`-offline-local-ai`: 모델 포함·Claude Code 연결 제외, GitHub Releases에 조각으로).
   풀고 `작업 기록.cmd` → 창 없이 실행, 설정은 모두 앱 안에서.
@@ -55,7 +55,7 @@ work-history/
 | | `sync.py` | 원본을 1분마다 가져오기, 중복 제거, 개인정보 규칙 적용 |
 | | `snapshots.py` | 작업 폴더 스냅샷 (dulwich), 변경 기록, 하위 폴더별 프로젝트 (앱은 추천만, 사람이 확인) |
 | | `extract.py` | 코드/텍스트, HWP, DOCX/XLSX/PPTX 텍스트 추출 |
-| 저장 | `db.py` | SQLite 스키마 + 마이그레이션 (`PRAGMA user_version`, 현재 v10) |
+| 저장 | `db.py` | SQLite 스키마 + 마이그레이션 (`PRAGMA user_version`, 현재 v11) |
 | | `store.py` | 공용 로더, 하루 경계, 세션 재계산 표시 |
 | 처리 (순수 함수) | `normalize.py` | 창 − AFK − 차단 구간 − 제외, 하루 단위 자르기 |
 | | `classify.py` | 수동 지정 > 키워드 규칙 > 없음 |
@@ -65,9 +65,8 @@ work-history/
 | 세션 저장 | `sessionstore.py` | 재묶기, 편집, 병합, 분할 |
 | AI | `ai_client.py` | 공급자 중립 `Model` 프로토콜 |
 | | `ai_claude.py` | (개발·비교용) Claude Code 헤드리스(`claude -p`) 구현, 도구 잠금. `mcp` 없으면 숨김 |
-| | `ai_openai.py` | OpenAI 호환 API 공통 (보고서 JSON 단계적 대체, 도구 루프, 생각 출력 제거) |
+| | `ai_openai.py` | llama-server의 OpenAI 호환 API 클라이언트 (보고서 JSON 단계적 대체, 도구 루프, 생각 출력 제거) |
 | | `ai_local.py` | 내 PC의 AI: llama.cpp `llama-server`를 켜고 끄며 연결 (외부 전송 없음, 자동 등록) |
-| | `ai_remote.py` | 주소로 등록한 AI 서버 (행망·사내 LLM, 어떤 모델이든 OpenAI 호환이면 연결) |
 | | `ai_context.py` | AI에 보낼 정확한 자료 + 검증 가능한 참조(C/S/N/P) |
 | | `ai_report.py` | 보고서 스키마, 프롬프트, 참조 검증, 렌더링 |
 | | `ai_agent.py` | "AI에게 묻기": 읽기 전용 기록 도구 + 인용 확인 |
@@ -120,9 +119,9 @@ python tools/release_parts.py dist/WorkHistory-0.1.0-windows-x64-offline-local-a
 - 파일 변경의 프로젝트는 앱이 추측해서 넣지 않는다: 하위 폴더별로 추천하고 사람이 확인한 것만 쓴다 (2026-10-28).
 - 스냅샷은 dulwich(Apache-2.0)로, git.exe·GPL 의존 금지.
 - **Windows 전용**, 창 기록은 앱의 내장 수집기로. macOS/Linux 지원과 ActivityWatch는 뺐다 (2026-10-28).
-- AI 기준은 **행망·로컬 LLM**: 내 PC의 로컬 모델(llama.cpp + Qwen3.5, 외부 전송 없음, 기본·추천)과
-  주소로 등록한 AI 서버(OpenAI 호환, 행망·사내 LLM). 모두 `ai_client.Model` 구현. 로컬 모델 파일은 `llm/`(git 제외),
-  배포본에는 들어 있음. 모델을 고르기 전(=동의 전)에는 AI 꺼짐.
+- AI는 **내 PC의 로컬 모델**만 쓴다 (llama.cpp + Qwen3.5, 외부 전송 없음, `ai_client.Model` 구현).
+  사내 AI 서버 연결 기능은 2026-11-04에 뺐다. 로컬 모델 파일은 `llm/`(git 제외), 배포본에는 들어 있음.
+  모델을 고르기 전(=동의 전)에는 AI 꺼짐.
 - Claude Code(헤드리스)는 소스에 남겨 두되 **개발·품질 비교용**으로만 쓴다 (배포본에는 없음, 2026-11-04 결정).
   Claude Code에 앱을 등록하는 "Claude Code 연결"은 2026-10-27에 없앰.
 - 로컬 전용, 배포는 Windows 포터블 zip. 행망용은 `--offline` 빌드: `mcp`와 그 의존성 30여 개를 빼고,

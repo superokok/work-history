@@ -13,19 +13,16 @@ supports.
 
 ## Which model
 
-The AI runs on one of three providers, chosen in 개인정보 → AI 설정 (AI is off
-until the user picks one):
+The model is chosen in 개인정보 → AI 설정 (AI is off until the user picks one):
 
 | Provider | For | In the released zip |
 |---|---|---|
-| A local model on this PC (llama.cpp + Qwen3.5) | default and recommended; nothing leaves the PC, works without internet | yes, with the models |
-| An AI server registered by address | an LLM the company already runs in its network (행망) | yes |
+| A local model on this PC (llama.cpp + Qwen3.5) | the AI users run; nothing leaves the PC, works without internet | yes, with the models |
 | Claude Code (headless) | development: quality comparison and evals on the demo data | no |
 
 The only package handed out is the closed-network zip (`--offline --with-models`,
-GitHub Releases). It leaves Claude Code out entirely, so on a user's PC the
-choice is between local models and registered AI servers. Claude Code stays in
-the source as a development and comparison tool.
+GitHub Releases), so on a user's PC the AI is always a local model. Claude Code
+stays in the source as a development and comparison tool.
 
 ## Provider: a local model on this PC (llama.cpp)
 
@@ -56,7 +53,7 @@ or that have no internet (폐쇄망). The app ships llama.cpp's `llama-server`
   the app zip, or built in with `tools/build_portable.py --with-models`.
 - Closed networks: `--offline` leaves the `mcp` package (and the ~30 libraries it
   pulls in) out of the zip; without it the app lists no Claude Code models
-  (`ai_claude.bundled()`), so only local models and registered AI servers remain;
+  (`ai_claude.bundled()`), so only local models remain;
   the settings screen then shows no Claude Code status, list entry or explanation either
   (`claude_bundled` in `/api/ai/settings`).
 
@@ -78,28 +75,11 @@ entry-level 4 GB NVIDIA GPU + Intel integrated graphics), `evals/report_eval.py`
 - A PC without an NVIDIA or AMD card runs at about CPU speed; the report is
   generated in the background while the user keeps working.
 
-## Provider: AI servers registered by address
-
-`workhistory/ai_remote.py`, table `ai_endpoints` (schema v6). For an LLM that
-already runs somewhere in the company network (행망): 개인정보 → AI 설정 →
-"AI 서버 등록" takes a name, an address (`10.1.2.3:8000`, `http://host/v1`, …),
-the model name (or "서버의 모델 불러오기", `GET /v1/models`) and an optional API
-key. Each registration is a model choice `remote:<id>`.
-
-- Any server with the OpenAI-compatible chat API works (vLLM, Ollama,
-  llama.cpp, LM Studio, TGI, a gateway). The shared client is
-  `ai_openai.OpenAICompatModel`: reports try a JSON schema, then JSON mode,
-  then plain text with the schema in the prompt; `<think>` output is removed;
-  questions run the app's own tool loop (a server without tool calling can
-  still write reports, and says so for questions).
-- Choosing a server is the consent to send the (redacted) records there; the
-  UI names the address. "연결 확인" only lists the server's models.
-- The API key is stored in the app database on this PC and never returned by
-  the API (`has_key` only). Requests bypass any system proxy. HTTPS
-  certificates are verified (no option to turn that off).
-- Removing the chosen server turns AI off; nothing falls back silently.
-- Local models need no registration: every `llm/models/*.gguf` is listed
-  automatically, and the largest one is the suggested default.
+- The client is `ai_openai.OpenAICompatModel` (llama-server speaks the OpenAI chat
+  API): reports try a JSON schema, then JSON mode, then plain text with the schema
+  in the prompt; `<think>` output is removed; questions run the app's own tool loop.
+- Every `llm/models/*.gguf` is listed automatically, and the largest one is the
+  suggested default.
 
 ## Provider: Claude Code (development only, not in the released zip)
 

@@ -708,7 +708,7 @@ function renderReportNotice(ai) {
   const local = ai && isLocal(ai.model);
   if (ai && !local && !ai.claude_installed && !(ai.local_models || []).length) notes.push(ai.claude_bundled
     ? "Claude Code가 설치되어 있지 않습니다. Claude Code를 설치하고 로그인하거나, 내 PC의 AI 모델을 llm 폴더에 넣으면 AI 초안을 만들 수 있습니다."
-    : "내 PC의 AI 모델이 없습니다. 앱 폴더의 llm\\models 에 .gguf 모델 파일을 넣거나, 개인정보 탭에서 AI 서버를 등록하세요.");
+    : "내 PC의 AI 모델이 없습니다. 앱 폴더의 llm\\models 에 .gguf 모델 파일을 넣으면 AI 초안을 만들 수 있습니다.");
   else if (ai && !ai.demo && !ai.enabled) notes.push("AI가 꺼져 있습니다. 개인정보 탭의 AI 설정에서 모델을 고르면 실제 기록으로 초안을 만들 수 있습니다.");
   else if (local) notes.push("내 PC의 AI로 만듭니다. 기록은 이 PC 밖으로 나가지 않습니다. 그래픽카드가 없는 PC에서는 몇 분 걸릴 수 있습니다.");
   $("report-notice").replaceChildren(...notes.map((n) => h("div", { class: "warning" }, n)));
@@ -837,12 +837,7 @@ $("report-copy").addEventListener("click", () => guarded(async () => {
 const MODEL_LABELS = { "": "사용 안 함", "claude-code": "Claude Code · 내 기본 모델", "claude-code:sonnet": "Claude Code · Sonnet",
   "claude-code:opus": "Claude Code · Opus", "claude-code:haiku": "Claude Code · Haiku (빠름)" };
 const isLocal = (m) => typeof m === "string" && m.startsWith("local:");
-const isRemote = (m) => typeof m === "string" && m.startsWith("remote:");
-let aiServers = [];  // registered AI servers (from /api/ai/settings), for labels and the list
-const serverOf = (m) => aiServers.find((s) => s.model === m);
-const modelLabel = (m) => MODEL_LABELS[m]
-  || (isLocal(m) ? `내 PC · ${m.slice(6)} (외부 전송 없음)` : null)
-  || (isRemote(m) && serverOf(m) ? `AI 서버 · ${serverOf(m).name} (${serverOf(m).model_id})` : m);
+const modelLabel = (m) => MODEL_LABELS[m] || (isLocal(m) ? `내 PC · ${m.slice(6)} (외부 전송 없음)` : m);
 let aiModel = "";
 
 function renderModelList(s) {
@@ -850,61 +845,15 @@ function renderModelList(s) {
     h("span", {}, h("b", {}, title), " ", h("span", { class: "meta" }, meta)), h("span", { class: "row" }, ...actions));
   $("ai-model-list").replaceChildren(
     ...s.local_models.map((m) => item(`내 PC · ${m.slice(6)}`, "자동 등록 · 외부 전송 없음 · llm\\models 폴더")),
-    ...aiServers.map((srv) => item(`AI 서버 · ${srv.name}`, `${srv.model_id} · ${srv.url}${srv.has_key ? " · API 키 있음" : ""}`,
-      h("button", { class: "small", onclick: () => checkServer(srv) }, "연결 확인"),
-      h("button", { class: "small danger", onclick: () => deleteServer(srv) }, "삭제"))),
     // Only where Claude Code is part of the install (development); the released zip has none.
     ...(s.claude_bundled ? [item("Claude Code", s.claude_installed ? "이 PC에 설치됨 · Anthropic으로 전송" : "설치되어 있지 않음")] : []),
     ...(s.local_models.length ? [] : [h("li", { class: "muted" },
       "내 PC 모델이 없습니다. 앱 폴더의 llm\\models 에 .gguf 모델 파일을 넣으면 자동으로 등록됩니다.")]));
 }
 
-function checkServer(srv) {
-  guarded(async () => {
-    await api("POST", `/api/ai/servers/${srv.id}/check`, {});
-    toast(`'${srv.name}' 연결 확인 완료: ${srv.model_id} 사용 가능 (업무 기록은 보내지 않았습니다)`);
-  });
-}
-
-function deleteServer(srv) {
-  if (!confirm(`'${srv.name}' 서버 등록을 삭제할까요?` + (aiModel === srv.model ? " 지금 쓰는 모델이라 AI가 꺼집니다." : ""))) return;
-  guarded(async () => {
-    await api("DELETE", `/api/ai/servers/${srv.id}`);
-    toast("서버 등록을 삭제했습니다.");
-    loadAISettings();
-  });
-}
-
-$("ai-server-fetch").addEventListener("click", () => guarded(async () => {
-  const btn = $("ai-server-fetch");
-  btn.disabled = true;
-  try {
-    const r = await api("POST", "/api/ai/servers/models", { url: $("ai-server-url").value, api_key: $("ai-server-key").value });
-    $("ai-server-models").replaceChildren(...r.models.map((m) => h("option", { value: m })));
-    if (r.models.length && !$("ai-server-model").value) $("ai-server-model").value = r.models[0];
-    toast(r.models.length ? `모델 ${r.models.length}개를 찾았습니다. 모델 이름 칸에서 고르세요.` : "서버가 모델 목록을 주지 않았습니다. 이름을 직접 입력하세요.");
-  } finally {
-    btn.disabled = false;
-  }
-}));
-
-$("ai-server-form").addEventListener("submit", (e) => {
-  e.preventDefault();
-  guarded(async () => {
-    const srv = await api("POST", "/api/ai/servers", {
-      name: $("ai-server-name").value, url: $("ai-server-url").value,
-      model_id: $("ai-server-model").value, api_key: $("ai-server-key").value,
-    });
-    for (const id of ["ai-server-name", "ai-server-url", "ai-server-model", "ai-server-key"]) $(id).value = "";
-    toast(`'${srv.name}'을(를) 등록했습니다. 위의 AI 모델에서 고르면 사용합니다.`);
-    loadAISettings();
-  });
-});
-
 async function loadAISettings() {
   const s = await guarded(() => api("GET", "/api/ai/settings"));
   if (!s) return;
-  aiServers = s.servers || [];
   renderModelList(s);
   $("ai-model").replaceChildren(...["", ...s.models].map((m) => h("option", { value: m },
     modelLabel(m) + (m === s.default_model ? " · 추천" : ""))));
@@ -916,8 +865,7 @@ async function loadAISettings() {
     h("span", { class: `chip ${s.local_models.length ? "ok" : ""}` },
       s.local_models.length ? `내 PC AI 모델 ${s.local_models.length}개` : "내 PC AI 모델 없음"),
     s.demo ? h("span", { class: "chip" }, "데모 DB: 전송 허용")
-      : ok(s.enabled, isLocal(s.model) ? "AI 켜짐: 내 PC에서 처리"
-        : isRemote(s.model) ? `AI 켜짐: ${serverOf(s.model) ? serverOf(s.model).url : "등록한 서버"}로 전송` : "AI 켜짐: 실제 기록 전송 허용", "AI 꺼짐"));
+      : ok(s.enabled, isLocal(s.model) ? "AI 켜짐: 내 PC에서 처리" : "AI 켜짐: 실제 기록 전송 허용", "AI 꺼짐"));
   $("ai-usage").textContent = s.stats.runs
     ? `지금까지 ${s.stats.runs}회 호출 (성공 ${s.stats.ok}) · 입력 ${s.stats.input_tokens.toLocaleString()} / 출력 ${(s.stats.output_tokens + s.stats.thinking_tokens).toLocaleString()} 토큰 · 평균 ${(s.stats.avg_ms / 1000).toFixed(1)}초`
     : "아직 AI를 호출한 적이 없습니다.";
@@ -979,11 +927,9 @@ $("ai-check").addEventListener("click", () => guarded(async () => {
 $("ai-model").addEventListener("change", (e) => {
   const model = e.target.value;
   // Ask whenever the records would go somewhere new; staying on this PC needs no warning after the first choice.
-  const srv = serverOf(model);
   const question = !model || model === aiModel ? null
     : isLocal(model) ? (aiModel ? null : "보고서와 'AI에게 묻기'에 내 PC의 AI를 쓸까요? 기록은 이 PC 밖으로 나가지 않습니다. 처음 쓸 때 모델을 불러오느라 시간이 걸리고, 그래픽카드가 없는 PC에서는 보고서 하나에 몇 분 걸릴 수 있습니다.")
-    : isRemote(model) ? `보고서와 'AI에게 묻기'에 '${srv ? srv.name : model}' 서버를 쓸까요? 실제 업무 기록이 (비밀값을 가린 뒤) ${srv ? srv.url : "그 서버"} 로 전송됩니다.`
-    : (aiModel && !isLocal(aiModel) && !isRemote(aiModel)) ? null
+    : (aiModel && !isLocal(aiModel)) ? null
     : "보고서와 'AI에게 묻기'에 Claude Code를 쓸까요? 실제 업무 기록이 (비밀값을 가린 뒤) Claude Code를 거쳐 Anthropic으로 전송됩니다.";
   if (question && !confirm(question)) {
     e.target.value = aiModel;

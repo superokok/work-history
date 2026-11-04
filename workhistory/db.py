@@ -226,7 +226,7 @@ MIGRATIONS: list[str] = [
     CREATE INDEX idx_change_files_change ON change_files(change_id);
     CREATE INDEX idx_change_files_path ON change_files(path);
     """,
-    # v6: AI servers the user registered by address (OpenAI-compatible); model choice "remote:<id>"
+    # v6: AI server registrations; dropped again in v11.
     """
     CREATE TABLE ai_endpoints (
         id         INTEGER PRIMARY KEY,
@@ -280,6 +280,10 @@ MIGRATIONS: list[str] = [
     # v10: the v7 usage counters are no longer used.
     """
     DROP TABLE IF EXISTS usage_events;
+    """,
+    # v11: AI servers are no longer registered; the AI runs on this PC.
+    """
+    DROP TABLE IF EXISTS ai_endpoints;
     """,
 ]
 

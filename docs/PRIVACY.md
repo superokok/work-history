@@ -86,10 +86,7 @@ own name: `Startup\작업 기록.lnk` and `Desktop\작업 기록.lnk`. Not avail
 Off until the user picks a model in 개인정보 → AI 설정 (the app asks for
 consent then) and runs a report or a question. With a "내 PC" model the
 records go only to the local model program the app started on this PC
-(127.0.0.1, random key); nothing leaves the PC. With a registered AI server
-(an address the user entered, e.g. inside the company network) the redacted
-records go to that server; its API key, if any, stays in the app database
-on this PC. "사용 안 함" turns it off again. "보낼 내용 보기" shows the exact
+(127.0.0.1, random key); nothing leaves the PC. "사용 안 함" turns it off again. "보낼 내용 보기" shows the exact
 report payload. Locally the app logs token counts and timings only, never
 prompts or answers.
 

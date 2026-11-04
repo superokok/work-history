@@ -40,9 +40,8 @@ extract.py    – text from code/text, HWP, DOCX/XLSX/PPTX (stdlib only)
 redact.py     – secret / personal-identifier masking before anything leaves the PC
 ai_client.py  – the provider-neutral Model protocol the AI code is written against
 ai_claude.py  – that protocol over headless Claude Code (`claude -p`, locked down); development/comparison only, not in the released zip
-ai_openai.py  – that protocol over any OpenAI-compatible chat API (shared by the two below)
+ai_openai.py  – that protocol over the OpenAI-compatible chat API that llama-server speaks
 ai_local.py   – llama.cpp's llama-server on this PC, started on demand (local models, nothing leaves the PC)
-ai_remote.py  – AI servers the user registered by address (e.g. an LLM in the company network)
 ai_agent.py   – "AI에게 묻기": read-only history tools + citation check
 mcp_server.py – the history tools over MCP (Claude Code, development only), consent-checked
 autostart.py  – start-at-logon and shortcut files, switched from the app
@@ -94,7 +93,7 @@ per kind, `bucket_id` `workhistory-window` / `workhistory-afk`, `bucket_created`
   long event that started before the cursor is still extended.
 - Privacy rules apply here (pause/deleted ranges, exclusions, "업무 앱만 기록").
 
-## 5. Data model (schema v10)
+## 5. Data model (schema v11)
 
 ```
 sources        id, bucket_id, bucket_created, kind('window'|'afk'), hostname,
@@ -139,8 +138,7 @@ app, title, status), the raw events `sync.py` imports from on Windows; pruned af
 
 v7 added a `usage_events` counter table that v10 drops again.
 
-v6 (AI servers): `ai_endpoints` (id, name, url = API base ending in /v1, model_id, api_key, created_at):
-servers the user registered by address; model choice `remote:<id>`.
+v6 added an `ai_endpoints` table (AI server registrations) that v11 drops again.
 
 v4 (AI): `reports` (saved daily/weekly drafts), `ai_runs` (token/latency log,
 no content).

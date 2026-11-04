@@ -216,23 +216,6 @@
         <p id="ai-usage" class="muted small-text"></p>
         <h3>등록된 모델</h3>
         <ul id="ai-model-list" class="plain"></ul>
-        <details id="ai-server-box">
-          <summary>AI 서버 등록 (행망·사내 LLM)</summary>
-          <p class="muted small-text">OpenAI 호환 API를 주는 LLM 서버(vLLM, Ollama, llama.cpp, LM Studio, 사내 게이트웨이 등)를 주소로 등록하면 어떤 모델이든 쓸 수 있습니다. 등록한 서버를 고르면 업무 기록이 (비밀값을 가린 뒤) 그 서버로 전송됩니다. API 키는 이 PC에만 저장되고 다시 표시되지 않습니다.</p>
-          <form id="ai-server-form">
-            <div class="row">
-              <input id="ai-server-name" placeholder="이름 (예: 행망 LLM)" maxlength="60" size="16">
-              <input id="ai-server-url" placeholder="주소 (예: http://10.1.2.3:8000)" size="30">
-              <input id="ai-server-key" type="password" placeholder="API 키 (필요할 때만)" autocomplete="off" size="20">
-            </div>
-            <div class="row">
-              <input id="ai-server-model" placeholder="모델 이름" list="ai-server-models" size="30">
-              <datalist id="ai-server-models"></datalist>
-              <button type="button" id="ai-server-fetch" class="small">서버의 모델 불러오기</button>
-              <button type="submit" class="primary">등록</button>
-            </div>
-          </form>
-        </details>
       </div>
       <div class="card">
         <h2>기록 대상</h2>
