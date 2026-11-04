@@ -72,8 +72,9 @@ Remaining validation is human: about a week of real use, following
 
 - Window activity recorded by the app itself (`collector.py`); ActivityWatch and
   macOS/Linux support removed: Windows only.
-- Local AI as the default (llama.cpp + Qwen3.5), AI servers by address, Claude Code
-  optional. `--offline` package for closed networks (no Claude Code link, models inside).
+- Local AI as the default (llama.cpp + Qwen3.5), AI servers by address. `--offline`
+  package for closed networks (no Claude Code link, models inside) is the only release;
+  Claude Code stays in the source for development and quality comparison (2026-11-04).
 - Runs without a console window (`pythonw`), stops with "앱 종료" in the app; log file
   and message box instead of a console.
 - Port 5730, else the next free one up to 5739; one app per database by a named mutex.

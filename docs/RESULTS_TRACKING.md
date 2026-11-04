@@ -8,9 +8,10 @@ carried in by USB. Window-focus time then says little about what was done
 from **window time** to **results: file changes**. Window tracking stays as
 an optional, secondary signal.
 
-Target setting for the hackathon demo: a Windows PC inside a 폐쇄망. The LLM
-is Claude Code for now (assumed reachable), behind a provider interface so a
-폐쇄망 LLM server can replace it.
+Target setting: a Windows PC inside a 폐쇄망. The LLM runs on the PC itself
+(llama.cpp + Qwen3.5, shipped in the zip) or on an LLM server in the company
+network, behind a provider interface (see AI.md). (Until 2026-10-23 the only
+provider was Claude Code; it stays for development comparisons only.)
 
 ## What it does
 

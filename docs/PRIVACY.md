@@ -98,8 +98,11 @@ records go only to the local model program the app started on this PC
 (127.0.0.1, random key); nothing leaves the PC. With a registered AI server
 (an address the user entered, e.g. inside the company network) the redacted
 records go to that server; its API key, if any, stays in the app database
-on this PC. With a Claude Code model,
-and only for that request, redacted work records are sent through Claude
-Code to Anthropic. "사용 안 함" turns it off again. "보낼 내용 보기" shows the exact
-report payload. The app stores no API key. Locally it logs token counts and
-timings only, never prompts or answers.
+on this PC. "사용 안 함" turns it off again. "보낼 내용 보기" shows the exact
+report payload. Locally the app logs token counts and timings only, never
+prompts or answers.
+
+The released (closed-network) zip has no other choice. A development install
+with the `claude` extra also lists Claude Code models (for quality
+comparison): with one of those, and only for that request, redacted work
+records are sent through Claude Code to Anthropic.

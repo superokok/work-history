@@ -1,7 +1,8 @@
 """Live quality evaluation of AI report drafts on the fictional demo scenario.
 
 Builds a fresh demo database in a temporary folder (real data is never used),
-asks Claude Code for reports, and checks each draft against
+asks the chosen model for reports (default: the largest local model in llm/,
+else Claude Code), and checks each draft against
 facts we know from the scenario:
 
 - required facts must appear (in the project's items),
@@ -9,8 +10,9 @@ facts we know from the scenario:
 - a daily report must not contain other days' work,
 - references must all verify; flags and restored projects are reported.
 
-Usage (Claude Code installed and signed in):
-    .venv/Scripts/python.exe -m evals.report_eval [--runs 2] [--model claude-code:sonnet]
+Usage:
+    .venv/Scripts/python.exe -m evals.report_eval [--runs 2] [--model local:Qwen3.5-9B-Q4_K_M]
+    .venv/Scripts/python.exe -m evals.report_eval --model claude-code:sonnet  # needs Claude Code signed in
 """
 
 import argparse

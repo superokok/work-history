@@ -3,7 +3,7 @@
 새 세션에서 가장 먼저 읽는 문서. 상세 설계는 [ARCHITECTURE.md](ARCHITECTURE.md)를 본다.
 구조가 바뀌면 이 문서를 함께 고친다.
 
-_마지막 갱신: 2026-10-28_
+_마지막 갱신: 2026-11-04_
 
 ## 무엇인가
 
@@ -12,8 +12,9 @@ _마지막 갱신: 2026-10-28_
 - 주 기록 = **결과물**: 등록한 작업 폴더의 파일 변경을 5분마다 숨김 Git 저장소(dulwich)에 스냅샷.
 - 보조 기록 = **창 활동**: 앱이 직접 기록한 앱/창 제목/유휴 상태를 작업 세션으로 묶음.
 - 그 위에 타임라인, 일일 리뷰, 이어서 하기, 검색, 프로젝트, 개인정보 설정,
-  AI 보고서·"AI에게 묻기" (기본은 내 PC AI: llama.cpp + Qwen3.5. 사내 AI 서버, Claude Code도 선택 가능).
-- 배포: Windows 포터블 zip 두 종류 (행망용 `-offline-local-ai`: 모델 포함·Claude Code 연결 제외 / 인터넷용).
+  AI 보고서·"AI에게 묻기" (내 PC AI: llama.cpp + Qwen3.5가 기본, 행망·사내 AI 서버도 선택 가능).
+  Claude Code는 개발 환경에서만 쓰는 비교용 선택지이며 배포본에는 없다.
+- 배포: 행망용 Windows 포터블 zip 하나 (`-offline-local-ai`: 모델 포함·Claude Code 연결 제외, GitHub Releases에 조각으로).
   풀고 `작업 기록.cmd` → 창 없이 실행, 설정은 모두 앱 안에서.
 - 스택: Python 3.11+ (표준 라이브러리 위주) + 바닐라 HTML/JS, SQLite. 빌드 단계 없음. **Windows 전용.**
 - 저장소: GitHub (비공개), 브랜치 `main`.
@@ -63,7 +64,7 @@ work-history/
 | | `redact.py` | 비밀값·개인 식별자 마스킹 |
 | 세션 저장 | `sessionstore.py` | 재묶기, 편집, 병합, 분할 |
 | AI | `ai_client.py` | 공급자 중립 `Model` 프로토콜 |
-| | `ai_claude.py` | Claude Code 헤드리스(`claude -p`) 구현, 도구 잠금 |
+| | `ai_claude.py` | (개발·비교용) Claude Code 헤드리스(`claude -p`) 구현, 도구 잠금. `mcp` 없으면 숨김 |
 | | `ai_openai.py` | OpenAI 호환 API 공통 (보고서 JSON 단계적 대체, 도구 루프, 생각 출력 제거) |
 | | `ai_local.py` | 내 PC의 AI: llama.cpp `llama-server`를 켜고 끄며 연결 (외부 전송 없음, 자동 등록) |
 | | `ai_remote.py` | 주소로 등록한 AI 서버 (행망·사내 LLM, 어떤 모델이든 OpenAI 호환이면 연결) |
@@ -72,7 +73,7 @@ work-history/
 | | `ai_agent.py` | "AI에게 묻기": 읽기 전용 기록 도구 + 인용 확인 |
 | | `ai_service.py` | AI 설정, 동의, 실행 로그, 저장된 보고서 |
 | | `usage.py` | 효과 측정: 보고서 작성 시간, AI 초안 그대로 쓴 줄, 검색 후 여는 시간 (숫자만, 이 PC에만) |
-| | `mcp_server.py` | 내부용 읽기 전용 MCP 서버: Claude Code 모델로 "AI에게 묻기"할 때만 앱이 띄움 (외부 연결 거부) |
+| | `mcp_server.py` | (개발·비교용) 내부 읽기 전용 MCP 서버: Claude Code 모델로 "AI에게 묻기"할 때만 앱이 띄움 (외부 연결 거부) |
 | 외부 연동 | `autostart.py` | 로그온 시 시작, 바로가기 생성 |
 | 서비스 | `service.py` | 타임라인, 검색, 메모, 프로젝트, 리뷰, 이어서 하기 쿼리 |
 | | `server.py` | JSON API + 정적 UI, 127.0.0.1 전용 |
@@ -93,12 +94,12 @@ uv pip install --python .venv/Scripts/python.exe -e .[claude]
 # 테스트 (2026-10-30 기준 238개 통과)
 .venv/Scripts/python.exe -m unittest discover -s tests -t .
 
-# AI 보고서 품질 평가 (Claude Code 로그인 필요)
+# AI 보고서 품질 평가 (기본: llm/의 가장 큰 로컬 모델. Claude Code 기준값은 --model claude-code:sonnet, 로그인 필요)
 .venv/Scripts/python.exe -m evals.report_eval
 
 # Windows 포터블 zip
-python tools/build_portable.py                 # llm/bin이 있으면 로컬 AI 실행기도 포함 (모델은 제외)
-python tools/build_portable.py --with-models   # 모델 파일까지 넣은 큰 zip (-local-ai)
+python tools/build_portable.py                 # 인터넷용(Claude Code 포함, 모델 제외) — 배포하지 않음, 개발 확인용
+python tools/build_portable.py --with-models   # 위 + 모델 (-local-ai) — 배포하지 않음
 python tools/build_portable.py --offline --with-models  # 행망(폐쇄망)용: Claude Code 연결(mcp 등) 제외 (-offline-local-ai) = 배포본
 python tools/release_parts.py dist/WorkHistory-0.1.0-windows-x64-offline-local-ai.zip  # 릴리스용 조각 + WorkHistory-join.cmd
 
@@ -120,11 +121,11 @@ python tools/release_parts.py dist/WorkHistory-0.1.0-windows-x64-offline-local-a
 - 파일 변경의 프로젝트는 앱이 추측해서 넣지 않는다: 하위 폴더별로 추천하고 사람이 확인한 것만 쓴다 (2026-10-28).
 - 스냅샷은 dulwich(Apache-2.0)로, git.exe·GPL 의존 금지.
 - **Windows 전용**, 창 기록은 앱의 내장 수집기로. macOS/Linux 지원과 ActivityWatch는 뺐다 (2026-10-28).
-- AI는 셋 중 선택 (모두 `ai_client.Model` 구현): 내 PC의 로컬 모델(llama.cpp + Qwen3.5, 외부 전송 없음, 기본·추천),
-  주소로 등록한 AI 서버(OpenAI 호환, 행망·사내 LLM), Claude Code(헤드리스). 로컬 모델 파일은 `llm/`(git 제외), 따로 배포.
-  모델을 고르기 전(=동의 전)에는 AI 꺼짐.
-- Claude Code는 AI 설정의 모델 선택지로만 씀 (로컬 모델과 비교용). Claude Code에 앱을 등록하는 "Claude Code 연결"은
-  2026-10-27에 없앰.
+- AI 기준은 **행망·로컬 LLM**: 내 PC의 로컬 모델(llama.cpp + Qwen3.5, 외부 전송 없음, 기본·추천)과
+  주소로 등록한 AI 서버(OpenAI 호환, 행망·사내 LLM). 모두 `ai_client.Model` 구현. 로컬 모델 파일은 `llm/`(git 제외),
+  배포본에는 들어 있음. 모델을 고르기 전(=동의 전)에는 AI 꺼짐.
+- Claude Code(헤드리스)는 소스에 남겨 두되 **개발·품질 비교용**으로만 쓴다 (배포본에는 없음, 2026-11-04 결정).
+  Claude Code에 앱을 등록하는 "Claude Code 연결"은 2026-10-27에 없앰.
 - 로컬 전용, 배포는 Windows 포터블 zip. 행망용은 `--offline` 빌드: `mcp`와 그 의존성 30여 개를 빼고,
   앱은 `mcp`가 없으면 Claude Code 모델을 목록에서 숨긴다 (`ai_claude.bundled()`, 2026-10-29).
 - 실행기는 pythonw로 창 없이 띄운다: 창을 실수로 닫아 기록이 끊기지 않게. 끄는 건 앱 안의 "앱 종료"만 (2026-10-30).

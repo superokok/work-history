@@ -14,7 +14,7 @@
 
 배포본은 **행망·폐쇄망용 zip** 하나입니다 (`WorkHistory-<버전>-windows-x64-offline-local-ai.zip`, 약 8.5GB).
 앱, 내 PC AI 모델 2개(Qwen3.5 4B·9B), Python과 Microsoft C++ 런타임이 모두 들어 있어, 아무것도
-설치되지 않은 인터넷 없는 Windows 10/11에서 그대로 돌아갑니다. Claude Code 연결은 빠져 있습니다.
+설치되지 않은 인터넷 없는 Windows 10/11에서 그대로 돌아갑니다. AI는 내 PC AI나 사내 AI 서버만 씁니다.
 
 1. 인터넷 PC에서 저장소의 **Releases**에 들어가 6개 파일(`….zip.001`~`.005`와 `WorkHistory-join.cmd`)을
    한 폴더에 받습니다. GitHub은 파일 하나를 2GB까지만 받아서 zip을 조각으로 나눠 올렸습니다.
@@ -99,9 +99,6 @@ AI가 꺼져 있고 실제 업무 기록은 어디에도 보내지 않습니다 
 - **AI 서버 · <이름>**: 행망·사내 LLM 서버를 주소(`http://IP:포트`), 모델 이름, API 키(선택)로
   등록해서 씁니다. OpenAI 호환 API면 됩니다 (vLLM, Ollama, llama.cpp, LM Studio 등). 고르면
   기록이 (비밀값을 가린 뒤) 그 서버로 갑니다.
-- **Claude Code · Sonnet 등** (인터넷용 zip에만): 이 PC에 설치되어 로그인된 Claude Code를
-  헤드리스로 씁니다 (빠름, API 키 불필요, 사용량은 본인 계정). 기록이 비밀값을 가린 뒤
-  Anthropic으로 전송됩니다. 앱의 읽기 전용 기록 도구 외에 모든 도구를 끄고 실행합니다.
 
 "보낼 내용 보기"는 보고서에 쓰일 내용을 그대로 보여 주고, "연결 확인"은 업무 기록 없이
 동작만 확인합니다.
@@ -118,7 +115,7 @@ AI가 꺼져 있고 실제 업무 기록은 어디에도 보내지 않습니다 
 | 일부 창이 `unknown`으로 나옴 | 보호된 시스템 프로세스는 앱 이름을 읽을 수 없습니다. 화면 잠금·유휴 중에 주로 생깁니다. |
 | AI 초안이 아주 느림 | 그래픽카드가 없거나 약한 PC입니다. 기다리는 동안 다른 일을 하거나 4B를 써 보세요 (품질은 9B가 낫습니다). |
 | 압축 해제 시 "경로가 너무 깁니다" | 더 짧은 폴더(예: `C:\WorkHistory`)에 풀어 주세요. |
-| "작업 기록.cmd" 실행 전에 Windows 경고 (내려받은 파일) | 압축 풀기 전에 zip을 오른쪽 클릭 → 속성 → 차단 해제하거나, "실행"을 고르세요. 회사 보안 프로그램이 `python.exe`·`llama-server.exe`를 막으면 예외 등록이 필요합니다. |
+| "작업 기록.cmd" 실행 전에 Windows 경고 (내려받은 파일) | 압축 풀기 전에 zip을 오른쪽 클릭 → 속성 → 차단 해제하거나, "실행"을 고르세요. 회사 보안 프로그램이 `pythonw.exe`·`llama-server.exe`를 막으면 예외 등록이 필요합니다. |
 | 꺼 둔 동안의 창 기록이 없음 | 창 활동은 앱이 켜져 있을 때만 기록합니다. 파일 변경은 다음 스캔 때 따라잡습니다. |
 
 ## 개발
@@ -130,8 +127,14 @@ uv pip install --python .venv/Scripts/python.exe -e .[claude]
 
 소스에서 실행: `start-workhistory.cmd`(`.venv`를 우선 사용, 창 없이 실행) 또는 콘솔에 로그를
 보려면 `.venv/Scripts/python.exe -m workhistory`. 런타임 패키지는 `dulwich`(폴더 스냅샷,
-Apache-2.0)와 `mcp`(MIT, Claude Code용)와 그 의존성뿐이며 모두 상업적 사용이 가능합니다
-([THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)).
+Apache-2.0)와 `mcp`(MIT, 개발용 Claude Code 연결)와 그 의존성뿐이며 모두 상업적 사용이
+가능합니다 ([THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)). 배포본에는 `mcp`가 없습니다.
+
+**Claude Code (개발용, 배포본에는 없음):** `.[claude]`로 설치한 개발 환경에서는 AI 설정에
+"Claude Code · Sonnet 등"도 나옵니다. 이 PC에 로그인된 Claude Code를 헤드리스로 쓰며(기록은
+비밀값을 가린 뒤 Anthropic으로 전송), 로컬 모델 품질을 비교하는 기준으로 씁니다
+(`.venv/Scripts/python.exe -m evals.report_eval --model claude-code:sonnet`). 로컬 모델 평가는
+`--model local:Qwen3.5-9B-Q4_K_M`. 자세한 내용: [docs/AI.md](docs/AI.md).
 
 **배포 zip 빌드** (venv의 Python과 패키지를 복사하며 아무것도 내려받지 않습니다):
 

@@ -1,4 +1,4 @@
-# AI features (Claude Code or a local model)
+# AI features (a local model first)
 
 Goal for the AX hackathon: AI that works on the user's *structured, chosen*
 work history — not on screenshots — and never states more than the data
@@ -11,55 +11,21 @@ supports.
 2. **Ask your history** ("지난주 로그인 버그 어디까지 했지?"): an agent that
    searches the local history with tools and answers with citations.
 
-## Claude Code path for questions (internal MCP)
+## Which model
 
-With a Claude Code model, "AI에게 묻기" lets Claude Code run the tool loop:
-the app starts `workhistory/mcp_server.py` for that one question (`--trace
-<file>`), Claude Code (headless, only these tools allowed) calls the same
-read-only tools as the in-app agent (`ai_agent.HistoryTools`), and the app
-checks the answer's citations against the trace. The server answers only such
-app runs, and only while the AI model is a Claude Code model; it is not
-registered in Claude Code and other programs get a refusal. (Until 2026-10-27
-a switch in the app also registered it with the user's own Claude Code; that
-connection was removed.)
+The AI runs on one of three providers, chosen in 개인정보 → AI 설정 (AI is off
+until the user picks one):
 
-## Provider: Claude Code (no API key)
+| Provider | For | In the released zip |
+|---|---|---|
+| A local model on this PC (llama.cpp + Qwen3.5) | default and recommended; nothing leaves the PC, works without internet | yes, with the models |
+| An AI server registered by address | an LLM the company already runs in its network (행망) | yes |
+| Claude Code (headless) | development: quality comparison and evals on the demo data | no |
 
-`workhistory/ai_claude.py` runs the Claude Code installed and signed in on
-the PC headless (`claude -p --output-format json`); usage counts against the
-user's Claude account. AI is **off** until the user picks a model in
-개인정보 → AI 설정 (`claude-code`, `claude-code:sonnet|opus|haiku`); that
-choice is the consent to send records through Claude Code (the UI asks
-first), and "사용 안 함" withdraws it. The demo database may always be used.
-
-Every run is locked down:
-
-- `--tools ""`: no built-in tools (no file access, shell or web);
-  `--strict-mcp-config`: no MCP servers except the one the app passes;
-  `--setting-sources project` in an empty temporary working directory: no
-  user hooks, permissions or CLAUDE.md; `--no-session-persistence`;
-  `--max-budget-usd 5` per run as a runaway guard.
-- The prompt goes through stdin. On Windows the native `claude.exe` behind
-  the npm `.cmd` shim is started directly, so no argument passes through
-  cmd.exe.
-- Reports: `--json-schema` with the report schema; `structured_output` goes
-  through `ai_report.validate` (reference check, flags).
-- Ask: Claude Code runs the tool loop itself against the app's MCP server
-  (`--mcp-config`, only the five history tools in `--allowedTools`). The app
-  starts that server with `--trace <file>`: it logs every tool call and the
-  references it returned, and `verify_answer` checks the answer's citations
-  against that trace; references no tool returned are removed.
-- "연결 확인" runs `claude auth status` (no content sent).
-
-Measured on the demo data (claude-code:sonnet, 2026-10-01): ask 12 s with 5
-verified citations; `evals/report_eval.py` passed 4/4 with 0 dropped
-references, median 30 s per report, but one weekly case took 166-214 s in
-both runs (cause not yet known).
-
-Re-measured 2026-10-21 (Claude Code 2.1.293, claude-code:sonnet,
-`--runs 2`): **8/8 passed** (all required facts present, no over-claims, no
-other days' work in daily reports), 0 dropped references, 0 flags, 0 restored
-projects; median 7.4 s, max 11.3 s per report (the slow weekly case is gone).
+The only package handed out is the closed-network zip (`--offline --with-models`,
+GitHub Releases). It leaves Claude Code out entirely, so on a user's PC the
+choice is between local models and registered AI servers. Claude Code stays in
+the source as a development and comparison tool.
 
 ## Provider: a local model on this PC (llama.cpp)
 
@@ -140,6 +106,60 @@ key. Each registration is a model choice `remote:<id>`.
 - Local models need no registration: every `llm/models/*.gguf` is listed
   automatically, and the largest one is the suggested default.
 
+## Provider: Claude Code (development only, not in the released zip)
+
+Kept for development: it is the reference the local models are measured against
+(`evals/report_eval.py`). It needs the `claude` extra (`mcp`) and a Claude Code
+installed and signed in on the PC; the closed-network zip has neither.
+
+`workhistory/ai_claude.py` runs the Claude Code installed and signed in on
+the PC headless (`claude -p --output-format json`); usage counts against the
+user's Claude account. AI is **off** until the user picks a model in
+개인정보 → AI 설정 (`claude-code`, `claude-code:sonnet|opus|haiku`); that
+choice is the consent to send records through Claude Code (the UI asks
+first), and "사용 안 함" withdraws it. The demo database may always be used.
+
+Every run is locked down:
+
+- `--tools ""`: no built-in tools (no file access, shell or web);
+  `--strict-mcp-config`: no MCP servers except the one the app passes;
+  `--setting-sources project` in an empty temporary working directory: no
+  user hooks, permissions or CLAUDE.md; `--no-session-persistence`;
+  `--max-budget-usd 5` per run as a runaway guard.
+- The prompt goes through stdin. On Windows the native `claude.exe` behind
+  the npm `.cmd` shim is started directly, so no argument passes through
+  cmd.exe.
+- Reports: `--json-schema` with the report schema; `structured_output` goes
+  through `ai_report.validate` (reference check, flags).
+- Ask: Claude Code runs the tool loop itself against the app's MCP server
+  (`--mcp-config`, only the five history tools in `--allowedTools`). The app
+  starts that server with `--trace <file>`: it logs every tool call and the
+  references it returned, and `verify_answer` checks the answer's citations
+  against that trace; references no tool returned are removed.
+- "연결 확인" runs `claude auth status` (no content sent).
+
+Measured on the demo data (claude-code:sonnet, 2026-10-01): ask 12 s with 5
+verified citations; `evals/report_eval.py` passed 4/4 with 0 dropped
+references, median 30 s per report, but one weekly case took 166-214 s in
+both runs (cause not yet known).
+
+Re-measured 2026-10-21 (Claude Code 2.1.293, claude-code:sonnet,
+`--runs 2`): **8/8 passed** (all required facts present, no over-claims, no
+other days' work in daily reports), 0 dropped references, 0 flags, 0 restored
+projects; median 7.4 s, max 11.3 s per report (the slow weekly case is gone).
+
+### Questions with Claude Code (internal MCP)
+
+With a Claude Code model, "AI에게 묻기" lets Claude Code run the tool loop:
+the app starts `workhistory/mcp_server.py` for that one question (`--trace
+<file>`), Claude Code (headless, only these tools allowed) calls the same
+read-only tools as the in-app agent (`ai_agent.HistoryTools`), and the app
+checks the answer's citations against the trace. The server answers only such
+app runs, and only while the AI model is a Claude Code model; it is not
+registered in Claude Code and other programs get a refusal. (Until 2026-10-27
+a switch in the app also registered it with the user's own Claude Code; that
+connection was removed.)
+
 ## Replacing the model
 
 The AI code is written against `ai_client.Model`, not against Claude Code:
@@ -196,5 +216,7 @@ one class plus a factory entry (`ai_local.LocalModel` is the second one). A Gemi
 - Unit tests with a fake `claude` CLI and fake models cover the command line,
   error mapping, the MCP trace check, validation and guards.
 - A small eval set on curated demo data (questions with expected referenced
-  sessions; report checks) is run against the live model before changes are
-  accepted.
+  sessions; report checks) is run against a live model before changes are
+  accepted: `evals/report_eval.py --model local:<model>` for the local models
+  (the default when one is installed), `--model claude-code:sonnet` for the
+  Claude Code reference.

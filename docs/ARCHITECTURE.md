@@ -39,12 +39,12 @@ snapshots.py  – work-folder snapshots in hidden Git repos (dulwich), change re
 extract.py    – text from code/text, HWP, DOCX/XLSX/PPTX (stdlib only)
 redact.py     – secret / personal-identifier masking before anything leaves the PC
 ai_client.py  – the provider-neutral Model protocol the AI code is written against
-ai_claude.py  – that protocol over headless Claude Code (`claude -p`, locked down)
+ai_claude.py  – that protocol over headless Claude Code (`claude -p`, locked down); development/comparison only, not in the released zip
 ai_openai.py  – that protocol over any OpenAI-compatible chat API (shared by the two below)
 ai_local.py   – llama.cpp's llama-server on this PC, started on demand (local models, nothing leaves the PC)
 ai_remote.py  – AI servers the user registered by address (e.g. an LLM in the company network)
 ai_agent.py   – "AI에게 묻기": read-only history tools + citation check
-mcp_server.py – the history tools over MCP (Claude Code), consent-checked
+mcp_server.py – the history tools over MCP (Claude Code, development only), consent-checked
 autostart.py  – start-at-logon and shortcut files, switched from the app
 ai_context.py – the exact payload for the AI with verifiable references (C/S/N/P)
 ai_report.py  – report schema, prompt, reference verification, rendering
