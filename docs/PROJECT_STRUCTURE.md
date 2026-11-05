@@ -36,7 +36,7 @@ work-history/
 ├─ tools/build_portable.py Windows 포터블 zip 빌드 → dist/ (git 제외)
 ├─ tools/release_parts.py  릴리스 파일: 앱 zip + 모델 1.9GB 조각 + WorkHistory-setup.cmd(풀기·합치기·검사·실행) → dist/release/
 ├─ tools/clean_check.py    개발 PC 흔적(사용자·경로·git 계정·데이터 파일) 검사: 빌드 전·테스트에서
-├─ tools/seed_demo.py      시연 준비: 앱 끄기 → DB 백업 → 데모(오늘 07~09시까지) → Claude Sonnet·모든 앱 → 앱 켜기
+├─ tools/seed_demo.py      시연 준비: 앱 끄기 → DB 백업 → 데모(오늘 07~09시까지, 작업 폴더 없음) → Claude Sonnet·모든 앱 → 앱 켜기
 ├─ llm/                    (git 제외) 로컬 AI: bin/llama-server.exe + DLL, models/*.gguf, 라이선스 전문
 ├─ ppt/                    사용자의 발표 파일(.pptx), 시연 시나리오·심사용 설명자료(.md), git 포함. 작업 중 만든 초안 덱은 docs/presentation/(git 제외)
 └─ docs/

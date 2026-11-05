@@ -41,6 +41,17 @@ class MorningTests(unittest.TestCase):
                                                  (local_ts(THURSDAY, 0),))}
             self.assertIn("[GOV-1430] 민원 목록 커서 기반 페이징 검토 - Jira - Chrome", titles)  # not the scrum
 
+    def test_no_work_folders_without_a_snapshot_dir(self):
+        """tools/seed_demo.py seeds this way: the folders added in settings bring the file changes."""
+        self._tmp = TempDB()
+        db = self._tmp.__enter__()
+        self.addCleanup(self._tmp.__exit__, None, None, None)
+        demo.seed(db, now=local_ts(THURSDAY, 15), morning=True)
+        with db.connect() as conn:
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM watched_folders").fetchone()[0], 0)
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM changes").fetchone()[0], 0)
+            self.assertGreater(conn.execute("SELECT COUNT(*) FROM sessions").fetchone()[0], 0)
+
     def test_a_weekend_borrows_thursdays_work(self):
         saturday = date(2026, 11, 7)
         self.seed(datetime(2026, 11, 7, 8).timestamp())  # run at 08:00: the morning is still complete

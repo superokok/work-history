@@ -7,6 +7,8 @@ Run through seed-demo.cmd (source checkout) or with the app's Python:
 2. Moves the current database and snapshots to <data folder>/backup/<time>/ (nothing is deleted).
 3. Creates a new database with the two-week demo scenario dated around today; today's work
    runs 07:00-09:00 and the scenario stops there, so live work during the presentation follows it.
+   No work folders: the scenario's folders do not exist on this PC, so file changes come from
+   the folders added in the app's settings.
 4. Settings: AI model Claude Code Sonnet, record every app.
 5. Starts the app again.
 
@@ -72,12 +74,12 @@ def main() -> int:
 
     db = Database(db_path)
     db.migrate()
-    demo.seed(db, snaps, morning=True)
+    demo.seed(db, morning=True)  # no repos_dir: no work folders
     with db.connect() as conn:
         for key, value in SETTINGS.items():
             conn.execute("INSERT INTO meta (key, value) VALUES (?, ?) "
                          "ON CONFLICT (key) DO UPDATE SET value = excluded.value", (key, value))
-    print("데모 데이터를 넣었습니다: 지난 2주 + 오늘 07:00~09:00.")
+    print("데모 데이터를 넣었습니다: 지난 2주 + 오늘 07:00~09:00 (작업 폴더 없음).")
     print("설정: AI 모델 Claude Code · Sonnet, 모든 앱 기록.")
 
     launcher = next((ROOT / name for name in LAUNCHERS if (ROOT / name).exists()), None)
