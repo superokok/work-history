@@ -95,23 +95,33 @@ class FolderMatcherTests(unittest.TestCase):
         with self.db.connect() as conn:
             return work.FolderMatcher(conn).match(set(windows))
 
-    def test_rules(self):
+    def test_a_path_under_a_work_folder(self):
         cases = {
-            ("idea64.exe", "project-a – Main.java"): self.a,              # file in the folder
-            ("Hwp.exe", "검토보고서.hwp - 한글"): self.b,                   # a document too
-            ("WindowsTerminal.exe", r"PS C:\app\docs-b> make"): self.b,   # the folder's path
-            ("Code.exe", "notes.txt - project-a - Visual Studio Code"): self.a,  # the folder's name
-            ("cmd.exe", "helm upgrade ./charts -n dev"): self.b,           # a path inside the folder
+            ("idea64.exe", "project-a – Main.java"): self.a,                  # its file is in the folder
+            ("Hwp.exe", "검토보고서.hwp - 한글"): self.b,                       # a document too
+            ("WindowsTerminal.exe", r"PS C:\app\docs-b> make"): self.b,       # the folder's path
+            ("cmd.exe", r"C:\APP\DOCS-B\charts 명령 프롬프트"): self.b,          # inside it, any case
         }
         self.assertEqual(self.match(*cases), cases)
 
-    def test_only_when_certain(self):
+    def test_names_alone_do_not_count(self):
         self.assertEqual(self.match(
-            ("notepad.exe", "README.md - 메모장"),                    # in two folders
-            ("chrome.exe", "project-a - GitHub - Google Chrome"),    # browsers are 웹
-            ("slack.exe", "project-a - Slack"),                       # messengers are 소통
-            ("dbeaver.exe", "DBeaver 23.1 - prod"),                   # nothing to go by
+            ("Code.exe", "notes.txt - project-a - Visual Studio Code"),  # folder name, no such file
+            ("cmd.exe", "helm upgrade ./charts -n dev"),                 # relative: from where?
+            ("WindowsTerminal.exe", r"PS C:\app\project-ab>"),           # another folder's path
+            ("notepad.exe", "README.md - 메모장"),                        # a file in two folders
+            ("chrome.exe", r"C:\app\project-a - Google Chrome"),         # browsers are 웹
+            ("slack.exe", "project-a - Slack"),                           # messengers are 소통
+            ("dbeaver.exe", "DBeaver 23.1 - prod"),                       # nothing to go by
         ), {})
+
+    def test_nested_work_folders_go_to_the_deepest(self):
+        with self.db.connect() as conn:
+            inner = self.folder(conn, r"C:\app\project-a\module-x", "module-x", ["Inner.java"])
+        self.assertEqual(self.match(("idea64.exe", "Inner.java"), ("pwsh.exe", r"PS C:\app\project-a\module-x>"),
+                                    ("pwsh.exe", r"PS C:\app\project-a>")),
+                         {("idea64.exe", "Inner.java"): inner, ("pwsh.exe", r"PS C:\app\project-a\module-x>"): inner,
+                          ("pwsh.exe", r"PS C:\app\project-a>"): self.a})
 
     def test_day_records_from_the_database(self):
         with self.db.connect() as conn:

@@ -195,16 +195,20 @@ local timezone.
 - **Project classification:** manual assignment > rule with the longest
   matching pattern (case-insensitive substring) > unassigned.
 - **Work records** (`work.py`, 2026-11-10; they replace work sessions): time is
-  not cut into sessions. Each window goes with one work folder only where the
-  window itself shows it, otherwise by the kind of app:
-  1. the file named in its title is in exactly one work folder (`locate.file_paths`);
-  2. its title holds a work folder's path (terminals);
-  3. a part of its title (split at " - ", " – ", " | ") is a work folder's name
-     (IDEs: "project-a – Main.java", VS Code: "a.yaml - project-a - Visual Studio Code");
-  4. a relative path in its title starts with a folder or file that is in
-     exactly one work folder (terminals: "helm upgrade ./chart");
-  5. anything else: browsers → 웹, messengers/mail/meetings → 소통, the rest →
+  not cut into sessions. A window goes with a work folder only when its path is
+  under that folder, otherwise by the kind of app:
+  1. its path is the work-folder file its title names (`locate.file_paths`, the
+     same path the timeline shows when the window is clicked: IDE and editor
+     titles name the open file), or a work folder's path written in the title
+     itself (terminals: `PS C:\app\project-a>`);
+  2. with nested work folders the deepest one wins;
+  3. names alone never count (a folder called "api" in some title, a relative
+     path such as "./chart" whose base is unknown);
+  4. anything else: browsers → 웹, messengers/mail/meetings → 소통, the rest →
      기타 (`categories.py`). Browsers and messengers are never put with a folder.
+  Demo scenario, last week: gov24-minwon-api 12시간 33분, poc-k8s 1시간 19분,
+  웹 6시간 20분, 소통 4시간 28분, 기타 11시간 50분 (its terminals show commands,
+  not paths).
   Nothing is guessed from what came before or after: a window between two
   stretches of project-a is not project-a unless it shows it. A record is one
   (day, work folder) or (day, 웹/소통/기타): seconds added up per window however
@@ -213,8 +217,6 @@ local timezone.
   by time. "업무 외" is a total only. Records are computed from the activity when
   asked (dashboard, AI report, AI에게 묻기); nothing is stored, so there is
   nothing to regroup or keep in step with edits.
-  Demo scenario, one day: gov24-minwon-api 5시간 14분, 웹 1시간 13분, 소통 30분,
-  기타 23분 (Postman), 업무 외 20분.
 - **Timeline:** one view, per app (`service.app_summary`): the day's activities
   added up per app (an app used again later joins its earlier time), most
   recently used app first, window titles by total time; clicking a window shows

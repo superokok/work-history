@@ -33,7 +33,7 @@ One developer on Windows 10/11, Korean UI, working offline-first.
 | Area | MVP behaviour |
 |---|---|
 | Collection | Window (app + title), browser address without query string, and idle periods, read by the app itself (Windows). No keystrokes, clipboard, screenshots, OCR, or document contents. |
-| Work records | Time per work folder per day (2026-11-10, replacing work sessions): a window counts for a work folder only when its title shows it (a file in the folder, the folder's path or name); other windows are 웹, 소통 or 기타 by app. No LLM, nothing to edit. |
+| Work records | Time per work folder per day (2026-11-10, replacing work sessions): a window counts for a work folder only when its path (the file its title names, or a path in its title) is under that folder; other windows are 웹, 소통 or 기타 by app. No LLM, nothing to edit. |
 | Daily timeline | One per-app view: one entry per app with its time added up over the day, window titles added up inside, most recently used first; file changes; filters for date and app. |
 | Reports | AI 업무일지 / 주간보고 drafts citing the records they use; editable, saved. |
 | Search | Local search over app/window titles, notes, project names, changed files; date and project filters. "AI에게 묻기" answers questions such as where some work was left, with citations. |
