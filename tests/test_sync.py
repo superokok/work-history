@@ -89,16 +89,10 @@ class SyncTests(unittest.TestCase):
         self.assertTrue(result.ok)
         self.assertEqual(self.rows("afk_events"), [])
 
-    def test_sync_marks_days_and_syncer_builds_sessions(self):
-        add_raw(self.db, "window", self.now - 1200, self.now - 600, "Code.exe", "main.py")
-        sync_once(self.db, now=self.now)
-        with self.db.connect() as conn:
-            self.assertEqual([r["version"] for r in conn.execute("SELECT version FROM session_days")], [-1])
-        Syncer(self.db).run_now()
-        with self.db.connect() as conn:
-            rows = conn.execute("SELECT title FROM sessions").fetchall()
-            self.assertEqual([r["title"] for r in rows], ["VS Code · main.py"])
-            self.assertEqual(conn.execute("SELECT version FROM session_days").fetchone()[0], 0)
+    def test_syncer_imports(self):
+        add_raw(self.db, "window", time.time() - 1200, time.time() - 600, "Code.exe", "main.py")
+        self.assertTrue(Syncer(self.db).run_now().ok)
+        self.assertEqual([r["title"] for r in self.rows("window_events")], ["main.py"])
 
 
 if __name__ == "__main__":

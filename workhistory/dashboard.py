@@ -1,8 +1,8 @@
 """The dashboard: where the time of a day or a week went, and what came out of it.
 
-Built from the same sessions as the timeline (excluded sessions do not count) and the
-recorded file changes of the work folders. Kinds of activity come from categories.py
-(rules, no AI). Projects are not used: the app no longer asks the user to classify.
+Built from the same activity as the timeline, the work records (time per work folder,
+work.py) and the recorded file changes of the work folders. Kinds of activity come from
+categories.py (rules, no AI). Projects are not used: the app no longer asks the user to classify.
 """
 
 import sqlite3
@@ -11,13 +11,13 @@ from collections import defaultdict
 from datetime import date, timedelta
 from typing import Optional
 
-from . import categories, sessionstore, store
+from . import categories, store, work
 from .classify import OFFWORK_APP
-from .sessions import app_label
+from .apps import app_label
 
 STRIP_MERGE_GAP_S = 120  # same-kind activities this close together form one block of the day strip
 STRIP_MIN_BLOCK_S = 180  # shorter blocks are folded into the one before (the strip only)
-TOP_WORK = 8             # longest sessions (by title) shown under "오래 한 일"
+TOP_WORK = 8             # work folders with the most time shown under "한 일" (then 웹·소통·기타)
 
 
 def _empty(day: date) -> dict:
@@ -25,30 +25,24 @@ def _empty(day: date) -> dict:
 
 
 def _day(conn: sqlite3.Connection, day: date, now: Optional[float]) -> dict:
-    """Time by kind, by app and by session title, the day strip and the file changes, for one day."""
+    """Time by kind, by app and by work folder, the day strip and the file changes, for one day."""
     if day > store.local_day(time.time() if now is None else now):
         return _empty(day)  # not yet
     activities, _ = store.day_activities(conn, day, now)
-    sessionstore.ensure_day(conn, day, now, activities)
     by_kind: dict[str, float] = defaultdict(float)
     apps: dict[str, float] = defaultdict(float)
-    work: dict[str, float] = defaultdict(float)  # session title -> work seconds
     blocks: list[list] = []
-    for s in conn.execute("SELECT * FROM sessions WHERE day = ? AND excluded = 0 ORDER BY start_ts",
-                          (day.isoformat(),)):
-        worked = 0.0
-        for a in sessionstore.activities_within(activities, s["start_ts"], s["end_ts"]):
-            kind = categories.category(a.app, a.title)
-            by_kind[kind] += a.duration
-            if a.app != OFFWORK_APP:
-                apps[a.app] += a.duration
-                worked += a.duration
-            if blocks and blocks[-1][2] == kind and a.start - blocks[-1][1] <= STRIP_MERGE_GAP_S:
-                blocks[-1][1] = max(blocks[-1][1], a.end)
-            else:
-                blocks.append([a.start, a.end, kind])
-        if worked > 0 and s["title"]:
-            work[s["title"]] += worked
+    for a in sorted(activities, key=lambda a: a.start):
+        kind = categories.category(a.app, a.title)
+        by_kind[kind] += a.duration
+        if a.app != OFFWORK_APP:
+            apps[a.app] += a.duration
+        if blocks and blocks[-1][2] == kind and a.start - blocks[-1][1] <= STRIP_MERGE_GAP_S:
+            blocks[-1][1] = max(blocks[-1][1], a.end)
+        else:
+            blocks.append([a.start, a.end, kind])
+    records, _ = work.day(conn, day, now, activities)
+    work_s = {(r.name, r.folder_id is None): r.seconds for r in records}  # (name, outside) -> seconds
     start, end = store.day_bounds(day)
     folders = conn.execute(
         "SELECT c.folder_id, f.label, COUNT(*) AS n, "
@@ -56,7 +50,7 @@ def _day(conn: sqlite3.Connection, day: date, now: Optional[float]) -> dict:
         "SUM(c.lines_added) AS added, SUM(c.lines_removed) AS removed "
         "FROM changes c JOIN watched_folders f ON f.id = c.folder_id "
         "WHERE c.baseline = 0 AND c.ts >= ? AND c.ts < ? GROUP BY c.folder_id", (start, end)).fetchall()
-    return {"day": day, "by_kind": by_kind, "apps": apps, "work": work, "blocks": _smooth(blocks),
+    return {"day": day, "by_kind": by_kind, "apps": apps, "work": work_s, "blocks": _smooth(blocks),
             "folders": folders}
 
 
@@ -112,17 +106,19 @@ def _folders(days: list[dict]) -> list[dict]:
 
 
 def _work(days: list[dict]) -> list[dict]:
-    """The session titles that took the most time; `day` is the day with the most of it (to open)."""
-    total: dict[str, float] = defaultdict(float)
-    best: dict[str, tuple[float, date]] = {}
+    """Time per work folder, most first, then 웹·소통·기타 (`outside`); `day` is the day with the most
+    of it (to open)."""
+    total: dict[tuple[str, bool], float] = defaultdict(float)
+    best: dict[tuple[str, bool], tuple[float, date]] = {}
     for d in days:
-        for title, sec in d["work"].items():
-            total[title] += sec
-            if title not in best or sec > best[title][0]:
-                best[title] = (sec, d["day"])
-    top = sorted(total.items(), key=lambda kv: -kv[1])[:TOP_WORK]
-    return [{"title": t, "seconds": round(sec), "day": best[t][1].isoformat(),
-             "days": sum(1 for d in days if t in d["work"])} for t, sec in top]
+        for key, sec in d["work"].items():
+            total[key] += sec
+            if key not in best or sec > best[key][0]:
+                best[key] = (sec, d["day"])
+    folders = sorted((k for k in total if not k[1]), key=lambda k: -total[k])[:TOP_WORK]
+    outside = [(n, True) for n in work.OUTSIDE if (n, True) in total]
+    return [{"title": k[0], "outside": k[1], "seconds": round(total[k]), "day": best[k][1].isoformat(),
+             "days": sum(1 for d in days if k in d["work"])} for k in folders + outside]
 
 
 def _top_app(days: list[dict]) -> Optional[dict]:

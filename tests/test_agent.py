@@ -74,27 +74,25 @@ class AgentTests(unittest.TestCase):
         self.assertTrue(changes)
         self.assertTrue(all(c["ref"].startswith("C") for c in changes))
 
-    def test_get_day_project_and_change(self):
+    def test_get_day_and_change(self):
         fix_day = self.monday - timedelta(days=6)
         with self.db.connect() as conn:
             t = self.tools(conn)
             day = t.get_day(fix_day.isoformat())
             self.assertEqual(day["ref"], f"D{fix_day.isoformat()}")
-            self.assertTrue(day["sessions"] and day["changes"] and day["notes"])
+            self.assertTrue(day["work"] and day["changes"] and day["notes"])
+            folder = day["work"][0]
+            self.assertEqual((folder["ref"], folder["folder"]), (f"W{fix_day.isoformat()}-1", "gov24-minwon-api"))
+            self.assertEqual({w.get("kind") for w in day["work"][1:]}, {"웹", "소통", "기타"})
+            self.assertTrue(all(w["ref"] in t.sources for w in day["work"]))
             change_ref = day["changes"][0]["ref"]
             detail = t.get_change(change_ref)
             self.assertIn("+            refreshTokens.delete(stored); // 기존 리프레시 토큰 무효화 (GOV-1418)",
                           detail["diff_excerpt"])
-            project = t.get_project("gov24")  # partial, case-insensitive
-            self.assertEqual(project["name"], "Gov24 민원 API")
-            self.assertEqual(project["next_action"], "커서 기반 페이징 전환 검토 (GOV-1430)")
-            self.assertTrue(project["recent_changes"])
-            self.assertIn("error", t.get_project("없는 프로젝트"))
             self.assertIn("error", t.get_change("C999999"))
-            listing = t.list_projects()
-            self.assertEqual({p["name"] for p in listing["projects"]}, {"Gov24 민원 API", "K8s 전환 PoC"})
-            with self.assertRaises(ValueError):
-                t.execute("drop_tables", {})
+            for removed in ("drop_tables", "get_project", "list_projects"):
+                with self.assertRaises(ValueError):
+                    t.execute(removed, {})
             with self.assertRaises(ValueError):
                 t.get_day("지난주")
 
@@ -103,7 +101,7 @@ class AgentTests(unittest.TestCase):
 
         def answer(results):
             note_ref = next(i["ref"] for i in results[0]["results"] if i["type"] == "메모")
-            return f"GOV-1418은 QA 확인 후 종료했습니다 [{note_ref}]. 지어낸 근거 [S999999]도 있습니다 [C424242]."
+            return f"GOV-1418은 QA 확인 후 종료했습니다 [{note_ref}]. 지어낸 근거 [W999999]도 있습니다 [C424242]."
 
         model = ScriptedModel([("search_history", {"query": "GOV-1418"})], answer)
         with self.db.connect() as conn:
@@ -111,7 +109,7 @@ class AgentTests(unittest.TestCase):
                                repos_dir=self.repos)
             runs = [dict(r) for r in conn.execute("SELECT kind, ok, tool_calls FROM ai_runs")]
         self.assertEqual(out["dropped_refs"], 2)
-        self.assertNotIn("S999999", out["answer"])
+        self.assertNotIn("W999999", out["answer"])
         self.assertNotIn("C424242", out["answer"])
         self.assertEqual(len(out["citations"]), 1)
         self.assertEqual(out["citations"][0]["type"], "note")
@@ -133,7 +131,7 @@ class AgentTests(unittest.TestCase):
 
     def test_tool_errors_do_not_break_the_answer(self):
         from workhistory import ai_agent
-        model = ScriptedModel([("get_day", {"date": "어제"}), ("get_project", {"name": "Gov24"})],
+        model = ScriptedModel([("get_day", {"date": "어제"}), ("get_change", {"ref": "C999999"})],
                               "기록에서 찾지 못했습니다.")
         with self.db.connect() as conn:
             out = ai_agent.ask(conn, "어제 뭐 했지?", demo=True, factory=lambda n: model)
@@ -144,15 +142,15 @@ class AgentTests(unittest.TestCase):
 class VerifyTests(unittest.TestCase):
     def test_verify_answer(self):
         from workhistory.ai_agent import verify_answer
-        text, cited, dropped = verify_answer("A [S1]. B [C2] [X9] [S1]. C [N3] .", {"S1": {}, "N3": {}})
-        self.assertEqual((cited, dropped), (["S1", "N3"], 1))
+        text, cited, dropped = verify_answer("A [W1]. B [C2] [X9] [W1]. C [N3] .", {"W1": {}, "N3": {}})
+        self.assertEqual((cited, dropped), (["W1", "N3"], 1))
         self.assertNotIn("C2", text)
-        self.assertIn("[S1]", text)
+        self.assertIn("[W1]", text)
 
     def test_grouped_refs_are_split_and_checked_one_by_one(self):
         from workhistory.ai_agent import verify_answer
-        text, cited, dropped = verify_answer("한 일 [S2, C9, D2026-09-24].", {"S2": {}, "D2026-09-24": {}})
-        self.assertEqual((text, cited, dropped), ("한 일 [S2][D2026-09-24].", ["S2", "D2026-09-24"], 1))
+        text, cited, dropped = verify_answer("한 일 [W2, C9, D2026-09-24].", {"W2": {}, "D2026-09-24": {}})
+        self.assertEqual((text, cited, dropped), ("한 일 [W2][D2026-09-24].", ["W2", "D2026-09-24"], 1))
 
 
 if __name__ == "__main__":

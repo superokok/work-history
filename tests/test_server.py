@@ -4,7 +4,7 @@ import json
 import subprocess
 import threading
 import unittest
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from urllib.parse import quote
 
@@ -65,9 +65,12 @@ class ServerTests(unittest.TestCase):
         self.assertEqual((status, body["saved"]["body"]), (200, "a\nb"))
 
     def test_status_last_day_only_in_demo(self):
+        start = datetime(2026, 11, 4, 9).timestamp()
         with self.db.connect() as conn:
-            conn.execute("INSERT INTO sessions (day, start_ts, end_ts, created_at, updated_at) "
-                         "VALUES ('2026-11-04', 0, 1, 0, 0)")
+            src = conn.execute("INSERT INTO sources (bucket_id, bucket_created, kind, hostname) "
+                               "VALUES ('w', 'c', 'window', 'h')").lastrowid
+            conn.execute("INSERT INTO window_events (source_id, aw_id, start_ts, end_ts, app, title) "
+                         "VALUES (?, 1, ?, ?, 'Code.exe', 'a.py')", (src, start, start + 600))
         self.assertIsNone(self.request("GET", "/api/status")[1]["last_day"])
         self.app.demo = True
         self.assertEqual(self.request("GET", "/api/status")[1]["last_day"], "2026-11-04")
@@ -121,25 +124,20 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual([n["id"] for n in r["notes"]], [note["id"]])
 
-    def test_session_endpoints(self):
+    def test_removed_endpoints(self):
         yesterday = date.today() - timedelta(days=1)
         today = yesterday.isoformat()  # a full past day keeps the test independent of the clock
         start = local_ts(yesterday, 10)
         add_raw(self.db, "window", start, start + 900, "Code.exe", "a.py")
-        add_raw(self.db, "window", start + 1800, start + 2400, "Code.exe", "b.py")
         self.request("POST", "/api/sync", {})
         status, t, _ = self.request("GET", f"/api/timeline?date={today}")
-        self.assertEqual(len(t["sessions"]), 2)
-        a, b = t["sessions"]
-        status, s, _ = self.request("PATCH", f"/api/sessions/{a['id']}", {"title": "리팩터링", "note": "다음: 테스트"})
-        self.assertEqual((status, s["title"], s["note"]), (200, "리팩터링", "다음: 테스트"))
-        status, m, _ = self.request("POST", "/api/sessions/merge", {"ids": [a["id"], b["id"]]})
-        self.assertEqual((status, m["title"], m["locked"]), (200, "리팩터링", 1))
-        status, parts, _ = self.request("POST", f"/api/sessions/{m['id']}/split", {"at": start + 1000})
-        self.assertEqual((status, len(parts)), (200, 2))
+        self.assertEqual((status, [a["app"] for a in t["apps"]]), (200, ["Code.exe"]))
+        self.assertNotIn("sessions", t)
+        # Sessions are gone (2026-11-10): time is kept per work folder instead.
+        self.assertEqual(self.request("PATCH", "/api/sessions/1", {"note": "x"})[0], 404)
+        self.assertEqual(self.request("POST", "/api/sessions/merge", {"ids": [1, 2]})[0], 404)
         self.assertEqual(self.request("GET", f"/api/review?date={today}")[0], 404)  # tab removed
         self.assertEqual(self.request("GET", "/api/resume")[0], 405)  # tab removed; POST /api/resume = 기록 재개
-        self.assertEqual(self.request("PATCH", "/api/sessions/99999", {"note": "x"})[0], 404)
 
     def test_port_is_exclusive(self):
         # Windows' SO_REUSEADDR would otherwise let a second instance share the port.

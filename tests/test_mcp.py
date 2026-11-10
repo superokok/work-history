@@ -46,8 +46,7 @@ class MCPServerTests(unittest.TestCase):
             async with Client(mcp_server.build(self.db, self.repos, demo_mode=True)) as c:
                 return await c.list_tools()
         tools = asyncio.run(go()).tools
-        self.assertEqual({t.name for t in tools}, {"search_history", "get_day", "list_projects", "get_project",
-                                                   "get_change", "get_report_data"})
+        self.assertEqual({t.name for t in tools}, {"search_history", "get_day", "get_change", "get_report_data"})
         self.assertTrue(all(t.annotations.read_only_hint and not t.annotations.destructive_hint for t in tools))
 
     def test_search_and_change_detail(self):
@@ -59,13 +58,13 @@ class MCPServerTests(unittest.TestCase):
 
     def test_only_the_apps_own_claude_runs_get_answers(self):
         # Another program (not started by the app for a question) is refused, even on demo data.
-        self.assertIn("내부적으로", text_of(self.call(True, "list_projects", {}, app_run=False))["error"])
+        query = {"query": "TokenRefreshFilter"}
+        self.assertIn("내부적으로", text_of(self.call(True, "search_history", query, app_run=False))["error"])
         # The app's own run on real data: only while the user's AI model is a Claude Code model.
-        self.assertIn("error", text_of(self.call(False, "list_projects", {})))
+        self.assertIn("error", text_of(self.call(False, "search_history", query)))
         with self.db.connect() as conn:
             conn.execute("INSERT INTO meta (key, value) VALUES ('ai_model', 'claude-code:sonnet')")
-        out = text_of(self.call(False, "list_projects", {}))
-        self.assertEqual({p["name"] for p in out["projects"]}, {"Gov24 민원 API", "K8s 전환 PoC"})
+        self.assertTrue(text_of(self.call(False, "search_history", query))["results"])
 
     def test_report_data_carries_rules_and_refs(self):
         monday = date.today() - timedelta(days=date.today().weekday())
@@ -74,6 +73,7 @@ class MCPServerTests(unittest.TestCase):
         self.assertEqual(out["kind"], "주간보고")
         self.assertIn("refs", out["rules"])
         self.assertTrue(all(c["ref"].startswith("C") for c in out["data"]["changes"]))
+        self.assertTrue(all(w["ref"].startswith("W") for w in out["data"]["work"]))
         bad = text_of(self.call(True, "get_report_data", {"kind": "monthly", "date": "2026-09-01"}))
         self.assertIn("error", bad)
         bad = text_of(self.call(True, "get_day", {"date": "어제"}))
@@ -99,11 +99,11 @@ class StdioTransportTests(unittest.TestCase):
             async def go():
                 async with Client(params, read_timeout_seconds=60) as c:
                     tools = await c.list_tools()
-                    result = await c.call_tool("list_projects", {})
+                    result = await c.call_tool("search_history", {"query": "GOV-1418"})
                     return tools, result
             tools, result = asyncio.run(go())
-        self.assertEqual(len(tools.tools), 6)
-        self.assertEqual({p["name"] for p in text_of(result)["projects"]}, {"Gov24 민원 API", "K8s 전환 PoC"})
+        self.assertEqual(len(tools.tools), 4)
+        self.assertTrue(text_of(result)["results"])
 
 
 if __name__ == "__main__":

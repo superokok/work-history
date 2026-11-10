@@ -2,7 +2,7 @@ import time
 import unittest
 from datetime import date, timedelta
 
-from workhistory import service, sessionstore
+from workhistory import service, work
 from workhistory.classify import TrackRule, is_tracked
 from workhistory.store import Invalid
 from workhistory.sync import recent_apps, reset_window_cursors, sync_once
@@ -59,10 +59,12 @@ class TrackingSyncTests(unittest.TestCase):
         self.assertEqual(t["total_active_s"], 110 * 60)  # lock screen is idle, not counted
         self.assertEqual(sum(p["seconds"] for p in t["by_project"]), 60 * 60)
         self.assertNotIn("", [a["app"] for a in t["by_app"]])
-        offwork = [s for s in t["sessions"] if s["offwork"]]
-        # YouTube (20 min) and KakaoTalk (30 min): each long enough to be its own session.
-        self.assertEqual([s["title"] for s in offwork], ["업무 외", "업무 외"])
         self.assertNotIn("가족방", str(t))  # untracked windows keep no title
+        with self.db.connect() as conn:
+            records, offwork = work.day(conn, self.day)
+        # YouTube (20 min) and KakaoTalk (30 min) are 업무 외: a total only, in no record.
+        self.assertEqual(offwork, 50 * 60)
+        self.assertNotIn("", [r.name for r in records])
 
     def test_reapply_recovers_forgotten_app_and_back_to_all(self):
         sync_once(self.db)
@@ -105,18 +107,6 @@ class TrackingSyncTests(unittest.TestCase):
         self.assertEqual([(a["app"], round(a["seconds"] / 60), a["tracked"]) for a in apps],
                          [("chrome.exe", 40, True), ("idea64.exe", 40, True), ("KakaoTalk.exe", 30, False)])
         self.assertEqual(self.events(), [])  # nothing imported
-
-
-class OffworkSessionTests(unittest.TestCase):
-    def test_short_offwork_detour_absorbed_with_work_title(self):
-        from workhistory.normalize import Activity
-        from workhistory.sessions import auto_title, dominant_project, group_activities, offwork_seconds
-        acts = [Activity(1, 0, 1200, "idea64.exe", "A.java", 5, "rule"),
-                Activity(2, 1200, 1320, "", "", None, None),  # 2-minute detour
-                Activity(3, 1320, 2400, "idea64.exe", "A.java", 5, "rule")]
-        [g] = group_activities(acts)
-        self.assertEqual((auto_title(g), dominant_project(g), offwork_seconds(g)),
-                         ("IntelliJ IDEA · A.java", 5, 120))
 
 
 if __name__ == "__main__":

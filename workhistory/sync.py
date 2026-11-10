@@ -14,11 +14,10 @@ import time
 from dataclasses import dataclass, field
 from typing import Iterable, Optional
 
-from . import sessionstore
 from .classify import OFFWORK_APP, Keyword, TrackRule, is_tracked, matches_any
 from .config import IDLE_APPS, SYNC_INTERVAL_S, SYNC_OVERLAP_S
 from .db import Database
-from .store import load_blocked, load_exclusions, load_tracking, mark_days_dirty
+from .store import load_blocked, load_exclusions, load_tracking
 
 log = logging.getLogger(__name__)
 
@@ -57,10 +56,8 @@ def store_events(
     `tracking` None records every app; otherwise windows matching no rule keep
     only their time (app and title are dropped before anything is stored).
     Re-importing an event re-applies the current rules to it.
-    Days touched by stored events are marked so their sessions get regrouped.
     """
     stored = skipped = 0
-    lo, hi = float("inf"), float("-inf")
     for ev in events:
         raw_id, start, end = ev["id"], ev["start_ts"], ev["end_ts"]
         if any(b_start <= start < b_end for b_start, b_end in blocked):
@@ -98,9 +95,6 @@ def store_events(
                 (source_id, raw_id, start, end, ev["status"]),
             )
         stored += 1
-        lo, hi = min(lo, start), max(hi, end)
-    if stored:
-        mark_days_dirty(conn, lo, hi)
     return stored, skipped
 
 
@@ -182,9 +176,6 @@ class Syncer:
         with self._lock:
             try:
                 self.last_result = sync_once(self.db, self.collector)
-                # Regroup sessions in the background so page loads stay fast.
-                with self.db.connect() as conn:
-                    sessionstore.ensure_all(conn)
             except Exception as e:  # keep the loop alive; never log event content
                 log.exception("sync failed")
                 self.last_result = SyncResult(ok=False, finished_at=time.time(),

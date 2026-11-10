@@ -172,21 +172,21 @@ class AskThroughClaudeCodeTests(unittest.TestCase):
             with db.connect() as conn:
                 def answer(results):
                     ref = results[0]["results"][0]["ref"]
-                    return f"찾았습니다 [{ref}, S999999]."
+                    return f"찾았습니다 [{ref}, W999999]."
                 m = MCPServerModel([("search_history", {"query": "GOV-1418"})], answer)
                 out = ai_agent.ask(conn, "GOV-1418 어디까지?", demo=True, factory=lambda n: m)
         self.assertEqual(len(out["citations"]), 1)
-        self.assertEqual(out["dropped_refs"], 1)  # S999999 was never returned by a tool
+        self.assertEqual(out["dropped_refs"], 1)  # W999999 was never returned by a tool
         self.assertEqual(out["tool_calls"], [{"name": "search_history", "ok": True,
                                               "args": {"query": "GOV-1418", "date_from": None, "date_to": None}}])
 
     def test_real_data_needs_claude_code_chosen_in_the_app(self):
         with TempDB() as db:
             with db.connect() as conn:
-                m = MCPServerModel([("list_projects", {})], lambda r: json.dumps(r[0], ensure_ascii=False))
+                m = MCPServerModel([("search_history", {"query": "x"})], lambda r: json.dumps(r[0], ensure_ascii=False))
                 ai_service.update_settings(conn, {"model": "claude-code:sonnet"}, False)
                 conn.commit()
-                out = ai_agent.ask(conn, "프로젝트?", demo=False, factory=lambda n: m)
+                out = ai_agent.ask(conn, "x 어디 썼지?", demo=False, factory=lambda n: m)
                 self.assertNotIn("error", out["answer"])
                 # Turning AI off withdraws it: the app's own MCP session refuses.
                 ai_service.update_settings(conn, {"model": ""}, False)

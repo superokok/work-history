@@ -1,7 +1,7 @@
 import unittest
 from datetime import date
 
-from workhistory import locate, service, store
+from workhistory import locate, service
 
 from tests.helpers import TempDB, local_ts
 
@@ -42,7 +42,6 @@ class TimelinePathTests(unittest.TestCase):
             for aw_id, start, end, app, title, path in events:
                 conn.execute("INSERT INTO window_events (source_id, aw_id, start_ts, end_ts, app, title, path) "
                              "VALUES (?, ?, ?, ?, ?, ?, ?)", (src, aw_id, start, end, app, title, path))
-            store.mark_days_dirty(conn, local_ts(DAY, 9), local_ts(DAY, 10))
             for root, files in ((r"C:\work\minwon-api", ["src/MinwonRepository.java", "src/Util.java"]),
                                 (r"C:\work\other", ["Util.java"])):
                 fid = conn.execute("INSERT INTO watched_folders (path, label, created_at) VALUES (?, 'x', 0)",

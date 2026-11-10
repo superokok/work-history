@@ -5,14 +5,14 @@ import shutil
 import sqlite3
 import time
 from collections import defaultdict
-from datetime import date, timedelta
+from datetime import date
 from pathlib import Path
 from typing import Any, Optional
 
-from . import locate, sessionstore, snapshots, store
+from . import locate, snapshots, store
 from .classify import FIELDS, OFFWORK_APP, Keyword, matches_any, resolve_project
+from .apps import app_label
 from .normalize import merge_rows
-from .sessions import app_label, offwork_seconds
 from .store import Invalid, NotFound, day_bounds
 
 __all__ = ["Invalid", "NotFound"]  # re-exported for the HTTP layer
@@ -67,60 +67,25 @@ def _like(q: str) -> str:
     return "%" + re.sub(r"([\\%_])", r"\\\1", q) + "%"
 
 
-def _session_out(s: dict, activities: Optional[list] = None) -> dict:
-    """API shape of a session; times come from `activities` when given (fresh)."""
-    if activities is None:
-        active, offwork = s["active_s"], s["offwork_s"]
-    else:
-        active, offwork = sum(a.duration for a in activities), offwork_seconds(activities)
-    return {
-        "id": s["id"], "day": s["day"], "start": s["start_ts"], "end": s["end_ts"],
-        "active_s": active, "offwork_s": offwork,
-        # Mostly untracked apps: shown as "업무 외", left out of work totals.
-        "offwork": active > 0 and offwork * 2 >= active,
-        "title": s["title"], "title_edited": bool(s["title_edited"]), "project_id": s["project_id"],
-        "project_manual": bool(s["project_manual"]), "note": s["note"],
-        "excluded": bool(s["excluded"]), "locked": bool(s["locked"]),
-    }
-
-
 # ---------------------------------------------------------------- timeline
 
 def timeline(conn: sqlite3.Connection, day: date, project: Any = None, app: Optional[str] = None,
              now: Optional[float] = None) -> dict:
     activities, warnings = store.day_activities(conn, day, now)
-    state = conn.execute("SELECT version FROM session_days WHERE day = ?", (day.isoformat(),)).fetchone()
-    if state is None or state["version"] != store.session_version(conn):
-        sessionstore.refresh_day(conn, day, activities=activities)
-
     filtering, wanted = _project_filter(project)
     by_project: dict[Optional[int], float] = defaultdict(float)
     by_app: dict[str, float] = defaultdict(float)
     offwork_total = 0.0
-    sessions = []
-    shown = []  # activities of the listed, counted sessions: the per-app view
-    for s in conn.execute("SELECT * FROM sessions WHERE day = ? ORDER BY start_ts", (day.isoformat(),)):
-        inside = sessionstore.activities_within(activities, s["start_ts"], s["end_ts"])
-        out = _session_out(dict(s), inside)
-        if not s["excluded"]:
-            work = out["active_s"] - out["offwork_s"]
-            if work > 0:
-                by_project[s["project_id"]] += work
-            offwork_total += out["offwork_s"]
-            for a in inside:
-                if a.app != OFFWORK_APP:
-                    by_app[a.app] += a.duration
-        rows = merge_rows(inside)
-        if app:
-            rows = [r for r in rows if r.app == app]
-            if not rows:
-                continue
-        if filtering and s["project_id"] != wanted:
+    shown = []  # the per-app view
+    for a in activities:
+        if a.app == OFFWORK_APP:
+            offwork_total += a.duration
+        else:
+            by_app[a.app] += a.duration
+            by_project[a.project_id] += a.duration
+        if (app and a.app != app) or (filtering and a.project_id != wanted):
             continue
-        out["rows"] = [r.__dict__ for r in rows]
-        sessions.append(out)
-        if not s["excluded"]:
-            shown.extend(a for a in inside if not app or a.app == app)
+        shown.append(a)
 
     return {
         "day": day.isoformat(),
@@ -130,7 +95,7 @@ def timeline(conn: sqlite3.Connection, day: date, project: Any = None, app: Opti
                        for k, v in sorted(by_project.items(), key=lambda kv: -kv[1])],
         "by_app": [{"app": k, "seconds": v}
                    for k, v in sorted(by_app.items(), key=lambda kv: -kv[1])],
-        "sessions": sessions,
+        "rows": [r.__dict__ for r in merge_rows(shown)],
         "apps": app_summary(shown, locate.file_paths(conn, list({a.title for a in shown if not a.path}))),
         "warnings": warnings,
         "notes": list_notes(conn, day),
@@ -218,10 +183,6 @@ def assign_project(conn: sqlite3.Connection, event_ids: Any, project_id: Any) ->
         marks = ",".join("?" * len(chunk))
         changed += conn.execute(f"UPDATE window_events SET project_id = ? WHERE id IN ({marks})",
                                 [pid, *chunk]).rowcount
-        span = conn.execute(f"SELECT MIN(start_ts), MAX(end_ts) FROM window_events WHERE id IN ({marks})",
-                            chunk).fetchone()
-        if span[0] is not None:
-            store.mark_days_dirty(conn, span[0], span[1])
     return changed
 
 
@@ -269,7 +230,6 @@ def update_project(conn: sqlite3.Connection, project_id: int, data: dict) -> dic
         updates["next_action"] = _text(data["next_action"], "다음 할 일", 2000, allow_empty=True)
     if "archived" in data:
         updates["archived"] = 1 if data["archived"] else 0
-        store.bump_session_version(conn)  # archived projects' rules stop applying
     if updates:
         try:
             conn.execute(f"UPDATE projects SET {', '.join(f'{k} = ?' for k in updates)} WHERE id = ?",
@@ -280,12 +240,9 @@ def update_project(conn: sqlite3.Connection, project_id: int, data: dict) -> dic
 
 
 def delete_project(conn: sqlite3.Connection, project_id: int) -> None:
-    # Sessions manually set to this project fall back to automatic classification.
-    conn.execute("UPDATE sessions SET project_manual = 0 WHERE project_id = ?", (project_id,))
     if conn.execute("DELETE FROM projects WHERE id = ?", (project_id,)).rowcount == 0:
         raise NotFound("프로젝트를 찾을 수 없습니다")
     snapshots.attribute_all(conn)  # its sub-folders are asked about again; changes may now lean elsewhere
-    store.bump_session_version(conn)
 
 
 def add_rule(conn: sqlite3.Connection, project_id: int, data: dict) -> dict:
@@ -295,14 +252,12 @@ def add_rule(conn: sqlite3.Connection, project_id: int, data: dict) -> dict:
     cur = conn.execute(
         "INSERT INTO project_rules (project_id, field, pattern, created_at) VALUES (?, ?, ?, ?)",
         (project_id, field, pattern, time.time()))
-    store.bump_session_version(conn)
     return {"id": cur.lastrowid, "project_id": project_id, "field": field, "pattern": pattern}
 
 
 def delete_rule(conn: sqlite3.Connection, rule_id: int) -> None:
     if conn.execute("DELETE FROM project_rules WHERE id = ?", (rule_id,)).rowcount == 0:
         raise NotFound("규칙을 찾을 수 없습니다")
-    store.bump_session_version(conn)
 
 
 # ---------------------------------------------------------------- notes
@@ -340,62 +295,6 @@ def delete_note(conn: sqlite3.Connection, note_id: int) -> None:
         raise NotFound("메모를 찾을 수 없습니다")
 
 
-# ---------------------------------------------------------------- project overview (AI tools)
-
-def _last_activity(conn: sqlite3.Connection, session: dict, now: Optional[float]) -> Optional[dict]:
-    activities, _ = store.day_activities(conn, date.fromisoformat(session["day"]), now)
-    inside = sessionstore.activities_within(activities, session["start_ts"], session["end_ts"])
-    if not inside:
-        return None
-    a = inside[-1]
-    return {"app": a.app, "title": a.title, "start": a.start, "end": a.end}
-
-
-def resume_overview(conn: sqlite3.Connection, now: Optional[float] = None) -> list[dict]:
-    """Active projects, most recently worked on first."""
-    sessionstore.ensure_all(conn, now)
-    week_ago = (date.today() - timedelta(days=6)).isoformat()
-    out = []
-    for p in list_projects(conn):
-        if p["archived"]:
-            continue
-        last = conn.execute(
-            "SELECT * FROM sessions WHERE project_id = ? AND excluded = 0 ORDER BY end_ts DESC LIMIT 1",
-            (p["id"],)).fetchone()
-        week = conn.execute(
-            "SELECT COALESCE(SUM(active_s), 0) FROM sessions WHERE project_id = ? AND excluded = 0 "
-            "AND day >= ?", (p["id"], week_ago)).fetchone()[0]
-        out.append({"id": p["id"], "name": p["name"], "color": p["color"],
-                    "next_action": p["next_action"], "week_active_s": week,
-                    "last_session": _session_out(dict(last))
-                    if last else None})
-    out.sort(key=lambda p: -(p["last_session"]["end"] if p["last_session"] else 0))
-    return out
-
-
-def resume_project(conn: sqlite3.Connection, project_id: int, now: Optional[float] = None) -> dict:
-    project = get_project(conn, project_id)
-    sessionstore.ensure_all(conn, now)
-    recent = [dict(r) for r in conn.execute(
-        "SELECT * FROM sessions WHERE project_id = ? AND excluded = 0 ORDER BY end_ts DESC LIMIT 10",
-        (project_id,))]
-    notes = [dict(r) for r in conn.execute(
-        "SELECT * FROM notes WHERE project_id = ? ORDER BY day DESC, created_at DESC LIMIT 10",
-        (project_id,))]
-    session_notes = [{"session_id": r["id"], "day": r["day"], "start": r["start_ts"], "note": r["note"]}
-                     for r in conn.execute(
-                         "SELECT id, day, start_ts, note FROM sessions WHERE project_id = ? "
-                         "AND note != '' ORDER BY end_ts DESC LIMIT 10", (project_id,))]
-    return {
-        "project": project,
-        "last_session": _session_out(recent[0]) if recent else None,
-        "last_activity": _last_activity(conn, recent[0], now) if recent else None,
-        "recent_sessions": [_session_out(r) for r in recent],
-        "notes": notes,
-        "session_notes": session_notes,
-    }
-
-
 # ---------------------------------------------------------------- search
 
 def search(conn: sqlite3.Connection, q: str, date_from: Optional[date] = None,
@@ -403,7 +302,6 @@ def search(conn: sqlite3.Connection, q: str, date_from: Optional[date] = None,
     q = (q or "").strip()
     if not q:
         raise Invalid("검색어를 입력하세요")
-    sessionstore.ensure_all(conn)
     like = _like(q)
     filtering, wanted = _project_filter(project)
 
@@ -448,9 +346,6 @@ def search(conn: sqlite3.Connection, q: str, date_from: Optional[date] = None,
     if filtering:
         sql += " AND project_id IS ?"
         args.append(wanted)
-    sessions = [_session_out(dict(r)) for r in conn.execute(
-        "SELECT * FROM sessions WHERE excluded = 0 AND (title LIKE ? ESCAPE '\\' OR note LIKE ? ESCAPE '\\')"
-        + sql + " ORDER BY end_ts DESC LIMIT ?", [like, like, *args, limit])]
     notes = [dict(r) for r in conn.execute(
         "SELECT * FROM notes WHERE body LIKE ? ESCAPE '\\'" + sql
         + " ORDER BY day DESC, created_at DESC LIMIT ?", [like, *args, limit])]
@@ -458,10 +353,6 @@ def search(conn: sqlite3.Connection, q: str, date_from: Optional[date] = None,
     projects = [dict(r) for r in conn.execute(
         "SELECT id, name, color, next_action FROM projects WHERE name LIKE ? ESCAPE '\\' "
         "OR next_action LIKE ? ESCAPE '\\' ORDER BY name", (like, like))]
-    for p in projects:
-        last = conn.execute("SELECT MAX(end_ts) FROM sessions WHERE project_id = ? AND excluded = 0",
-                            (p["id"],)).fetchone()[0]
-        p["last_activity_ts"] = last
 
     files_sql = ("SELECT cf.id, cf.change_id, cf.path, cf.kind, cf.lines_added, cf.lines_removed, c.ts, "
                  "f.label AS folder, "
@@ -476,7 +367,7 @@ def search(conn: sqlite3.Connection, q: str, date_from: Optional[date] = None,
     changed_files = [dict(r) for r in conn.execute(files_sql + sql + " ORDER BY c.ts DESC LIMIT ?",
                                                    [*files_args, *args, limit])]
 
-    return {"query": q, "events": events, "sessions": sessions, "notes": notes,
+    return {"query": q, "events": events, "notes": notes,
             "projects": projects, "files": changed_files}
 
 
@@ -549,14 +440,12 @@ def add_exclusion(conn: sqlite3.Connection, data: dict) -> dict:
     for i in range(0, len(raw), 500):
         chunk = raw[i:i + 500]
         conn.execute(f"DELETE FROM collector_events WHERE id IN ({','.join('?' * len(chunk))})", chunk)
-    store.bump_session_version(conn)
     return {"field": field, "pattern": pattern, "purged": len(doomed)}
 
 
 def delete_exclusion(conn: sqlite3.Connection, exclusion_id: int) -> None:
     if conn.execute("DELETE FROM exclusions WHERE id = ?", (exclusion_id,)).rowcount == 0:
         raise NotFound("제외 항목을 찾을 수 없습니다")
-    store.bump_session_version(conn)
 
 
 def is_paused(conn: sqlite3.Connection) -> bool:
@@ -568,19 +457,16 @@ def pause(conn: sqlite3.Connection, now: Optional[float] = None) -> None:
     now = time.time() if now is None else now
     if not is_paused(conn):
         conn.execute("INSERT INTO blocked_ranges (kind, start_ts) VALUES ('pause', ?)", (now,))
-        store.mark_days_dirty(conn, now, now)
 
 
 def resume(conn: sqlite3.Connection, now: Optional[float] = None) -> None:
     now = time.time() if now is None else now
-    for r in conn.execute("SELECT start_ts FROM blocked_ranges WHERE kind = 'pause' AND end_ts IS NULL"):
-        store.mark_days_dirty(conn, min(r["start_ts"], now), now)
     conn.execute("UPDATE blocked_ranges SET end_ts = ? WHERE kind = 'pause' AND end_ts IS NULL", (now,))
 
 
 def delete_data(conn: sqlite3.Connection, data: dict, now: Optional[float] = None,
                 repos_dir: Optional[Path] = None) -> dict:
-    """Delete imported activity, notes and sessions for a day range, or everything.
+    """Delete imported activity and notes for a day range, or everything.
 
     A 'deleted' blocked range is recorded so later syncs do not re-import it.
     Projects, rules and exclusions are kept.
@@ -601,9 +487,9 @@ def delete_data(conn: sqlite3.Connection, data: dict, now: Optional[float] = Non
             "DELETE FROM afk_events WHERE start_ts >= ? AND end_ts <= ?", (lo, hi)).rowcount,
         "notes": conn.execute(
             "DELETE FROM notes WHERE day >= ? AND day <= ?", (day_lo, day_hi)).rowcount,
-        "sessions": conn.execute(
-            "DELETE FROM sessions WHERE day >= ? AND day <= ?", (day_lo, day_hi)).rowcount,
     }
+    # Rows of the session tables earlier versions kept (titles, notes): gone with the rest.
+    conn.execute("DELETE FROM sessions WHERE day >= ? AND day <= ?", (day_lo, day_hi))
     # The collector's raw events too, so they are really gone.
     conn.execute("DELETE FROM collector_events WHERE start_ts >= ? AND end_ts <= ?", (lo, hi))
     if data.get("all") is True:
@@ -616,8 +502,6 @@ def delete_data(conn: sqlite3.Connection, data: dict, now: Optional[float] = Non
     else:
         # Change records go; the snapshot repository itself keeps those commits (documented limitation).
         counts["changes"] = conn.execute("DELETE FROM changes WHERE ts >= ? AND ts < ?", (lo, hi)).rowcount
-        if hi > lo:
-            store.mark_days_dirty(conn, lo, hi)  # regroup whatever partially remains
     if hi > lo:
         conn.execute("INSERT INTO blocked_ranges (kind, start_ts, end_ts) VALUES ('deleted', ?, ?)",
                      (lo, hi))

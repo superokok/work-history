@@ -12,7 +12,9 @@ supports.
    user-written titles it had nothing to come from.)
    There are no projects (2026-11-05): the model groups the records itself by
    issue key, MR, work folder or topic and names each group from the records
-   ("기타" for the rest); a group's time is the sessions it cites.
+   ("기타" for the rest); a group's time is the work folder records it cites
+   (a record cited by several groups is shared evenly; 웹/소통/기타 records add
+   no time and are listed under the report as "작업 폴더 밖").
 2. **Ask your history** ("지난주 로그인 버그 어디까지 했지?"): an agent that
    searches the local history with tools and answers with citations.
 
@@ -152,8 +154,9 @@ one class plus a factory entry (`ai_local.LocalModel` is the second one).
 - Only work data is sent: recorded file changes (C: files, line counts and
   a bounded excerpt of changed lines; snapshots of one folder less than 30
   minutes apart go as one change, from the first old version to the last new
-  one), sessions that are not excluded and not
-  "업무 외" (S). Projects, next actions and notes are not sent to the report
+  one), and work records (W, `work.py`): each work folder's time on each day,
+  or the day's 웹 / 소통 / 기타 time, with spans of the day and the window
+  titles that took the most time. Projects, next actions and notes are not sent to the report
   (2026-11-05: the app has no screens for them any more), nor are browser
   addresses.
   "업무 외" time is sent as a total only.
@@ -163,11 +166,9 @@ one class plus a factory entry (`ai_local.LocalModel` is the second one).
   leaving room in the 32k context for the rules and the answer). It is sent as
   JSON with one record per line, each file as one short string
   ("src/Auth.java (수정 +12 -3)"). When a period is too big, `FIT_LEVELS` are
-  tried in order: fewer windows per session, wider merging of a folder's
+  tried in order: fewer windows per record, wider merging of a folder's
   changes (up to one per folder per day), fewer files listed per change, and
-  only then leaving out the shortest sessions. On a fictional busy week (3
-  folders snapshotted every 5 minutes, 658 snapshots, 54 sessions) every
-  session and every folder-day stays in, in about 35k characters.
+  only then leaving out the shortest records.
 - Diff excerpts use what room is left, at most 600 lines per request, 50 per
   change, 25 per file, 200 characters per line, shared fairly: each change gets
   an equal share of what is left, so early changes cannot use up the room.
@@ -187,21 +188,16 @@ one class plus a factory entry (`ai_local.LocalModel` is the second one).
   sent, so a number taken from another piece of work (GOV-1418 on the
   count-query work of GOV-1423) is marked.
 - A 실적 bullet that says something is finished (완료, 해결, 종료, 마무리, …;
-  `ai_report.DONE_WORDS`) is shown as "완료 확인 필요" unless one of its
-  references is the user's own words saying so: a session title the user
-  wrote (S). File changes and window activity show work, not that it is
-  done. When the claim names
-  issue keys (GOV-1423), each key needs a sentence of the user's own that
-  names it and says it is done — a note "GOV-1418 완료. GOV-1423 3.2초" does
-  not finish GOV-1423. The summary has no references and is checked against
-  all of the user's words the same way ("요약 … (완료 근거 없음 — 확인 필요)").
+  `ai_report.DONE_WORDS`) is shown as "완료 확인 필요": file changes and window
+  titles show work, not that it is done, and the prompt asks for "진행·작업"
+  wording. The summary is checked the same way.
 - Clicking a "파일 변경" (C) citation opens that change's diffs directly.
 - 차주 계획 is not in the records: the model may suggest one or two next
   steps per group that follow from them, and each is marked "AI 제안 — 확인
-  필요" (unless a session title the user wrote backs it).
-- Missing work: a work folder whose recorded file changes in the period are
-  not cited anywhere in the draft is added as "<folder> (작업 폴더)" with
-  "파일 변경이 AI 초안에 빠졌습니다".
+  필요".
+- Missing work: a work folder whose records (W) and file changes (C) in the
+  period are not cited anywhere in the draft is added as "<folder> (작업 폴더)"
+  with its time and "이 작업 폴더의 기록이 AI 초안에 빠졌습니다".
 - AI text is always labelled as an AI draft and must be saved by the user to
   become a report.
 
@@ -209,8 +205,7 @@ one class plus a factory entry (`ai_local.LocalModel` is the second one).
 
 - Unit tests with a fake `claude` CLI and fake models cover the command line,
   error mapping, the MCP trace check, validation and guards.
-- A small eval set on curated demo data (questions with expected referenced
-  sessions; report checks) is run against a live model before changes are
+- A small eval set on curated demo data (report checks) is run against a live model before changes are
   accepted: `evals/report_eval.py --model local:<model>` for the local models
   (the default when one is installed), `--model claude-code:sonnet` for the
   Claude Code reference.

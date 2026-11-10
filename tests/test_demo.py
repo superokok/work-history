@@ -50,7 +50,7 @@ class MorningTests(unittest.TestCase):
         with db.connect() as conn:
             self.assertEqual(conn.execute("SELECT COUNT(*) FROM watched_folders").fetchone()[0], 0)
             self.assertEqual(conn.execute("SELECT COUNT(*) FROM changes").fetchone()[0], 0)
-            self.assertGreater(conn.execute("SELECT COUNT(*) FROM sessions").fetchone()[0], 0)
+            self.assertGreater(conn.execute("SELECT COUNT(*) FROM window_events").fetchone()[0], 0)
 
     def test_a_weekend_borrows_thursdays_work(self):
         saturday = date(2026, 11, 7)

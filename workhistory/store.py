@@ -82,24 +82,3 @@ def day_activities(conn: sqlite3.Connection, day: date,
     window, afk = load_events(conn, start, end)
     return build_activities(window, afk, load_blocked(conn, now), start, end,
                             load_exclusions(conn), load_rules(conn))
-
-
-# Sessions are derived data. `session_days` remembers, per day, which
-# classification version its sessions were computed with; -1 means "new
-# activity arrived". Anything that changes classification bumps the version.
-
-def session_version(conn: sqlite3.Connection) -> int:
-    row = conn.execute("SELECT value FROM meta WHERE key = 'session_version'").fetchone()
-    return int(row["value"]) if row else 0
-
-
-def bump_session_version(conn: sqlite3.Connection) -> None:
-    conn.execute("INSERT INTO meta (key, value) VALUES ('session_version', '1') "
-                 "ON CONFLICT (key) DO UPDATE SET value = CAST(value AS INTEGER) + 1")
-
-
-def mark_days_dirty(conn: sqlite3.Connection, start_ts: float, end_ts: float) -> None:
-    conn.executemany(
-        "INSERT INTO session_days (day, version) VALUES (?, -1) "
-        "ON CONFLICT (day) DO UPDATE SET version = -1",
-        [(d.isoformat(),) for d in days_between(start_ts, end_ts)])

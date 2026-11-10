@@ -17,7 +17,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Optional
 
-from .sessions import BROWSER_APPS, app_key
+from .apps import BROWSER_APPS, app_key
 
 log = logging.getLogger(__name__)
 

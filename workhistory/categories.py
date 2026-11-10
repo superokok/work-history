@@ -5,7 +5,7 @@ labels it so.
 """
 
 from .classify import OFFWORK_APP
-from .sessions import BROWSER_APPS, CHAT_APPS, CODE_APPS, MEETING_APPS, app_key
+from .apps import BROWSER_APPS, CHAT_APPS, CODE_APPS, MEETING_APPS, app_key
 
 # Display order, labels and colors (the dashboard and its legend use them as they are).
 CATEGORIES = [

@@ -455,15 +455,14 @@ $("report-generate").addEventListener("click", () => {
 });
 
 // ---- Citations. What the AI wrote and what is in the records must never look alike:
-// AI text sits in a tinted "AI" box; records show their own content (the note, the files, the session title).
-const SOURCE_KINDS = { session: "세션", change: "파일 변경", note: "메모", project: "프로젝트", day: "타임라인" };
+// AI text sits in a tinted "AI" box; records show their own content (the note, the files, the work folder).
+const SOURCE_KINDS = { work: "작업 기록", change: "파일 변경", note: "메모", day: "타임라인" };
 
-const sourceWhen = (src) => (src.type === "session" || src.type === "change" ? `${src.day.slice(5)} ${hhmm(src.start)}`
+const sourceWhen = (src) => (src.type === "change" ? `${src.day.slice(5)} ${hhmm(src.start)}`
   : src.day ? src.day.slice(5) : "");
 
 function openSource(src, ref) {
-  if (src.type === "project") gotoProject(src.project_id);
-  else if (src.type === "change") showChange(Number(ref.slice(1)));
+  if (src.type === "change") showChange(Number(ref.slice(1)));
   else gotoDay(src.day);
 }
 
@@ -662,15 +661,8 @@ function gotoDay(day) {
   setDay(day);
 }
 
-// The project's card in 설정.
-function gotoProject(id) {
-  showTab("settings");
-  $(`project-${id}`)?.scrollIntoView({ block: "center" });
-}
-
 // ------------------------------------------------------------------ ask the AI
-const TOOL_LABELS = { search_history: "기록 검색", get_day: "하루 보기", list_projects: "프로젝트 목록",
-  get_project: "프로젝트 보기", get_change: "변경 내용 보기" };
+const TOOL_LABELS = { search_history: "기록 검색", get_day: "하루 보기", get_change: "변경 내용 보기" };
 
 $("ask-form").addEventListener("submit", (e) => {
   e.preventDefault();
@@ -722,16 +714,7 @@ function renderSearch(r) {
   if (r.projects.length) {
     groups.push(section("프로젝트", r.projects.length, h("ul", { class: "plain" }, r.projects.map((p) => h("li", {},
       h("span", {}, h("span", { class: "dot", style: { background: p.color } }), p.name,
-        p.next_action ? h("span", { class: "meta" }, ` · 다음 할 일: ${p.next_action}`) : null),
-      h("span", { class: "meta" }, p.last_activity_ts
-        ? h("button", { class: "link", onclick: () => gotoDay(isoDay(new Date(p.last_activity_ts * 1000))) }, `마지막 작업 ${ago(p.last_activity_ts)}`)
-        : "기록 없음"))))));
-  }
-  if (r.sessions.length) {
-    groups.push(section("작업 세션", r.sessions.length, h("ul", { class: "plain" }, r.sessions.map((s) => h("li", {},
-      h("span", {}, h("button", { class: "link", onclick: () => gotoDay(s.day) }, `${s.day} ${hhmm(s.start)}–${hhmm(s.end)}`),
-        " ", s.title, s.note ? h("span", { class: "meta" }, ` · 메모: ${s.note}`) : null),
-      h("span", { class: "meta" }, `${projectName(s.project_id)} · ${dur(s.active_s)}`))))));
+        p.next_action ? h("span", { class: "meta" }, ` · 다음 할 일: ${p.next_action}`) : null))))));
   }
   if (r.notes.length) {
     groups.push(section("메모", r.notes.length, h("ul", { class: "notes" }, r.notes.map((n) => h("li", {},
@@ -843,18 +826,18 @@ $("exclusion-form").addEventListener("submit", (e) => {
   });
 });
 
-const deletedSummary = (r) => `삭제 완료: 창 기록 ${r.window_events}건, 세션 ${r.sessions}개, 메모 ${r.notes}건`;
+const deletedSummary = (r) => `삭제 완료: 창 기록 ${r.window_events}건, 메모 ${r.notes}건`;
 
 $("delete-form").addEventListener("submit", (e) => {
   e.preventDefault();
   const from = $("delete-from").value, to = $("delete-to").value;
   if (!from || !to) return toast("시작일과 종료일을 선택하세요.");
-  if (!confirm(`${from} ~ ${to} 기간의 활동·세션·메모를 삭제합니다. 되돌릴 수 없습니다.`)) return;
+  if (!confirm(`${from} ~ ${to} 기간의 활동·메모를 삭제합니다. 되돌릴 수 없습니다.`)) return;
   guarded(async () => toast(deletedSummary(await api("POST", "/api/delete-data", { from, to }))));
 });
 
 $("delete-all").addEventListener("click", () => {
-  if (!confirm("가져온 모든 활동 기록과 세션·메모를 삭제합니다. 되돌릴 수 없습니다. 계속할까요?")) return;
+  if (!confirm("가져온 모든 활동 기록과 메모를 삭제합니다. 되돌릴 수 없습니다. 계속할까요?")) return;
   guarded(async () => toast(deletedSummary(await api("POST", "/api/delete-data", { all: true }))));
 });
 
@@ -1014,14 +997,15 @@ function dashRow({ name, sub, stat, share, onclick }) {
     h("div", { class: "dash-stat" }, stat));
 }
 
-// The longest work by session title; a click opens that day's timeline.
+// Time per work folder, then 웹·소통·기타 (outside the work folders); a click opens that day's timeline.
 function renderDashWork(r) {
-  if (!r.work.length) return $("dash-work").replaceChildren(h("p", { class: "muted" }, "이 기간에 기록된 작업 세션이 없습니다."));
+  if (!r.work.length) return $("dash-work").replaceChildren(h("p", { class: "muted" }, "이 기간에 기록된 활동이 없습니다."));
   const max = Math.max(...r.work.map((w) => w.seconds), 1);
   const when = (day) => `${day.slice(5)} (${weekdayOf(day)})`;
   $("dash-work").replaceChildren(...r.work.map((w) => dashRow({
     name: w.title, share: w.seconds / max, stat: dur(w.seconds),
-    sub: r.span === "week" ? (w.days > 1 ? `${w.days}일 · 가장 오래 한 날 ${when(w.day)}` : when(w.day)) : "",
+    sub: [w.outside ? "작업 폴더 밖" : "", r.span === "week" ? (w.days > 1 ? `${w.days}일 · 가장 오래 한 날 ${when(w.day)}` : when(w.day)) : ""]
+      .filter(Boolean).join(" · "),
     onclick: () => gotoDay(w.day),
   })));
 }

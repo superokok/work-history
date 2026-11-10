@@ -22,7 +22,7 @@ Target setting: a Windows PC inside a 폐쇄망. The LLM runs on the PC itself
    the timeline, search and AI.
 4. Files copied in from a USB stick appear as additions/modifications like
    any other change, so the work trail continues across the air gap.
-5. AI reports and questions cite changes (`C<id>`) next to sessions and notes,
+5. AI reports and questions cite changes (`C<id>`) next to work records (`W`),
    with the same reference verification as before.
 
 ## Which project a change belongs to (decision 2026-10-28)

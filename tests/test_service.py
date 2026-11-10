@@ -2,7 +2,7 @@ import sqlite3
 import unittest
 from datetime import date, timedelta
 
-from workhistory import service, sessionstore, store
+from workhistory import service, store
 from workhistory.db import SCHEMA_VERSION, Database
 
 from tests.helpers import TempDB, local_ts
@@ -16,11 +16,10 @@ def add_source(conn) -> int:
 
 
 def all_rows(t):
-    return [r for s in t["sessions"] for r in s["rows"]]
+    return t["rows"]
 
 
 def add_window(conn, source, aw_id, start, end, app, title):
-    store.mark_days_dirty(conn, start, end)  # as sync does
     return conn.execute("INSERT INTO window_events (source_id, aw_id, start_ts, end_ts, app, title) "
                         "VALUES (?, ?, ?, ?, ?, ?)", (source, aw_id, start, end, app, title)).lastrowid
 
@@ -80,14 +79,12 @@ class TimelineTests(ServiceTestCase):
         gov_row = all_rows(t)[0]
         self.assertEqual((gov_row["project_id"], gov_row["project_source"]), (self.gov, "rule"))
         totals = {p["project_id"]: p["seconds"] for p in t["by_project"]}
-        # The 10-minute unclassified Chrome read right after Gov24 work belongs to that session.
-        self.assertEqual(totals, {self.gov: 2400, None: 1200})
+        self.assertEqual(totals, {self.gov: 1800, None: 1800})
 
-    def test_apps_add_up_across_sessions_newest_first(self):
+    def test_apps_add_up_newest_first(self):
         with self.db.connect() as conn:
             t = service.timeline(conn, DAY, now=local_ts(DAY, 23))
-            # Chrome at 09:30 and again at 10:00 is two sessions but one app entry.
-            self.assertEqual(len(t["sessions"]), 2)
+            # Chrome at 09:30 and again at 10:00 is one app entry.
             self.assertEqual([(a["app"], a["seconds"]) for a in t["apps"]],
                              [("chrome.exe", 1800), ("idea64.exe", 1800)])
             chrome = t["apps"][0]
@@ -95,12 +92,6 @@ class TimelineTests(ServiceTestCase):
                              ("Chrome", local_ts(DAY, 9, 30), local_ts(DAY, 10, 20)))
             self.assertEqual([w["seconds"] for w in chrome["windows"]], [1200, 600])
             self.assertEqual(t["apps"][1]["windows"][0]["project_id"], self.gov)
-
-            excluded = t["sessions"][-1]["id"]
-            sessionstore.update_session(conn, excluded, {"excluded": True})
-            t = service.timeline(conn, DAY, now=local_ts(DAY, 23))
-            self.assertEqual([(a["app"], a["seconds"]) for a in t["apps"]],
-                             [("chrome.exe", 600), ("idea64.exe", 1800)])
             t = service.timeline(conn, DAY, app="idea64.exe", now=local_ts(DAY, 23))
             self.assertEqual([a["app"] for a in t["apps"]], ["idea64.exe"])
 
@@ -124,8 +115,8 @@ class TimelineTests(ServiceTestCase):
             only_gov = service.timeline(conn, DAY, project=str(self.gov), now=local_ts(DAY, 23))
             unassigned = service.timeline(conn, DAY, project="none", now=local_ts(DAY, 23))
             chrome = service.timeline(conn, DAY, app="chrome.exe", now=local_ts(DAY, 23))
-        self.assertEqual([r["event_ids"] for r in all_rows(only_gov)], [[self.e1], [self.e2]])
-        self.assertEqual([r["event_ids"] for r in all_rows(unassigned)], [[self.e3]])
+        self.assertEqual([r["event_ids"] for r in all_rows(only_gov)], [[self.e1]])
+        self.assertEqual([r["event_ids"] for r in all_rows(unassigned)], [[self.e2], [self.e3]])
         self.assertEqual(len(all_rows(chrome)), 2)
         # Totals always describe the whole day.
         self.assertEqual(only_gov["total_active_s"], 3600)
@@ -197,9 +188,6 @@ class SearchTests(ServiceTestCase):
             r = service.search(conn, "페이징")
             self.assertEqual(len(r["notes"]), 1)
             self.assertEqual([p["id"] for p in r["projects"]], [self.gov])
-            r = service.search(conn, "gov24 백엔드")
-            self.assertAlmostEqual(r["projects"][0]["last_activity_ts"],
-                                   local_ts(DAY + timedelta(days=1), 9, 10), places=3)
 
     def test_empty_query_rejected(self):
         with self.db.connect() as conn:
@@ -220,7 +208,7 @@ class PrivacyTests(ServiceTestCase):
             service.timeline(conn, DAY, now=local_ts(DAY, 23))
             counts = service.delete_data(conn, {"from": DAY.isoformat(), "to": DAY.isoformat()},
                                          now=local_ts(DAY, 23) + 86400 * 2)
-            self.assertEqual(counts, {"window_events": 3, "afk_events": 0, "notes": 1, "sessions": 2, "changes": 0})
+            self.assertEqual(counts, {"window_events": 3, "afk_events": 0, "notes": 1, "changes": 0})
             self.assertEqual(len(all_rows(service.timeline(conn, DAY + timedelta(days=1)))), 1)
             self.assertEqual(conn.execute("SELECT kind FROM blocked_ranges").fetchone()[0], "deleted")
 

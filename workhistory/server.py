@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterable, Optional
 from urllib.parse import parse_qs, urlparse
 
-from . import ai_agent, ai_service, dashboard, service, sessionstore, snapshots
+from . import ai_agent, ai_service, dashboard, service, snapshots
 from .ai_client import AIError
 from .autostart import Launch
 from .autostart import default as default_launch
@@ -86,7 +86,8 @@ class App:
             return {
                 "demo": self.demo,
                 # The demo opens on its last recorded day: before 09:00 its "today" is still empty.
-                "last_day": conn.execute("SELECT MAX(day) FROM sessions").fetchone()[0] if self.demo else None,
+                "last_day": conn.execute("SELECT date(MAX(end_ts), 'unixepoch', 'localtime') FROM window_events"
+                                         ).fetchone()[0] if self.demo else None,
                 "paused": service.is_paused(conn),
                 "db_path": self.db.path,
                 # False when window activity can't be recorded (only file changes then).
@@ -118,18 +119,6 @@ class App:
         @r("POST", "/api/assign")
         def assign(conn, query, body):
             return {"changed": service.assign_project(conn, body.get("event_ids"), body.get("project_id"))}
-
-        @r("PATCH", r"/api/sessions/(\d+)")
-        def update_session(conn, query, body, sid):
-            return sessionstore.update_session(conn, int(sid), body)
-
-        @r("POST", "/api/sessions/merge")
-        def merge_sessions(conn, query, body):
-            return sessionstore.merge_sessions(conn, body.get("ids"))
-
-        @r("POST", r"/api/sessions/(\d+)/split")
-        def split_session(conn, query, body, sid):
-            return sessionstore.split_session(conn, int(sid), body.get("at"))
 
         @r("GET", "/api/projects")
         def projects(conn, query, body):
@@ -408,7 +397,7 @@ def make_handler(app: App, port: int):
                 return
             url = urlparse(self.path)
             if url.path.startswith("/api/") and self._from_other_site():
-                # Even a GET can have side effects (session regrouping, the Claude Code status check
+                # Even a GET can have side effects (the Claude Code status check
                 # starts processes), so no other web page may call the API, not even "blind".
                 self._json(403, {"error": "요청이 거부되었습니다"})
                 return

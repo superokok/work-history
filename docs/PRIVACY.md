@@ -55,8 +55,8 @@ Addresses are shown in the timeline only; they are not sent to the AI.
   "Delete all" removes every snapshot repository. Deleting a date range
   removes the change records; the commits stay in the snapshot repository
   until the folder is removed.
-- Before any text is sent to an AI model (diff excerpts, notes, window titles,
-  session titles, next actions) it is passed through `redact.py`, which masks
+- Before any text is sent to an AI model (diff excerpts, window titles, notes
+  in "AI에게 묻기") it is passed through `redact.py`, which masks
   private keys, JWT/Bearer tokens, AWS/Google/Slack/GitHub/`sk-` keys,
   passwords in URLs and `.netrc` lines, `password/token/secret/api_key = value` pairs,
   Korean resident registration numbers, card numbers and long random tokens.
@@ -68,7 +68,7 @@ Addresses are shown in the timeline only; they are not sent to the AI.
 | **Record only work apps** (기록 대상: 업무 앱만 기록) | Only windows matching a rule (app name contains X, optionally title contains Y) are imported with app and title. All other windows are stored as anonymous **업무 외** time: no app name, no title. The raw events keep them for 35 days so the app picker can list them and "최근 30일에 다시 적용" can re-import with the current rules. |
 | **Pause / resume** (일시정지) | Nothing is recorded while paused; paused time is removed from timelines. |
 | **Exclusion list** (제외 목록) | Windows whose app or title contains a listed keyword (case-insensitive) are never recorded or imported; adding a rule also purges existing matching events, raw ones included. |
-| **Delete data** (데이터 삭제) | Deletes imported and raw events, notes and sessions for a date range or everything. Deleted ranges are not re-imported. |
+| **Delete data** (데이터 삭제) | Deletes imported and raw events and notes (and session rows older versions kept) for a date range or everything. Deleted ranges are not re-imported. |
 
 ## Sensitive data in window titles
 

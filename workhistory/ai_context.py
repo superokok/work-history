@@ -1,16 +1,16 @@
 """The exact work data the AI may see for a period, with citable references.
 
-References: S<id> = session (inferred from activity), C<id> = recorded file
-changes of one work folder (results). There are no projects and no notes: the
-model groups the work itself (issue keys, work folders, topics). Nothing
-outside this payload is sent to the model, every free-text field passes the
-secret redaction, and every reference the model returns is checked against
-`refs`.
+References: W<n> = a work record (one work folder's time on one day, or the
+day's 웹 / 소통 / 기타 time; work.py), C<id> = recorded file changes of one work
+folder (results). There are no projects and no notes: the model groups the work
+itself (issue keys, work folders, topics). Nothing outside this payload is sent
+to the model, every free-text field passes the secret redaction, and every
+reference the model returns is checked against `refs`.
 
 The payload is kept within a size budget so a busy week fits the model's
 context: snapshots of one folder taken close together go as one piece of work,
-and when that is not enough, fewer windows per session and the shortest
-sessions are left out (`FIT_LEVELS`). Diff excerpts share what room is left.
+and when that is not enough, fewer windows per record and the shortest records
+are left out (`FIT_LEVELS`). Diff excerpts share what room is left.
 """
 
 import difflib
@@ -18,14 +18,12 @@ import json
 import sqlite3
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from pathlib import Path
 from typing import Optional
 
-from . import sessionstore, store
-from .classify import OFFWORK_APP
+from . import store, work
 from .redact import redact
-from .sessions import app_label, clean_title
 
 MAX_DAYS = 31
 MIN_WINDOW_S = 60
@@ -33,18 +31,19 @@ MIN_WINDOW_S = 60
 # (32k tokens, 8k of them for the answer): about 18k tokens of data, counted in characters of `dumps`.
 PAYLOAD_CHARS = 40_000
 # Ways to make a period fit, tried in order until the payload without diffs takes at most
-# FIT_SHARE of the budget: (windows per session, shortest session sent in seconds,
+# FIT_SHARE of the budget: (windows per record, shortest record sent in seconds,
 # snapshots of one folder closer than this many seconds go as one change, files listed per change).
 FIT_LEVELS = [
-    (5, 60, 30 * 60, 20),
-    (3, 60, 30 * 60, 20),
-    (3, 60, 3 * 3600, 10),
-    (2, 60, 24 * 3600, 10),
+    (10, 60, 30 * 60, 20),
+    (6, 60, 30 * 60, 20),
+    (6, 60, 3 * 3600, 10),
+    (4, 60, 24 * 3600, 10),
+    (3, 60, 24 * 3600, 5),
     (2, 60, 24 * 3600, 5),
-    (1, 60, 24 * 3600, 5),
     (1, 300, 24 * 3600, 5),
     (1, 900, 24 * 3600, 5),
 ]
+SPANS_SHOWN = 8  # times of day listed per record
 FIT_SHARE = 0.7
 # Diff excerpts: enough to see what changed, shared fairly between the changes of the period.
 DIFF_LINES_PER_FILE = 25
@@ -63,19 +62,20 @@ class Context:
     refs: set[str] = field(default_factory=set)
     # ref -> where it points, for links in the UI: {type, day, label, start?, end?}
     sources: dict[str, dict] = field(default_factory=dict)
-    session_seconds: dict[str, float] = field(default_factory=dict)  # S ref -> work seconds
-    folder_changes: dict[str, list[str]] = field(default_factory=dict)  # work folder -> its C refs
-    # ref -> what the user wrote themselves (a session title they edited).
-    # Only these may back a claim that something is finished.
-    user_words: dict[str, str] = field(default_factory=dict)
+    # W ref of a work folder -> its seconds (records of 웹/소통/기타 add no time to a group of work)
+    work_seconds: dict[str, float] = field(default_factory=dict)
+    # work folder -> its W and C refs, to notice a folder the draft leaves out
+    folder_refs: dict[str, list[str]] = field(default_factory=dict)
+    folder_seconds: dict[str, float] = field(default_factory=dict)
     # ref -> the text the model saw for it (titles, paths, diff lines), to check issue numbers against.
     ref_text: dict[str, str] = field(default_factory=dict)
+    outside_s: dict[str, float] = field(default_factory=dict)  # 웹 / 소통 / 기타 -> seconds
     offwork_s: float = 0.0
 
     @property
     def empty(self) -> bool:
         p = self.payload
-        return not p["sessions"] and not p["changes"]
+        return not p["work"] and not p["changes"]
 
 
 def _hm(ts: float) -> str:
@@ -83,7 +83,7 @@ def _hm(ts: float) -> str:
 
 
 def dumps(payload: dict) -> str:
-    """The payload as sent: valid JSON with one session or change per line (indenting every key
+    """The payload as sent: valid JSON with one record or change per line (indenting every key
     would spend a large part of the budget on whitespace)."""
     def value(v) -> str:
         if isinstance(v, list) and v:
@@ -115,41 +115,32 @@ def _excerpt(repo, path: str, old_blob: Optional[str], new_blob: Optional[str], 
     return lines
 
 
-# ---------------------------------------------------------------- sessions
+# ---------------------------------------------------------------- work records
 
-def _sessions(conn: sqlite3.Connection, ctx: Context, start: date, end: date) -> list[dict]:
-    """Every work session of the period with all its windows (longest first); trimmed later."""
+def _records(conn: sqlite3.Connection, ctx: Context, start: date, end: date) -> list[tuple[str, work.Record]]:
+    """(W ref, record) for every work record of the period; trimmed later."""
     out = []
-    day = start
-    while day <= end:
-        activities, _ = store.day_activities(conn, day)
-        sessionstore.refresh_day(conn, day, activities=activities)
-        for s in conn.execute(
-                "SELECT * FROM sessions WHERE day = ? AND excluded = 0 ORDER BY start_ts", (day.isoformat(),)):
-            inside = sessionstore.activities_within(activities, s["start_ts"], s["end_ts"])
-            work = [a for a in inside if a.app != OFFWORK_APP]
-            work_s = sum(a.duration for a in work)
-            ctx.offwork_s += sum(a.duration for a in inside) - work_s
-            windows: dict[tuple[str, str], float] = defaultdict(float)
-            for a in work:
-                windows[(app_label(a.app), clean_title(a.title, a.app))] += a.duration
-            out.append({"row": s, "day": day, "work_s": work_s,
-                        "windows": sorted(windows.items(), key=lambda kv: -kv[1])})
-        day += timedelta(days=1)
-    conn.commit()  # regrouped sessions are derived data; keep them
+    for _day, recs, offwork in work.period(conn, start, end):
+        ctx.offwork_s += offwork
+        for r in recs:
+            out.append((f"W{len(out) + 1}", r))
     return out
 
 
-def _session_item(s: dict, windows: int) -> dict:
-    row = s["row"]
+def _spans(r: work.Record) -> str:
+    shown = [f"{_hm(a)}-{_hm(b)}" for a, b in r.spans[:SPANS_SHOWN]]
+    more = len(r.spans) - len(shown)
+    return ", ".join(shown) + (f" 외 {more}번" if more > 0 else "")
+
+
+def _record_item(ref: str, r: work.Record, windows: int) -> dict:
     return {
-        "ref": f"S{row['id']}", "date": s["day"].isoformat(),
-        "time": f"{_hm(row['start_ts'])}-{_hm(row['end_ts'])}",
-        "minutes": round(s["work_s"] / 60),
-        "title": redact(row["title"]),
-        "title_by": "user" if row["title_edited"] else "auto",
+        "ref": ref, "date": r.day.isoformat(),
+        **({"folder": r.name} if r.folder_id else {"kind": r.name}),
+        "minutes": round(r.seconds / 60),
+        "times": _spans(r),
         "windows": [{"app": app, "title": redact(title), "minutes": round(sec / 60)}
-                    for (app, title), sec in s["windows"][:windows] if sec >= MIN_WINDOW_S],
+                    for (app, title), sec in r.top_windows(windows) if sec >= MIN_WINDOW_S],
     }
 
 
@@ -271,21 +262,21 @@ def build(conn: sqlite3.Connection, start: date, end: date, repos_dir: Optional[
         raise store.Invalid(f"한 번에 {MAX_DAYS}일까지만 보낼 수 있습니다")
 
     ctx = Context(start, end, {})
-    sessions = _sessions(conn, ctx, start, end)
+    records = _records(conn, ctx, start, end)
     rows, files = _change_rows(conn, start, end)
 
     def payload(level) -> tuple[dict, list]:
         windows, min_s, gap, limit = level
-        chosen = [s for s in sessions if s["work_s"] >= max(min_s, 60)]
+        chosen = [(ref, r) for ref, r in records if r.seconds >= max(min_s, 60)]
         changes = []
         for burst in _bursts(rows, gap):
             merged = _burst_files(burst, files)
             changes.append((_change_item(burst, merged, limit), burst, merged))
         return {
             "period": {"from": start.isoformat(), "to": end.isoformat()},
-            "work_minutes": round(sum(s["work_s"] for s in chosen) / 60),
+            "work_minutes": round(sum(r.seconds for _, r in records) / 60),
             "offwork_minutes": round(ctx.offwork_s / 60),
-            "sessions": [_session_item(s, windows) for s in chosen],
+            "work": [_record_item(ref, r, windows) for ref, r in chosen],
             "changes": [c[0] for c in changes],
         }, changes
 
@@ -295,10 +286,10 @@ def build(conn: sqlite3.Connection, start: date, end: date, repos_dir: Optional[
         if fits(data):
             break
     else:
-        # Still too big (a long period): keep the longest sessions that fit.
+        # Still too big (a long period): keep the longest records that fit.
         windows, _, gap, limit = FIT_LEVELS[-1]
-        lengths = sorted({s["work_s"] for s in sessions})
-        lo, hi = 0, len(lengths)  # threshold index; hi = no sessions at all
+        lengths = sorted({r.seconds for _, r in records})
+        lo, hi = 0, len(lengths)  # threshold index; hi = no records at all
         while lo < hi:
             mid = (lo + hi) // 2
             if fits(payload((windows, lengths[mid], gap, limit))[0]):
@@ -308,18 +299,22 @@ def build(conn: sqlite3.Connection, start: date, end: date, repos_dir: Optional[
         level = (windows, lengths[lo] if lo < len(lengths) else float("inf"), gap, limit)
         data, changes = payload(level)
     windows, min_s, _, limit = level
-    for s in sessions:
-        if s["work_s"] < max(min_s, 60):
+    for ref, r in records:
+        if r.folder_id:
+            ctx.folder_seconds[r.name] = ctx.folder_seconds.get(r.name, 0.0) + r.seconds
+        else:
+            ctx.outside_s[r.name] = ctx.outside_s.get(r.name, 0.0) + r.seconds
+        if r.seconds < max(min_s, 60):
             continue
-        row, ref = s["row"], f"S{s['row']['id']}"
-        ctx.session_seconds[ref] = s["work_s"]
         ctx.refs.add(ref)
-        ctx.sources[ref] = {"type": "session", "day": s["day"].isoformat(), "label": row["title"],
-                            "start": row["start_ts"], "end": row["end_ts"]}
-        if row["title_edited"]:
-            ctx.user_words[ref] = row["title"]
-    for item in data["sessions"]:
-        ctx.ref_text[item["ref"]] = "\n".join([item["title"]] + [w["title"] for w in item["windows"]])
+        ctx.sources[ref] = {"type": "work", "day": r.day.isoformat(), "label": r.name,
+                            "start": r.spans[0][0], "end": r.spans[-1][1]}
+        if r.folder_id:
+            ctx.work_seconds[ref] = r.seconds
+            ctx.folder_refs.setdefault(r.name, []).append(ref)
+    for item in data["work"]:
+        name = item.get("folder") or item.get("kind")
+        ctx.ref_text[item["ref"]] = "\n".join([name] + [w["title"] for w in item["windows"]])
 
     if repos_dir is not None and changes:
         room = (PAYLOAD_CHARS - _size(data)) // DIFF_LINE_COST
@@ -332,7 +327,7 @@ def build(conn: sqlite3.Connection, start: date, end: date, repos_dir: Optional[
     for item, burst, merged in changes:
         ref, first = item["ref"], burst[0]
         ctx.refs.add(ref)
-        ctx.folder_changes.setdefault(item["folder"], []).append(ref)
+        ctx.folder_refs.setdefault(item["folder"], []).append(ref)
         ctx.sources[ref] = {"type": "change", "day": item["date"], "start": first["ts"],
                             "label": f"{item['folder']}: " + ", ".join(
                                 f["path"].rsplit("/", 1)[-1] for f in merged[:3])}

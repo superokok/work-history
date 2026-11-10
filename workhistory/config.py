@@ -43,14 +43,9 @@ IDLE_APPS = frozenset({"lockapp.exe"})
 # shown as one timeline row.
 ROW_MERGE_GAP_S = 60
 
-# Session grouping (see sessions.py). Constants on purpose: make them
-# user-configurable only if real use shows the defaults don't fit.
-SESSION_GAP_S = 10 * 60
-MIN_PROJECT_RUN_S = 3 * 60      # switching to another known project
-UNASSIGNED_RUN_S = 15 * 60      # unclassified work inside a project session
-OFFWORK_RUN_S = 10 * 60         # 업무 외 inside a work session (like a short break)
-MIN_KIND_RUN_S = 15 * 60        # coding / reading / chat must last this long to be its own session
-MIN_MEETING_RUN_S = 5 * 60      # a meeting is its own session even when short
+# Work records (see work.py): a work folder's windows closer than this are shown as one
+# span of the day ("09:15-11:50"). Spans are for display; time is always added up per window.
+WORK_SPAN_GAP_S = 10 * 60
 
 
 

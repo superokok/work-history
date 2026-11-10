@@ -1,7 +1,7 @@
 """Demo data: a fictional two-week developer scenario.
 
 Only ever written to the separate demo database, which the UI always marks as
-demo data. The scenario is realistic on purpose so that sessions and
+demo data. The scenario is realistic on purpose so that work records and
 AI reports can be judged on it (and used for the AI eval set):
 
 - last week: token refresh bug GOV-1418 (analysis -> fix -> MR), a K8s PoC,
@@ -20,10 +20,9 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
-from . import demo_files, sessionstore, snapshots, store
+from . import demo_files, snapshots
 from .classify import OFFWORK_APP, TrackRule, is_tracked
 from .db import Database
-from .store import mark_days_dirty
 
 GOV, K8S = "Gov24 민원 API", "K8s 전환 PoC"
 PROJECTS = {
@@ -155,12 +154,6 @@ NOTES = [
     (2, "17:25", GOV, "DBA 인덱스 승인. 운영 반영은 다음 주 화요일 배포 창에서 진행"),
 ]
 
-# (day offset, "HH:MM" inside the session, title the user typed)
-SESSION_TITLES = [
-    (-7, "09:30", "GOV-1418 토큰 재발급 버그 원인 분석"),
-    (-3, "09:30", "민원 조회 실행계획 분석"),
-]
-
 
 def _ts(day: date, hhmm: str) -> float:
     h, m = map(int, hhmm.split(":"))
@@ -257,8 +250,6 @@ def seed(db: Database, repos_dir: Optional[Path] = None, now: Optional[float] = 
                     aw_id += 1
                     conn.execute("INSERT INTO window_events (source_id, aw_id, start_ts, end_ts, app, title, path) "
                                  "VALUES (?, ?, ?, ?, ?, ?, ?)", (win, aw_id, s, e, app, title, path))
-        if days:
-            mark_days_dirty(conn, _ts(days[0][1], "00:00"), now)
 
         offsets = dict(days)
         for offset, hhmm, project, text in NOTES:
@@ -268,19 +259,8 @@ def seed(db: Database, repos_dir: Optional[Path] = None, now: Optional[float] = 
                              "VALUES (?, ?, ?, ?, ?)",
                              (offsets[offset].isoformat(), project_ids.get(project), text, ts, ts))
 
-        for offset, day in days:
-            activities, _ = store.day_activities(conn, day, now)
-            sessionstore.refresh_day(conn, day, now, activities)
         if repos_dir is not None:
             _seed_files(conn, Path(repos_dir), project_ids, monday, today, now, edits)
-
-        for offset, hhmm, title in SESSION_TITLES:
-            if offset not in offsets:
-                continue
-            at = _ts(offsets[offset], hhmm)
-            row = conn.execute("SELECT id FROM sessions WHERE start_ts <= ? AND end_ts > ?", (at, at)).fetchone()
-            if row:
-                sessionstore.update_session(conn, row["id"], {"title": title})
     return True
 
 

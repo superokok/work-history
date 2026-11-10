@@ -30,11 +30,12 @@ sync.py       – incremental pull, dedupe/upsert, privacy filtering at ingest
    ▼
 SQLite (db.py, versioned migrations via PRAGMA user_version)
    ▼
-store.py      – shared loaders, day bounds, session staleness bookkeeping
+store.py      – shared loaders, day bounds
 normalize.py  – pure: window − AFK idle − blocked ranges − exclusions, clipped to day
 classify.py   – pure: manual override > keyword rule > none
-sessions.py   – pure: deterministic grouping + auto titles
-sessionstore.py – persisted sessions: regroup, edits, merge, split
+apps.py       – pure: app names, labels, window title cleanup
+work.py       – work records: each window put with a work folder only where it shows one,
+                else 웹 / 소통 / 기타; time per (day, work folder) with spans of the day
 snapshots.py  – work-folder snapshots in hidden Git repos (dulwich), change records
 extract.py    – text from code/text, HWP, DOCX/XLSX/PPTX (stdlib only)
 redact.py     – secret / personal-identifier masking before anything leaves the PC
@@ -45,13 +46,13 @@ ai_local.py   – llama.cpp's llama-server on this PC, started on demand (local 
 ai_agent.py   – "AI에게 묻기": read-only history tools + citation check
 mcp_server.py – the history tools over MCP (Claude Code, development only), consent-checked
 autostart.py  – start-at-logon and shortcut files, switched from the app
-ai_context.py – the exact payload for the AI with verifiable references (C/S), within a size budget
+ai_context.py – the exact payload for the AI with verifiable references (W/C), within a size budget
 ai_report.py  – report schema, prompt, reference and issue-number checks, rendering
 ai_service.py – settings, consent, run log, saved reports
    ▼
-service.py    – timeline, search, notes, projects, project overview (AI tools)
-dashboard.py  – day/week dashboard: time by kind of activity, the day strip, longest work
-                (session titles), file changes per work folder; the day before / last week to compare
+service.py    – timeline, search, notes, projects
+dashboard.py  – day/week dashboard: time by kind of activity, the day strip, time per work
+                folder (work.py), file changes per work folder; the day before / last week to compare
 categories.py – kind of activity from the app name (rules, no AI)
    ▼
 server.py     – JSON API + static UI, bound to 127.0.0.1 only
@@ -122,9 +123,13 @@ v2 (Phase 3):
 ```
 sessions       id, day, start_ts, end_ts, active_s, title, title_edited,
                project_id, project_manual, note, excluded, locked, timestamps
-session_days   day PK, version   (-1 = new activity; else classification version)
-meta           key PK, value     ('session_version' bumps on rule/exclusion changes)
+session_days   day PK, version
+meta           key PK, value
 ```
+
+`sessions` and `session_days` are no longer written or read (2026-11-10: work records,
+computed from the activity on demand, replaced sessions). Rows earlier versions left stay in
+the database and go with 데이터 삭제.
 
 v5 (results, see RESULTS_TRACKING.md):
 
@@ -161,7 +166,7 @@ v3 (record only work apps):
 ```
 track_rules    id, app_pattern, title_pattern   (either may be empty, not both)
 meta           'track_mode' = 'all' | 'selected'
-sessions       + offwork_s   (untracked part of the session's active time)
+sessions       + offwork_s   (no longer used)
 ```
 
 Timestamps are stored as UTC epoch seconds (REAL). Day boundaries use the OS
@@ -185,56 +190,42 @@ local timezone.
   app/title on re-import, so resetting the window cursors
   (`reset_window_cursors`) re-applies the current rules from the collector's
   raw events. Totals and stats report 업무 외 time separately; it never
-  gets a project, and short 업무 외 detours are absorbed into work sessions
-  like any other detour. The app picker reads app names from the raw
+  gets a project or a work record. The app picker reads app names from the raw
   events and does not store the list.
 - **Project classification:** manual assignment > rule with the longest
   matching pattern (case-insensitive substring) > unassigned.
-- **Session grouping** (`sessions.py`, constants in `config.py`):
-  1. more than 10 min without activity (idle already removed) ends a session;
-  2. a switch to another known project starts a new session only if it lasts
-     at least 3 min. Unclassified work under 15 min (a browser search) and
-     업무 외 time under 10 min stay inside the surrounding session;
-  3. inside one project, a *kind* of work lasting at least 15 min becomes its
-     own session: coding (IDE, terminal, API/DB tools), reading (browser),
-     chat (messengers/mail); meetings (Teams/Zoom windows titled 회의,
-     스크럼, meeting...) from 5 min. Switching apps within one kind never
-     splits a session.
-  Tuned on the two-week demo scenario: per-app splitting produced 23-29
-  sessions per day (every IDE/browser switch); the rules above give 3-11.
-  Auto title = dominant app + its longest-viewed window title (app suffix
-  like " - Google Chrome" removed). Session project = manual, else the
-  dominant activity project by time. Totals use session projects; excluded
-  sessions are left out of totals and AI reports.
-- **Timeline views:** sessions stay the unit for edits, totals and AI
-  references. The timeline's default *per-app* view (`service.app_summary`) is
-  display only: the activities of the listed, non-excluded sessions added up
-  per app for the whole day (an app used again later joins its earlier time),
-  most recently used app first, window titles by total time; clicking a window shows
-  its address or file path to copy. The session view
-  lists sessions newest first. Since 2026-11-05 the timeline shows no project
-  totals, project pickers or notes (the API still returns them; existing notes
-  and project data still feed the AI).
-- **Session edits are never lost:** sessions are regenerated, but an edited
-  (title/project/note/excluded) session follows its regrouped counterpart by
-  start time, so the session you are in keeps growing after you rename it.
-  If no counterpart exists any more, it is frozen (`locked`) at its range.
-  Merge and split create locked sessions; regrouping happens only outside
-  locked ranges.
-- **Staleness:** sync marks touched days `-1`; rule/exclusion/archive changes
-  bump a global version. Stale days are regrouped by the background syncer
-  every minute, by the timeline for the viewed day, and by search and the
-  AI tools before they run (committing per day). Measured: 365 days x 600 events
-  regroup in about 8 s (only after a rule change); a 3,000-event day loads in
-  about 25 ms cached / 60 ms regrouped.
-- **Next action:** each project has a user-written "다음 할 일", edited on its
-  card in 설정. AI reports may write a "next" item only from it or from notes;
-  the app never claims to know the next task. The "AI에게 묻기" tools read a
-  per-project overview (last session and window, recent sessions, notes) from
-  `service.resume_overview` / `resume_project`.
-- **Tabs (2026-11-05):** 타임라인, 보고서, 검색, 설정. The template daily review
-  and the 이어서 하기 tab were removed (the AI 업무일지 and "AI에게 묻기" cover
-  them); projects, rules and work folders moved into 설정.
+- **Work records** (`work.py`, 2026-11-10; they replace work sessions): time is
+  not cut into sessions. Each window goes with one work folder only where the
+  window itself shows it, otherwise by the kind of app:
+  1. the file named in its title is in exactly one work folder (`locate.file_paths`);
+  2. its title holds a work folder's path (terminals);
+  3. a part of its title (split at " - ", " – ", " | ") is a work folder's name
+     (IDEs: "project-a – Main.java", VS Code: "a.yaml - project-a - Visual Studio Code");
+  4. a relative path in its title starts with a folder or file that is in
+     exactly one work folder (terminals: "helm upgrade ./chart");
+  5. anything else: browsers → 웹, messengers/mail/meetings → 소통, the rest →
+     기타 (`categories.py`). Browsers and messengers are never put with a folder.
+  Nothing is guessed from what came before or after: a window between two
+  stretches of project-a is not project-a unless it shows it. A record is one
+  (day, work folder) or (day, 웹/소통/기타): seconds added up per window however
+  often the user switched back and forth, spans of the day (a gap over
+  `WORK_SPAN_GAP_S` = 10 min starts a new span; display only) and window titles
+  by time. "업무 외" is a total only. Records are computed from the activity when
+  asked (dashboard, AI report, AI에게 묻기); nothing is stored, so there is
+  nothing to regroup or keep in step with edits.
+  Demo scenario, one day: gov24-minwon-api 5시간 14분, 웹 1시간 13분, 소통 30분,
+  기타 23분 (Postman), 업무 외 20분.
+- **Timeline:** one view, per app (`service.app_summary`): the day's activities
+  added up per app (an app used again later joins its earlier time), most
+  recently used app first, window titles by total time; clicking a window shows
+  its address or file path to copy. The timeline shows no project totals,
+  project pickers or notes (the API still returns them).
+- **Next action:** each project may keep a user-written "다음 할 일" (API only
+  since 2026-11-05). The app never claims to know the next task: AI reports mark
+  every next step as an AI suggestion.
+- **Tabs:** 대시보드 (2026-11-10), 타임라인, 보고서, 검색, 설정. The template daily review
+  and the 이어서 하기 tab were removed (2026-11-05: the AI 업무일지 and "AI에게 묻기" cover
+  them); work folders are in 설정.
 - **Search:** SQLite `LIKE` substring search. Korean words are often 2
   characters and not whitespace-separated, so token-based FTS would miss them;
   personal-scale data (≈10⁵–10⁶ rows) is fast enough with `LIKE`. FTS5
@@ -253,7 +244,7 @@ The launchers start `pythonw.exe` (no console, since 2026-10-30: a closed consol
 stop the recording); the app then logs to `%LOCALAPPDATA%\WorkHistory\workhistory.log` (1 MB,
 one backup, no event content), shows startup errors in a message box, and stops only through
 "앱 종료" (`POST /api/quit`, guarded like every write by the `X-Work-History` header).
-`sessions.py` still knows a few macOS/Linux app names; they are harmless.
+`apps.py` still knows a few macOS/Linux app names; they are harmless.
 
 ## 8. Security
 
@@ -265,8 +256,8 @@ one backup, no event content), shows startup errors in a message box, and stops 
   never approves → other websites cannot write to the API.
 - Requests to `/api/` that a browser marks as started by another site
   (`Sec-Fetch-Site: cross-site|same-site`, or a foreign `Origin`) are refused,
-  GETs included: some GETs have side effects (session regrouping, the Claude
-  Code status check starts processes).
+  GETs included: some GETs have side effects (the Claude Code status check
+  starts processes).
 - Logs contain counts and errors only, never titles or note text.
 - The MCP server is internal (the app starts it for one question with a Claude
   Code model) and refuses any other caller; its instructions still say that

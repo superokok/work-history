@@ -93,14 +93,6 @@ class DashboardTests(unittest.TestCase):
         self.assertNotIn("blocks", r)
         self.assertEqual(sum(r["week"][4]["by_kind"].values()), 0)  # Friday has not happened yet
 
-    def test_excluded_sessions_do_not_count(self):
-        with self.db.connect() as conn:
-            dashboard.dashboard(conn, DAY, "day", now=NOW)  # builds the sessions
-            conn.execute("UPDATE sessions SET excluded = 1 WHERE day = ?", (DAY.isoformat(),))
-            r = dashboard.dashboard(conn, DAY, "day", now=NOW)
-        self.assertEqual(r["totals"]["active_s"], 0)
-        self.assertEqual((r["blocks"], r["work"], r["top_app"]), ([], [], None))
-
     def test_unknown_span(self):
         with self.db.connect() as conn, self.assertRaises(ValueError):
             dashboard.dashboard(conn, DAY, "month", now=NOW)
