@@ -970,6 +970,14 @@ const WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"];
 const weekdayOf = (day) => WEEKDAYS[(new Date(day + "T00:00:00").getDay() + 6) % 7];
 const pct = (part, whole) => (whole > 0 ? Math.round((part / whole) * 100) : 0);
 const hours = (sec) => `${Math.round(sec / 360) / 10}`;
+// "이번 주", "지난주" or "11/2 주" for the week shown (r.week starts on its Monday).
+function weekName(r) {
+  const monday = r.week[0].day, today = isoDay(new Date());
+  const thisMonday = shiftDay(today, -((new Date(today + "T00:00:00").getDay() + 6) % 7));
+  if (monday === thisMonday) return "이번 주";
+  if (monday === shiftDay(thisMonday, -7)) return "지난주";
+  return `${Number(monday.slice(5, 7))}/${Number(monday.slice(8))} 주`;
+}
 
 function svg(tag, attrs = {}, ...children) {
   const el = document.createElementNS("http://www.w3.org/2000/svg", tag);
@@ -1050,6 +1058,7 @@ function renderWeekChart(r) {
       `${WEEKDAYS[i]} ${Number(d.day.slice(5, 7))}/${Number(d.day.slice(8))}`));
     if (totals[i]) chart.append(svg("text", { x: x + barW / 2, y: y(acc) - 5, "text-anchor": "middle" }, `${hours(totals[i])}h`));
   });
+  $("dash-week-title").textContent = `${weekName(r)} 분류별 시간`;
   $("dash-week-chart").replaceChildren(chart, dashLegend(r.categories.filter((c) => r.week.some((d) => d.by_kind[c.key] > 0))));
 }
 
@@ -1058,7 +1067,7 @@ const dashLegend = (cats) => h("div", { class: "dash-legend" },
 
 function renderDonut(r) {
   const total = r.categories.reduce((s, c) => s + r.by_kind[c.key], 0);
-  $("dash-donut-title").textContent = r.span === "week" ? "이번 주 분류"
+  $("dash-donut-title").textContent = r.span === "week" ? `${weekName(r)} 분류`
     : r.day === isoDay(new Date()) ? "오늘 분류" : `${r.day.slice(5)} 분류`;
   if (!total) return $("dash-donut").replaceChildren(h("p", { class: "muted" }, "이 기간에 기록된 활동이 없습니다."));
   const R = 40, C = 2 * Math.PI * R;
