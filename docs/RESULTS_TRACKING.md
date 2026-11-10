@@ -57,7 +57,17 @@ up in a report and is hard to notice, while an unassigned change stays visible.
 ## Scanning rules
 
 - Change detection by `(size, mtime_ns)` per file; only changed files are read
-  and hashed.
+  and hashed. A file whose size and modified time did not change is not opened
+  at all (not even its stored copy), and when no file changed, no tree is built
+  and nothing is written: a scan that finds nothing new only lists the folder.
+- New objects are written as one pack file per scan (at most 64 MB each)
+  instead of one loose file per object, with fast compression (zlib level 1).
+- The snapshot thread runs in Windows background mode (lower CPU, disk and
+  memory priority), so a long scan gives way to the programs in use.
+- Measured on a development laptop with a 36,535-file folder: the first scan
+  (baseline) about 90 s in the background, every later scan with no changes
+  about 3 s (before 2026-11-10: 235 s and 28 s). A 1,500-file folder: 6 s and
+  0.4 s.
 - Skipped directories: `.git`, `node_modules`, `build`, `dist`, `target`,
   `out`, `bin`, `obj`, `.gradle`, `.idea`, `.vs`, `.vscode`, `__pycache__`,
   `.venv`, `venv`.
@@ -69,6 +79,8 @@ up in a report and is hard to notice, while an unassigned change stays visible.
   inside a work folder cannot pull in files from elsewhere.
 - Skipped: files over 5 MB and binary build outputs (`*.exe`, `*.dll`,
   `*.class`, `*.jar`, `*.war`, `*.zip`, `*.7z`, `*.pyc`, ...).
+- The first snapshot (baseline) is not work: its files are recorded without
+  reading them back to tell text from binary.
 - Text files: line diffs. Documents (`.hwp`, `.docx`, `.xlsx`, `.pptx`):
   extracted text is diffed; extraction results are cached by blob id.
   A document that would unpack to more than 50 MB is treated as binary

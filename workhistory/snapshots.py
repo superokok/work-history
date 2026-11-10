@@ -13,9 +13,11 @@ import difflib
 import fnmatch
 import logging
 import os
+import re
 import shutil
 import sqlite3
 import stat
+import sys
 import threading
 import time
 from collections import Counter, defaultdict
@@ -46,6 +48,8 @@ SKIP_PATTERNS = ("*.exe", "*.dll", "*.so", "*.dylib", "*.class", "*.jar", "*.war
                  "*.7z", "*.rar", "*.tar", "*.gz", "*.pyc", "*.pyo", "*.o", "*.obj", "*.pdb", "*.iso",
                  "*.mp4", "*.mov", "*.avi", "*.log", "*.tmp", "~$*", "*.lock", "Thumbs.db", "desktop.ini", ".DS_Store")
 MAX_FILE_BYTES = 5 * 1024 * 1024
+PACK_BYTES = 64 * 1024 * 1024  # new objects per pack file at most (memory bound)
+PACK_MIN_OBJECTS = 20         # fewer new objects are written as loose objects
 EXACT_DIFF_MAX_LINES = 5000
 FILE_MODE = 0o100644
 DIR_MODE = 0o040000
@@ -53,17 +57,22 @@ REF = b"refs/heads/main"
 AUTHOR = "WorkHistory <workhistory@localhost>".encode()
 
 
-def _matches(name: str, patterns: tuple[str, ...]) -> bool:
-    lower = name.lower()
-    return any(fnmatch.fnmatchcase(lower, p.lower()) for p in patterns)
+def _pattern(patterns: tuple[str, ...]) -> "re.Pattern[str]":
+    """One regular expression for a list of file name patterns (case-insensitive): a scan
+    checks every file name, so one match beats dozens of fnmatch calls."""
+    return re.compile("|".join(fnmatch.translate(p.lower()) for p in patterns))
+
+
+_SECRET = _pattern(SECRET_PATTERNS)
+_SKIP = _pattern(SKIP_PATTERNS)
 
 
 def is_secret(name: str) -> bool:
-    return _matches(name, SECRET_PATTERNS)
+    return _SECRET.match(name.lower()) is not None
 
 
 def is_skipped(name: str) -> bool:
-    return _matches(name, SKIP_PATTERNS)
+    return _SKIP.match(name.lower()) is not None
 
 
 @dataclass
@@ -81,21 +90,29 @@ def repo_path(repos_dir: Path, folder_id: int) -> Path:
 
 def _open_repo(path: Path) -> Repo:
     if path.exists():
-        return Repo(str(path))
-    path.parent.mkdir(parents=True, exist_ok=True)
-    return Repo.init_bare(str(path), mkdir=True)
+        repo = Repo(str(path))
+    else:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        repo = Repo.init_bare(str(path), mkdir=True)
+    # Fast compression: the snapshots stay on this PC, and zlib's default level made the
+    # first scan of a big folder CPU-bound.
+    repo.object_store.pack_compression_level = repo.object_store.loose_compression_level = 1
+    return repo
 
 
 def _is_link(entry: os.DirEntry) -> bool:
     """Symlinks and Windows junctions: they can lead outside the watched folder.
 
-    os.scandir does not count a junction as a symlink, so it gets its own check. Other
-    reparse points (e.g. OneDrive placeholder files) are ordinary files and stay included."""
+    os.scandir does not count a junction as a symlink, so directories get their own check
+    (junctions are always directories; files need no extra system call). Other reparse
+    points (e.g. OneDrive placeholder files) are ordinary files and stay included."""
     if entry.is_symlink():
         return True
+    if hasattr(entry, "is_junction"):  # Python 3.12+: from the directory listing, no system call
+        return entry.is_junction()
     tag = getattr(stat, "IO_REPARSE_TAG_MOUNT_POINT", None)
-    if tag is None:
-        return False  # not Windows
+    if tag is None or not entry.is_dir(follow_symlinks=False):
+        return False  # not Windows, or a file
     return getattr(os.lstat(entry.path), "st_reparse_tag", 0) == tag
 
 
@@ -123,7 +140,33 @@ def _walk(root: Path) -> Iterator[tuple[str, os.DirEntry]]:
                 continue
 
 
-def _build_tree(store: Any, files: dict[str, bytes]) -> bytes:
+class _Batch:
+    """New objects written as one pack file instead of one small file each: the first scan
+    of a big folder would otherwise create (and have the virus scanner check) thousands of
+    files. Flushed when it holds PACK_BYTES, so memory stays bounded."""
+
+    def __init__(self, store: Any):
+        self.store, self.objects, self.size, self.ids = store, [], 0, set()
+
+    def add(self, obj: Any) -> None:
+        if obj.id in self.ids:
+            return
+        self.ids.add(obj.id)
+        self.objects.append((obj, None))
+        self.size += len(obj.as_raw_string())
+        if self.size >= PACK_BYTES:
+            self.flush()
+
+    def flush(self) -> None:
+        if len(self.objects) >= PACK_MIN_OBJECTS:
+            self.store.add_objects(self.objects)
+        else:
+            for obj, _ in self.objects:
+                self.store.add_object(obj)
+        self.objects, self.size = [], 0
+
+
+def _build_tree(store: Any, files: dict[str, bytes], batch: Optional[_Batch] = None) -> bytes:
     """Nested Git trees for {posix path: blob id}; returns the root tree id."""
     root: dict = {}
     for path, blob_id in files.items():
@@ -141,7 +184,10 @@ def _build_tree(store: Any, files: dict[str, bytes]) -> bytes:
             else:
                 tree.add(name.encode("utf-8"), FILE_MODE, value)
         if tree.id not in store:
-            store.add_object(tree)
+            if batch is not None:
+                batch.add(tree)
+            else:
+                store.add_object(tree)
         return tree.id
 
     return write(root)
@@ -182,13 +228,19 @@ def scan(conn: sqlite3.Connection, repos_dir: Path, folder_id: int, now: Optiona
                      (now, result.error, folder_id))
         return result
 
-    cache = {r["path"]: (r["size"], r["mtime_ns"], r["blob_id"]) for r in conn.execute(
-        "SELECT path, size, mtime_ns, blob_id FROM file_state WHERE folder_id = ?", (folder_id,))}
     repo = _open_repo(repo_path(repos_dir, folder_id))
     try:
         store = repo.object_store
+        # The cache is trusted only next to the repository it was made with (a removed or
+        # recreated repository has no snapshot yet): then an unchanged size and modified time
+        # mean an unchanged file, with no need to open anything.
+        cache = {r["path"]: (r["size"], r["mtime_ns"], r["blob_id"]) for r in conn.execute(
+            "SELECT path, size, mtime_ns, blob_id FROM file_state WHERE folder_id = ?", (folder_id,))
+                 } if REF in repo.refs else {}
         current: dict[str, bytes] = {}
         state: list[tuple] = []
+        changed = False
+        batch = _Batch(store)
         for rel, entry in _walk(root):
             try:
                 st = entry.stat()
@@ -197,7 +249,7 @@ def scan(conn: sqlite3.Connection, repos_dir: Path, folder_id: int, now: Optiona
             if not stat.S_ISREG(st.st_mode) or st.st_size > MAX_FILE_BYTES:
                 continue
             cached = cache.get(rel)
-            if cached and cached[0] == st.st_size and cached[1] == st.st_mtime_ns and cached[2].encode() in store:
+            if cached and cached[0] == st.st_size and cached[1] == st.st_mtime_ns:
                 blob_id = cached[2].encode()
             else:
                 try:
@@ -208,18 +260,29 @@ def scan(conn: sqlite3.Connection, repos_dir: Path, folder_id: int, now: Optiona
                         current[rel] = cached[2].encode()
                         state.append((folder_id, rel, cached[0], cached[1], cached[2]))
                     continue
-                blob_id = add_blob(repo, data)
+                blob = Blob.from_string(data)
+                blob_id = blob.id
+                if not cached or cached[2].encode() != blob_id:
+                    changed = True
+                    if blob_id not in store:
+                        batch.add(blob)
             current[rel] = blob_id
             state.append((folder_id, rel, st.st_size, st.st_mtime_ns, blob_id.decode()))
         result.files = len(current)
+        changed = changed or not cache or current.keys() != cache.keys()
+        # Nothing to write either when every file kept its size and modified time.
+        stale = changed or any(cache[r[1]][:2] != (r[2], r[3]) for r in state)
 
-        result.change_id, result.baseline = commit_snapshot(conn, repo, folder_id, current, now)
+        if changed:  # most scans find nothing new: then no tree is built and nothing is written
+            batch.flush()
+            result.change_id, result.baseline = commit_snapshot(conn, repo, folder_id, current, now)
     finally:
         repo.close()
 
-    conn.execute("DELETE FROM file_state WHERE folder_id = ?", (folder_id,))
-    conn.executemany("INSERT INTO file_state (folder_id, path, size, mtime_ns, blob_id) VALUES (?, ?, ?, ?, ?)",
-                     state)
+    if stale:
+        conn.execute("DELETE FROM file_state WHERE folder_id = ?", (folder_id,))
+        conn.executemany("INSERT INTO file_state (folder_id, path, size, mtime_ns, blob_id) VALUES (?, ?, ?, ?, ?)",
+                         state)
     conn.execute("UPDATE watched_folders SET last_scan_at = ?, last_error = NULL WHERE id = ?", (now, folder_id))
     return result
 
@@ -237,7 +300,9 @@ def commit_snapshot(conn: sqlite3.Connection, repo: Repo, folder_id: int, files:
 
     Returns (change id or None, whether it was the folder's first snapshot).
     """
-    tree_id = _build_tree(repo.object_store, files)
+    batch = _Batch(repo.object_store)
+    tree_id = _build_tree(repo.object_store, files, batch)
+    batch.flush()
     parent = repo.refs[REF] if REF in repo.refs else None
     parent_tree = repo[parent].tree if parent else None
     if tree_id == parent_tree:
@@ -273,7 +338,9 @@ def _record_change(conn: sqlite3.Connection, repo: Repo, folder_id: int, commit_
         kind = {"add": "A", "delete": "D"}.get(ch.type, "M")
         added = removed = None
         if baseline:
-            is_text = extract_text(path, repo[new_blob].data) is not None if new_blob else False
+            # The first snapshot is not work and is never shown or sent: no need to read every
+            # file back to tell text from binary (that made adding a big folder slow).
+            is_text = False
         else:
             old_text, new_text = _text(repo, old_blob, path), _text(repo, new_blob, path)
             is_text = old_text is not None or new_text is not None
@@ -528,6 +595,19 @@ def remove_area(conn: sqlite3.Connection, folder_id: int, data: dict) -> dict:
 
 # ---------------------------------------------------------------- background
 
+def background_priority() -> None:
+    """Windows: put the calling thread in background mode (lower CPU, disk and memory
+    priority), so a long scan gives way to the programs the user is working in."""
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        kernel32.SetThreadPriority(kernel32.GetCurrentThread(), 0x00010000)  # THREAD_MODE_BACKGROUND_BEGIN
+    except (OSError, AttributeError):
+        pass
+
+
 class Snapshotter:
     """Scans every enabled folder periodically on a background thread."""
 
@@ -556,6 +636,7 @@ class Snapshotter:
             return results
 
     def _loop(self) -> None:
+        background_priority()
         while not self._stop.is_set():
             self.run_now()
             self._wake.wait(self.interval_s)
