@@ -1,7 +1,8 @@
-"""Start with the computer / desktop shortcut, switched from inside the app.
+"""Start with the computer, switched from inside the app.
 
-Only ever creates, overwrites or removes files with this app's own names:
-Startup\\작업 기록.lnk and Desktop\\작업 기록.lnk (via the shell's own COM object).
+Only ever creates, overwrites or removes one file with this app's own name:
+Startup\\작업 기록.lnk (via the shell's own COM object). (A desktop shortcut button
+existed until 2026-11-10.)
 
 What gets started: the launcher the app was started from (the launchers set
 WORKHISTORY_LAUNCHER), else this Python with `-m workhistory`.
@@ -21,8 +22,7 @@ LNK_NAME = APP_NAME + ".lnk"
 TIMEOUT_S = 30
 
 # Windows known folders (SHGetKnownFolderPath); they follow OneDrive / folder redirection.
-_FOLDER_IDS = {"startup": "{B97D20BB-F46A-4C97-BA10-5E3608430854}",
-               "desktop": "{B4BFCC3A-DB2C-424C-B029-7FE99A87C641}"}
+_FOLDER_IDS = {"startup": "{B97D20BB-F46A-4C97-BA10-5E3608430854}"}
 
 # Creates a .lnk with WScript.Shell. Paths come in through environment variables,
 # so nothing user-controlled is ever parsed as PowerShell code.
@@ -74,15 +74,11 @@ class Launch:
     def _autostart_path(self) -> Path:
         return self.folder("startup") / LNK_NAME
 
-    def _shortcut_path(self) -> Path:
-        return self.folder("desktop") / LNK_NAME
-
     # ------------------------------------------------------------ state
 
     def status(self) -> dict:
         return {
             "autostart": {"supported": True, "enabled": self._autostart_path().exists()},
-            "shortcut": {"supported": True, "exists": self._shortcut_path().exists(), "where": "바탕화면"},
             "command": self.command,
         }
 
@@ -94,18 +90,11 @@ class Launch:
             path.unlink(missing_ok=True)
         return self.status()
 
-    def create_shortcut(self) -> dict:
-        self._write(self._shortcut_path(), autostart=False)
-        return self.status()
-
     # ------------------------------------------------------------ writing
 
-    def _args(self, autostart: bool) -> list[str]:
-        # At logon the app starts in the background; opening the shortcut also opens the browser.
-        return self.command + (["--no-browser"] if autostart else [])
-
     def _write(self, path: Path, autostart: bool) -> None:
-        args = self._args(autostart)
+        # At logon the app starts in the background, without opening the browser.
+        args = self.command + (["--no-browser"] if autostart else [])
         path.parent.mkdir(parents=True, exist_ok=True)
         target = args[0]
         out = self.powershell({"WH_LNK": str(path), "WH_TARGET": target,

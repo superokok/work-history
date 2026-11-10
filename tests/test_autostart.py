@@ -35,7 +35,7 @@ class LaunchTests(unittest.TestCase):
 
     def test_windows_shortcuts_go_through_the_shell_with_paths_in_env_vars(self):
         ps = FakePowerShell()
-        folders = {"startup": self.home / "Startup", "desktop": self.home / "Desktop"}
+        folders = {"startup": self.home / "Startup"}
         launch = Launch([r"C:\앱\python.exe", "-m", "workhistory"], folders.__getitem__, ps)
         self.assertFalse(launch.status()["autostart"]["enabled"])
         status = launch.set_autostart(True)
@@ -44,15 +44,13 @@ class LaunchTests(unittest.TestCase):
         self.assertEqual(Path(env["WH_LNK"]), self.home / "Startup" / "작업 기록.lnk")
         self.assertEqual(env["WH_TARGET"], r"C:\앱\python.exe")
         self.assertEqual(env["WH_ARGS"], "-m workhistory --no-browser")  # at logon: no browser
-        launch.create_shortcut()
-        self.assertEqual(ps.calls[1]["WH_ARGS"], "-m workhistory")
-        self.assertTrue(launch.status()["shortcut"]["exists"])
         self.assertFalse(launch.set_autostart(False)["autostart"]["enabled"])
         self.assertFalse((self.home / "Startup" / "작업 기록.lnk").exists())
-        self.assertTrue((self.home / "Desktop" / "작업 기록.lnk").exists())  # only autostart was removed
+        self.assertNotIn("shortcut", launch.status())  # no desktop shortcut button any more
+        self.assertFalse(hasattr(launch, "create_shortcut"))
 
     def test_windows_failure_is_reported(self):
-        folders = {"startup": self.home / "Startup", "desktop": self.home / "Desktop"}
+        folders = {"startup": self.home / "Startup"}
         launch = Launch(CMD, folders.__getitem__, FakePowerShell(fail=True))
         with self.assertRaises(Invalid):
             launch.set_autostart(True)

@@ -45,7 +45,7 @@ ai_openai.py  – that protocol over the OpenAI-compatible chat API that llama-s
 ai_local.py   – llama.cpp's llama-server on this PC, started on demand (local models, nothing leaves the PC)
 ai_agent.py   – "AI에게 묻기": read-only history tools + citation check
 mcp_server.py – the history tools over MCP (Claude Code, development only), consent-checked
-autostart.py  – start-at-logon and shortcut files, switched from the app
+autostart.py  – start at logon (Startup shortcut), switched from the app
 ai_context.py – the exact payload for the AI with verifiable references (W/C), within a size budget
 ai_report.py  – report schema, prompt, reference and issue-number checks, rendering
 ai_service.py – settings, consent, run log, saved reports
@@ -235,7 +235,7 @@ local timezone.
 
 Windows only (decision 2026-10-28; until then the app also ran on macOS/Linux with
 ActivityWatch). Windows-specific pieces: the collector (`collector.py`, Win32 via ctypes),
-shortcuts (`autostart.py`, WScript.Shell), the data folder (`%LOCALAPPDATA%`), the launcher
+the start-at-logon shortcut (`autostart.py`, WScript.Shell), the data folder (`%LOCALAPPDATA%`), the launcher
 (`start-workhistory.cmd`, portable zip), exclusive port binding (`server._ExclusiveServer`) and the
 single-instance mutex (`instance.py`). Port: 5730, else the next free one up to 5739 (since
 2026-10-30); one app per database is a named mutex, not the port, and a second launch asks each

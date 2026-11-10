@@ -162,8 +162,7 @@ class ServerTests(unittest.TestCase):
         self.assertEqual((status, body["autostart"]["enabled"]), (200, True))
         self.assertTrue((self.home / "startup" / "작업 기록.lnk").exists())
         self.assertEqual(self.request("POST", "/api/launch", {"autostart": "yes"})[0], 400)
-        status, body, _ = self.request("POST", "/api/launch/shortcut", {})
-        self.assertEqual((status, body["shortcut"]["exists"]), (200, True))
+        self.assertEqual(self.request("POST", "/api/launch/shortcut", {})[0], 404)  # removed 2026-11-10
 
     def test_quit(self):
         # Without a quit hook (tests, embedding) the app can't be stopped from the page.

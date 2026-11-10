@@ -239,12 +239,6 @@ class App:
                 raise ApiError(400, "autostart는 true/false입니다")
             return {**self.launch.set_autostart(body["autostart"]), "demo": self.demo}
 
-        @r("POST", "/api/launch/shortcut")
-        def create_shortcut(conn, query, body):
-            if self.demo:
-                raise ApiError(409, "데모 모드에서는 바로가기를 만들지 않습니다")
-            return {**self.launch.create_shortcut(), "demo": self.demo}
-
         @r("POST", "/api/ai/ask")
         def ai_ask(conn, query, body):
             return ai_agent.ask(conn, body.get("question"), self.demo, self.ai_factory, self.repos_dir)

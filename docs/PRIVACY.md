@@ -79,10 +79,11 @@ from events, note text, and search queries are not logged. Started without a con
 (the normal way), the app writes them to `%LOCALAPPDATA%\WorkHistory\workhistory.log`
 (at most 1 MB plus one older file); started from a console, they go to the console.
 
-## Start at logon and shortcuts
+## Start at logon
 
-Off by default. 설정 → 실행 creates or removes only files with the app's
-own name: `Startup\작업 기록.lnk` and `Desktop\작업 기록.lnk`. Not available in demo mode.
+Off by default. 설정 → 실행 creates or removes only one file with the app's
+own name: `Startup\작업 기록.lnk`. Not available in demo mode. (A desktop
+shortcut button was removed on 2026-11-10.)
 
 ## Optional AI
 
