@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import re
 import unittest
 from datetime import date, timedelta
 from unittest import mock
@@ -110,8 +111,8 @@ class ValidationTests(AIDataTestCase):
             "project": "Gov24 백엔드",
             "done": [{"text": "리프레시 토큰 처리 분석", "refs": [s, "S999999", s]},
                      {"text": "근거 없는 성과", "refs": ["S424242"]}],
-            "next": [{"text": "AI가 지어낸 계획", "refs": [s]}],
-            "issues": [{"text": "QA 서버 배포 대기", "refs": [s]}, {"text": "", "refs": []}],
+            "next": [{"text": "AI가 지어낸 계획", "refs": [s]}, {"text": "", "refs": []}],
+            "issues": [{"text": "예전 형식의 이슈 칸", "refs": [s]}],  # no longer asked for: ignored
         }]}
 
     def test_refs_verified_and_flags(self):
@@ -120,13 +121,36 @@ class ValidationTests(AIDataTestCase):
         self.assertEqual([(i.text, i.refs, i.flag) for i in block.done],
                          [("리프레시 토큰 처리 분석", [f"S{self.first}"], None), ("근거 없는 성과", [], "no_evidence")])
         self.assertEqual([i.flag for i in block.next], ["unconfirmed_plan"])
-        self.assertEqual([i.text for i in block.issues], ["QA 서버 배포 대기"])
+        self.assertNotIn("예전 형식의 이슈 칸", ai_report.render_text(report))
+        self.assertNotIn("issues", json.dumps(ai_report.SCHEMA))
         self.assertEqual(report.dropped_refs, 2)
         self.assertEqual(block.seconds, 50 * 60)
 
+    def test_issue_numbers_must_come_from_the_cited_records(self):
+        s = f"S{self.first}"  # windows: "gov24-api – AuthService.java", "JWT refresh token"
+        with self.db.connect() as conn:
+            sessionstore.update_session(conn, self.first, {"title": "GOV-1423 AuthService 정리"})
+        raw = {"summary": "GOV-1423 작업과 GOV-9999 검토", "projects": [
+            {"project": "GOV-1418 토큰 버그", "done": [
+                {"text": "GOV-1418 AuthService 수정", "refs": [s]},       # number from another piece of work
+                {"text": "GOV-1423 AuthService 정리 (MR !77)", "refs": [s]},  # GOV-1423 yes, !77 no
+                {"text": "AuthService.java 정리", "refs": [s]}],
+             "next": [{"text": "gov-1423 리뷰 반영", "refs": [s]}]},       # case does not matter
+            {"project": "GOV-1423 정리", "done": [{"text": "정리", "refs": [s]}], "next": []}]}
+        report = ai_report.validate("weekly", self.context(), raw)
+        wrong, right = report.projects
+        self.assertEqual((wrong.name_flag, right.name_flag), ("unbacked_key", None))
+        self.assertEqual([i.flag for i in wrong.done], ["unbacked_key", "unbacked_key", None])
+        self.assertEqual([i.flag for i in wrong.next], [None])  # the title the user wrote names it
+        self.assertEqual(report.summary_flag, "unbacked_key")  # GOV-9999 is nowhere in the data
+        self.assertEqual(ai_report.unbacked_keys("GOV-14 정리", [s], self.context().ref_text), ["GOV-14"])
+        text = ai_report.render_text(report)
+        self.assertIn("## GOV-1418 토큰 버그 (50분) (번호가 근거에 없음 — 확인 필요)", text)
+        self.assertIn("- GOV-1418 AuthService 수정 (번호가 근거에 없음 — 확인 필요)", text)
+
     def test_finished_claims_need_the_users_own_words(self):
         s = f"S{self.first}"
-        raw = {"summary": "", "projects": [{"project": "Gov24 백엔드", "next": [], "issues": [], "done": [
+        raw = {"summary": "", "projects": [{"project": "Gov24 백엔드", "next": [], "done": [
             {"text": "토큰 갱신 버그 수정 완료", "refs": [s]},   # auto session title: not proof
             {"text": "해결 방안 검토", "refs": [s]},             # not a claim
             {"text": "토큰 갱신 로직 수정", "refs": [s]},
@@ -147,7 +171,7 @@ class ValidationTests(AIDataTestCase):
         s = f"S{self.first}"
         raw = {"summary": "GOV-1418 버그 수정 및 GOV-1423 조회 성능 개선을 완료하고, K8s 전환을 진행함. "
                           "GOV-1418은 QA 확인 후 종료함.",
-               "projects": [{"project": "Gov24 백엔드", "next": [], "issues": [], "done": [
+               "projects": [{"project": "Gov24 백엔드", "next": [], "done": [
                    {"text": "GOV-1423 조회 성능 개선 완료", "refs": [s]},
                    {"text": "GOV-1418 QA 확인 후 종료", "refs": [s]},
                ]}]}
@@ -163,7 +187,7 @@ class ValidationTests(AIDataTestCase):
     def test_a_title_the_user_wrote_backs_a_finished_claim(self):
         with self.db.connect() as conn:
             sessionstore.update_session(conn, self.first, {"title": "AuthService 리팩터링 마무리"})
-        raw = {"summary": "", "projects": [{"project": "Gov24 백엔드", "next": [], "issues": [], "done": [
+        raw = {"summary": "", "projects": [{"project": "Gov24 백엔드", "next": [], "done": [
             {"text": "AuthService 리팩터링 마무리", "refs": [f"S{self.first}"]}]}]}
         [block] = ai_report.validate("weekly", self.context(), raw).projects
         self.assertIsNone(block.done[0].flag)
@@ -173,7 +197,7 @@ class ValidationTests(AIDataTestCase):
         ctx.folder_changes = {"gov24-api": ["C77"], "docs": ["C78"]}
         ctx.refs |= {"C77", "C78"}
         raw = {"summary": "", "projects": [{"project": "문서", "done": [{"text": "x", "refs": ["C78"]}],
-                                            "next": [], "issues": []}]}
+                                            "next": []}]}
         report = ai_report.validate("weekly", ctx, raw)
         self.assertEqual([(b.project, b.missing_from_ai) for b in report.projects],
                          [("문서", False), ("gov24-api (작업 폴더)", True)])
@@ -182,9 +206,9 @@ class ValidationTests(AIDataTestCase):
     def test_groups_are_named_by_the_model_and_timed_by_their_sessions(self):
         s = f"S{self.first}"
         raw = {"summary": "", "projects": [
-            {"project": "", "done": [{"text": "회의", "refs": []}], "next": [], "issues": []},
+            {"project": "", "done": [{"text": "회의", "refs": []}], "next": []},
             {"project": "GOV-1418 토큰 버그", "done": [{"text": "분석", "refs": [s]}, {"text": "수정", "refs": [s]}],
-             "next": [], "issues": []}]}
+             "next": []}]}
         report = ai_report.validate("weekly", self.context(), raw)
         self.assertEqual([(b.project, b.seconds) for b in report.projects],
                          [("GOV-1418 토큰 버그", 50 * 60), ("기타", 0)])  # a session counts once
@@ -318,8 +342,8 @@ class ChangesContextTests(unittest.TestCase):
         fix = changes[0]
         self.assertIn(fix["ref"], ctx.refs)
         self.assertEqual(ctx.sources[fix["ref"]]["type"], "change")
-        self.assertEqual({f["path"].rsplit("/", 1)[-1]: f["change"] for f in fix["files"]},
-                         {"TokenRefreshFilter.java": "수정", "LegacyTokenTest.java": "삭제"})
+        names = sorted(re.sub(r" [+-]\d+", "", f.rsplit("/", 1)[-1]) for f in fix["files"])  # line counts aside
+        self.assertEqual(names, ["LegacyTokenTest.java (삭제)", "TokenRefreshFilter.java (수정)"])
         excerpt = "\n".join(fix["diff_excerpt"])
         self.assertIn("+            refreshTokens.delete(stored);", excerpt)
         self.assertEqual(ctx.folder_changes, {"gov24-minwon-api": [c["ref"] for c in changes]})
@@ -361,6 +385,70 @@ class ChangesContextTests(unittest.TestCase):
         self.assertNotIn("qa_tok_998877", text)
         self.assertIn("password: ***", text)
 
+    def commit(self, conn, day, hh, mm, path, text):
+        """One more snapshot of the demo API folder with `path` set to `text`."""
+        from workhistory import snapshots
+        fid = conn.execute("SELECT id FROM watched_folders WHERE label = 'gov24-minwon-api'").fetchone()[0]
+        repo = snapshots._open_repo(snapshots.repo_path(self.repos, fid))
+        try:
+            head = repo[repo[repo.refs[snapshots.REF]].tree]
+            files = {}
+
+            def collect(tree, prefix):
+                for e in tree.items():
+                    name = prefix + e.path.decode()
+                    if e.mode == snapshots.DIR_MODE:
+                        collect(repo[e.sha], name + "/")
+                    else:
+                        files[name] = e.sha
+            collect(head, "")
+            files[path] = snapshots.add_blob(repo, text.encode())
+            snapshots.commit_snapshot(conn, repo, fid, files, local_ts(day, hh, mm))
+        finally:
+            repo.close()
+
+    def test_snapshots_close_together_go_as_one_change(self):
+        day = self.monday - timedelta(days=6)  # demo changes at 11:45 and 17:25
+        with self.db.connect() as conn:
+            self.commit(conn, day, 16, 0, "docs/note.md", "one\n")
+            self.commit(conn, day, 16, 5, "docs/note.md", "one\ntwo\n")
+            self.commit(conn, day, 16, 10, "docs/other.md", "x\n")
+            ctx = ai_context.build(conn, day, day, self.repos)
+        changes = ctx.payload["changes"]
+        self.assertEqual([c["time"] for c in changes], ["11:45", "16:00-16:10", "17:25"])
+        burst = changes[1]
+        self.assertEqual(burst["files"], ["docs/note.md (추가 +2 -0)", "docs/other.md (추가 +1 -0)"])
+        self.assertIn("+two", burst["diff_excerpt"])          # first version to last, in one excerpt
+        self.assertEqual(ctx.folder_changes["gov24-minwon-api"], [c["ref"] for c in changes])
+        self.assertTrue(all(c["ref"] in ctx.refs and c["ref"] in ctx.sources for c in changes))
+
+    def test_a_busy_period_is_trimmed_to_fit(self):
+        last_week = (self.monday - timedelta(days=7), self.monday - timedelta(days=1))
+        with self.db.connect() as conn:
+            full = ai_context.build(conn, *last_week, self.repos)
+            with mock.patch.object(ai_context, "PAYLOAD_CHARS", 6000):
+                small = ai_context.build(conn, *last_week, self.repos)
+        size = len(ai_context.dumps(small.payload))
+        self.assertLess(size, len(ai_context.dumps(full.payload)))
+        self.assertLessEqual(size, 6000)
+        json.loads(ai_context.dumps(small.payload))  # what is sent is valid JSON
+        self.assertLessEqual(max(len(s["windows"]) for s in small.payload["sessions"]), 2)
+        # Every work folder is still there, with refs the report can cite.
+        self.assertEqual(set(small.folder_changes), set(full.folder_changes))
+        self.assertTrue(all(c["ref"] in small.refs for c in small.payload["changes"]))
+        self.assertEqual(set(small.session_seconds), {s["ref"] for s in small.payload["sessions"]})
+
+    def test_diff_lines_are_shared_between_changes(self):
+        last_week = (self.monday - timedelta(days=7), self.monday - timedelta(days=1))
+        with self.db.connect() as conn, mock.patch.object(ai_context, "DIFF_LINES_TOTAL", 30):
+            ctx = ai_context.build(conn, *last_week, self.repos)
+        changes = ctx.payload["changes"]
+        with_diff = [c for c in changes if "diff_excerpt" in c]
+        self.assertGreater(len(with_diff), 3)                  # not all spent on the first change
+        self.assertIn("diff_excerpt", changes[-1])
+        lines = sum(len([l for l in c["diff_excerpt"] if not l.startswith("# ")]) for c in with_diff)
+        self.assertLessEqual(lines, 30)
+
     def test_folder_with_file_changes_is_restored(self):
         ctx = self.build(-6)
         report = ai_report.validate("daily", ctx, {"summary": "", "projects": []})
@@ -372,7 +460,7 @@ class ChangesContextTests(unittest.TestCase):
         ref = ctx.payload["changes"][0]["ref"]
         report = ai_report.validate("daily", ctx, {"summary": "", "projects": [
             {"project": "Gov24 민원 API", "done": [{"text": "리프레시 토큰 재사용 차단", "refs": [ref]}],
-             "next": [{"text": "변경만 근거인 계획", "refs": [ref]}], "issues": []}]})
+             "next": [{"text": "변경만 근거인 계획", "refs": [ref]}]}]})
         block = next(b for b in report.projects if b.project == "Gov24 민원 API")
         self.assertEqual((block.done[0].flag, block.next[0].flag), (None, "unconfirmed_plan"))
 

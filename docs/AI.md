@@ -7,7 +7,9 @@ supports.
 ## Features
 
 1. **Work report drafts** (daily 업무일지 / weekly 주간보고): per group of work,
-   금주 실적 / 차주 계획 / 이슈. Every bullet cites the records it came from.
+   금주 실적 / 차주 계획 (오늘 한 일 / 다음 할 일). Every bullet cites the records
+   it came from. (An 이슈 section was dropped on 2026-11-10: with no notes or
+   user-written titles it had nothing to come from.)
    There are no projects (2026-11-05): the model groups the records itself by
    issue key, MR, work folder or topic and names each group from the records
    ("기타" for the rest); a group's time is the sessions it cites.
@@ -148,15 +150,27 @@ one class plus a factory entry (`ai_local.LocalModel` is the second one).
 - Nothing is sent until the user turns AI on (see above); the demo
   database (synthetic data) is always allowed.
 - Only work data is sent: recorded file changes (C: files, line counts and
-  a bounded excerpt of changed lines), sessions that are not excluded and not
+  a bounded excerpt of changed lines; snapshots of one folder less than 30
+  minutes apart go as one change, from the first old version to the last new
+  one), sessions that are not excluded and not
   "업무 외" (S). Projects, next actions and notes are not sent to the report
   (2026-11-05: the app has no screens for them any more), nor are browser
   addresses.
   "업무 외" time is sent as a total only.
 - Every free-text field passes `redact.py` (keys, tokens, passwords, resident
   registration and card numbers) before it is sent.
-- Diff excerpts are capped: 25 lines per file, 50 per change, 600 per request,
-  200 characters per line.
+- The payload has a size budget (`ai_context.PAYLOAD_CHARS`, about 18k tokens,
+  leaving room in the 32k context for the rules and the answer). It is sent as
+  JSON with one record per line, each file as one short string
+  ("src/Auth.java (수정 +12 -3)"). When a period is too big, `FIT_LEVELS` are
+  tried in order: fewer windows per session, wider merging of a folder's
+  changes (up to one per folder per day), fewer files listed per change, and
+  only then leaving out the shortest sessions. On a fictional busy week (3
+  folders snapshotted every 5 minutes, 658 snapshots, 54 sessions) every
+  session and every folder-day stays in, in about 35k characters.
+- Diff excerpts use what room is left, at most 600 lines per request, 50 per
+  change, 25 per file, 200 characters per line, shared fairly: each change gets
+  an equal share of what is left, so early changes cannot use up the room.
 - The exact payload can be previewed in the UI before sending.
 - Logged locally per call: kind, model, token counts, latency, success —
   never prompt or response text.
@@ -165,7 +179,13 @@ one class plus a factory entry (`ai_local.LocalModel` is the second one).
 
 - Every reference the model returns is checked against the records that were
   actually sent; unknown references are dropped.
-- A 실적/이슈 bullet without a valid reference is shown as "근거 없음".
+- A bullet without a valid reference is shown as "근거 없음".
+- Issue and MR numbers (GOV-1423, !318, #42; `ai_report.WORK_KEY`) must appear
+  in the records the bullet cites (window titles, file names, diff lines);
+  otherwise the bullet is shown as "번호 확인 필요". A group name is checked
+  against all records its bullets cite, and the summary against all records
+  sent, so a number taken from another piece of work (GOV-1418 on the
+  count-query work of GOV-1423) is marked.
 - A 실적 bullet that says something is finished (완료, 해결, 종료, 마무리, …;
   `ai_report.DONE_WORDS`) is shown as "완료 확인 필요" unless one of its
   references is the user's own words saying so: a session title the user

@@ -500,19 +500,20 @@ const factLegend = () => h("div", { class: "legend" },
 
 function renderReportSide(r) {
   const flagBadge = { no_evidence: badge("plain", "근거 없음"), unconfirmed_plan: badge("plain", "AI 제안"),
-    unconfirmed_done: badge("plain", "완료 확인 필요") };
+    unconfirmed_done: badge("plain", "완료 확인 필요"), unbacked_key: badge("plain", "번호 확인 필요") };
   const aiText = (text, flag) => h("div", { class: `ai-text${flag ? " flagged" : ""}` },
     badge("ai", "AI"), " ", text, flag ? [" ", flagBadge[flag].cloneNode(true)] : null);
-  const [doneLabel, nextLabel, issueLabel] = r.kind === "daily" ? ["오늘 한 일", "다음 할 일", "이슈"] : ["금주 실적", "차주 계획", "이슈"];
+  const [doneLabel, nextLabel] = r.kind === "daily" ? ["오늘 한 일", "다음 할 일"] : ["금주 실적", "차주 계획"];
   $("report-side").replaceChildren(
     h("div", { class: "card" },
       h("h2", {}, "AI 초안과 근거"),
       factLegend(),
       r.summary ? aiText(r.summary, r.summary_flag) : null,
       ...r.projects.map((p) => h("div", { class: "report-project" },
-        h("h3", {}, p.project, p.seconds ? h("span", { class: "meta" }, ` · ${dur(p.seconds)}`) : null),
+        h("h3", {}, p.project, p.seconds ? h("span", { class: "meta" }, ` · ${dur(p.seconds)}`) : null,
+          p.name_flag ? [" ", flagBadge[p.name_flag].cloneNode(true)] : null),
         p.missing_from_ai ? h("p", { class: "warning" }, "이 작업 폴더의 파일 변경이 AI 초안에 빠졌습니다. 직접 작성하세요.") : null,
-        ...[[doneLabel, p.done], [nextLabel, p.next], [issueLabel, p.issues]].filter(([, items]) => items.length).map(([label, items]) =>
+        ...[[doneLabel, p.done], [nextLabel, p.next]].filter(([, items]) => items.length).map(([label, items]) =>
           h("div", {}, h("div", { class: "meta" }, label),
             h("ul", { class: "report-items" }, items.map((it) => h("li", {},
               aiText(it.text, it.flag),

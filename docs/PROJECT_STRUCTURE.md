@@ -69,8 +69,8 @@ work-history/
 | | `ai_claude.py` | (개발·비교용) Claude Code 헤드리스(`claude -p`) 구현, 도구 잠금. `mcp` 없으면 숨김 |
 | | `ai_openai.py` | llama-server의 OpenAI 호환 API 클라이언트 (보고서 JSON 단계적 대체, 도구 루프, 생각 출력 제거) |
 | | `ai_local.py` | 내 PC의 AI: llama.cpp `llama-server`를 켜고 끄며 연결 (외부 전송 없음, 자동 등록) |
-| | `ai_context.py` | AI에 보낼 정확한 자료 + 검증 가능한 참조(C/S, 프로젝트·메모 없음) |
-| | `ai_report.py` | 보고서 스키마, 프롬프트(업무 묶기는 AI가), 참조 검증, 빠진 작업 폴더 표시, 렌더링 |
+| | `ai_context.py` | AI에 보낼 정확한 자료 + 검증 가능한 참조(C/S, 프로젝트·메모 없음), 크기 예산에 맞추기 |
+| | `ai_report.py` | 보고서 스키마, 프롬프트(업무 묶기는 AI가), 참조·이슈 번호 검증, 빠진 작업 폴더 표시, 렌더링 |
 | | `ai_agent.py` | "AI에게 묻기": 읽기 전용 기록 도구 + 인용 확인 |
 | | `ai_service.py` | AI 설정, 동의, 실행 로그, 저장된 보고서 |
 | | `mcp_server.py` | (개발·비교용) 내부 읽기 전용 MCP 서버: Claude Code 모델로 "AI에게 묻기"할 때만 앱이 띄움 (외부 연결 거부) |
@@ -94,7 +94,7 @@ uv pip install --python .venv/Scripts/python.exe -e .[claude] pip   # pip: 빌�
 .venv/Scripts/python.exe -m workhistory --demo     # 데모 데이터 (별도 demo.db)
 seed-demo.cmd                                      # 시연: 실제 앱 DB를 데모 데이터로 (기존 DB는 %LOCALAPPDATA%\WorkHistory\backup\)
 
-# 테스트 (2026-11-10 기준 240개)
+# 테스트 (2026-11-10 기준 244개)
 .venv/Scripts/python.exe -m unittest discover -s tests -t .
 
 # AI 보고서 품질 평가 (기본: llm/의 가장 큰 로컬 모델. Claude Code 기준값은 --model claude-code:sonnet, 로그인 필요)
@@ -154,6 +154,9 @@ python tools/build_portable.py                 # 인터넷용(Claude Code 포함
   병합·분할)를 화면에서 뺐다. 세션은 계속 자동으로 묶여 AI 보고서 근거(S)와 대시보드에 쓰이고, 편집 API
   (`/api/sessions/...`)와 이미 고친 제목은 그대로 둔다. 화면에서 새로 고친 제목이 생기지 않으므로 보고서의
   "완료"는 예전에 고친 제목이 있을 때만 나오고, 그 외에는 "진행·작업"으로 쓴다.
+- AI 보고서에서 이슈 칸을 뺐다 (2026-11-10): 칸은 한 일·다음 할 일 두 개. 이슈 번호·MR 번호는 인용한 자료에
+  나온 것만 인정하고, 아니면 "번호 확인 필요"로 표시한다. 보내는 자료는 크기 예산(약 18k 토큰) 안에 맞춘다:
+  한 줄에 기록 하나인 JSON, 가까운 스냅샷은 변경 하나로 합치고, 넘치면 창 수·파일 수를 줄이고 마지막에 짧은 세션을 뺀다.
 - 타임라인 앱별 보기에서 창을 누르면 경로를 보여 주고 복사할 수 있다 (2026-11-05). 브라우저는 주소창을
   UI Automation(ctypes)으로 읽어 쿼리·`#`·계정 정보를 뗀 주소를 저장하고(v13 `path`, 기록 대상 앱만),
   IDE·편집기는 Windows가 열린 파일을 알려 주지 않아 창 제목의 파일 이름을 작업 폴더에서 찾는다.

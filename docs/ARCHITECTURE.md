@@ -45,8 +45,8 @@ ai_local.py   – llama.cpp's llama-server on this PC, started on demand (local 
 ai_agent.py   – "AI에게 묻기": read-only history tools + citation check
 mcp_server.py – the history tools over MCP (Claude Code, development only), consent-checked
 autostart.py  – start-at-logon and shortcut files, switched from the app
-ai_context.py – the exact payload for the AI with verifiable references (C/S/N/P)
-ai_report.py  – report schema, prompt, reference verification, rendering
+ai_context.py – the exact payload for the AI with verifiable references (C/S), within a size budget
+ai_report.py  – report schema, prompt, reference and issue-number checks, rendering
 ai_service.py – settings, consent, run log, saved reports
    ▼
 service.py    – timeline, search, notes, projects, project overview (AI tools)

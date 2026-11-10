@@ -1,17 +1,16 @@
 """AI work report drafts (daily 업무일지 / weekly 주간보고) with verified citations."""
 
-import json
 import re
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-from .ai_context import Context
+from .ai_context import Context, dumps
 from .sessions import duration
 
 KINDS = {"daily": "업무일지", "weekly": "주간보고"}
 SECTION_LABELS = {
-    "daily": ("오늘 한 일", "다음 할 일", "이슈"),
-    "weekly": ("금주 실적", "차주 계획", "이슈"),
+    "daily": ("오늘 한 일", "다음 할 일"),
+    "weekly": ("금주 실적", "차주 계획"),
 }
 # Words that say something is finished. File changes and sessions show work, not that it is done:
 # only the user's own words (session titles they wrote) may back such a claim.
@@ -44,10 +43,8 @@ SCHEMA = {
                     "done": {"type": "array", "items": _ITEM, "description": "한 일 (실적)"},
                     "next": {"type": "array", "items": _ITEM,
                              "description": "다음 계획: 기록에서 이어지는 다음 단계 제안"},
-                    "issues": {"type": "array", "items": _ITEM,
-                               "description": "이슈·막힌 점: 본인이 쓴 세션 제목에 적힌 것만, 없으면 빈 배열"},
                 },
-                "required": ["project", "done", "next", "issues"],
+                "required": ["project", "done", "next"],
             },
         },
     },
@@ -60,17 +57,17 @@ SYSTEM = """당신은 소프트웨어 개발자의 업무 보고서 초안을 �
 업무 묶기:
 - 같은 일을 한 기록끼리 '업무' 하나로 묶습니다. 이슈 번호(예: GOV-1418), MR 번호(예: !312), 파일 변경의 작업 폴더(folder), 창 제목의 저장소·파일 이름처럼 기록에 드러난 단서로 묶습니다.
 - 업무 이름(project)은 기록에 나온 이슈 번호나 저장소·주제를 써서 짧게 짓습니다 (예: 'GOV-1418 리프레시 토큰 재발급 버그', 'poc-k8s Helm 배포'). 기록에 없는 이름이나 회사 프로젝트명을 지어내지 않습니다.
+- 이슈 번호와 MR 번호는 그 묶음이 인용한 자료(refs)의 창 제목·파일 이름·diff에 실제로 나온 것만 씁니다. 비슷한 주제라도 다른 일의 번호를 가져다 붙이지 않습니다. 번호가 드러나지 않으면 번호 없이 주제로 이름을 짓습니다.
 - 어디에도 묶기 어려운 업무 활동은 '기타'로 모읍니다. 같은 업무를 여러 묶음으로 나누지 않습니다.
 - 업무 묶음은 일을 많이 한 순서로 씁니다.
 
 반드시 지킬 것:
 - 입력 자료에 있는 사실만 씁니다. 자료에 없는 작업, 결과, 수치, 원인을 지어내지 않습니다.
 - 모든 항목의 refs에는 그 항목의 근거가 된 ref를 넣습니다. 그 업무에 쓴 세션(S)도 빠짐없이 넣습니다 (업무별 시간 계산에 씁니다).
-- 파일 변경(C)은 실제로 만들거나 고친 결과물이므로 실적의 가장 좋은 근거입니다. diff_excerpt와 파일 이름, 같은 시간대의 세션을 함께 보고 무엇을 바꿨는지 업무 언어로 요약합니다. 코드나 경로를 길게 옮기지 말고 필요하면 클래스나 파일 이름만 괄호로 붙입니다.
-- 한 일(done)을 먼저 씁니다. 기간 안의 파일 변경(C)은 하나도 빠짐없이 어느 업무의 한 일(done) 항목 refs에 넣습니다. 고친 내용은 이슈가 아니라 한 일입니다.
+- 파일 변경(C) 하나는 한 작업 폴더에서 이어서 바꾼 것을 묶은 것입니다 (time이 '09:10-11:40'처럼 범위일 수 있음). 실제로 만들거나 고친 결과물이므로 실적의 가장 좋은 근거입니다. diff_excerpt와 파일 이름, 같은 시간대의 세션을 함께 보고 무엇을 바꿨는지 업무 언어로 요약합니다. 코드나 경로를 길게 옮기지 말고 필요하면 클래스나 파일 이름만 괄호로 붙입니다.
+- 한 일(done)을 먼저 씁니다. 기간 안의 파일 변경(C)은 하나도 빠짐없이 어느 업무의 한 일(done) 항목 refs에 넣습니다.
 - 세션 제목과 창 제목은 무엇을 보고 작업했는지를 보여줄 뿐, 끝냈다는 증거가 아닙니다. 파일 변경(C)이 있으면 '추가', '수정', '작성'처럼 쓰고, 창 제목에 보이는 사실(예: 'MR !312 등록')은 그대로 쓸 수 있습니다. '완료', '해결', '종료' 같은 단정은 본인이 직접 쓴 세션 제목(title_by가 user)에 그렇게 적혀 있을 때만 씁니다. 그 외에는 '~ 작업', '~ 검토', '~ 분석', '~ 진행'처럼 활동으로 씁니다.
 - 다음 계획(next): 기록에서 자연스럽게 이어지는 다음 단계(예: 올린 MR의 리뷰 반영, 검토 중인 작업의 적용)를 업무마다 1~2개까지 제안하고 근거 ref를 넣습니다. 이런 제안은 사용자에게 'AI 제안'으로 표시됩니다. 기록과 관계없는 새 일을 지어내지 않습니다.
-- 이슈(issues)는 빈 배열로 둡니다. 예외는 본인이 직접 쓴 세션 제목(title_by가 user)에 문제나 막힌 점이 적힌 경우뿐입니다. 고친 버그나 작업 주제는 이슈가 아닙니다.
 - 같은 일을 여러 세션에서 했으면 한 항목으로 합치고 ref를 모두 넣습니다.
 - 요약(summary)에도 같은 규칙을 적용합니다. 항목에서 '완료', '해결'이라고 쓸 근거가 없는 일은 요약에서도 '진행', '작업'으로 씁니다.
 - 한국어 업무 보고 문체로, 한 항목은 한 줄로 간결하게 씁니다 (명사형 종결).
@@ -81,7 +78,8 @@ SYSTEM = """당신은 소프트웨어 개발자의 업무 보고서 초안을 �
 class Item:
     text: str
     refs: list[str]
-    flag: Optional[str] = None  # None | 'no_evidence' | 'unconfirmed_plan' | 'unconfirmed_done'
+    # None | 'no_evidence' | 'unbacked_key' | 'unconfirmed_plan' | 'unconfirmed_done'
+    flag: Optional[str] = None
 
 
 @dataclass
@@ -91,8 +89,12 @@ class ProjectBlock:
     seconds: float
     done: list[Item] = field(default_factory=list)
     next: list[Item] = field(default_factory=list)
-    issues: list[Item] = field(default_factory=list)
     missing_from_ai: bool = False
+    name_flag: Optional[str] = None  # 'unbacked_key' when the name has an issue number its records lack
+
+    @property
+    def items(self) -> list[Item]:
+        return self.done + self.next
 
 
 @dataclass
@@ -104,15 +106,18 @@ class Report:
     projects: list[ProjectBlock]
     offwork_s: float
     dropped_refs: int = 0
-    summary_flag: Optional[str] = None  # 'unconfirmed_done' when the summary calls unbacked work finished
+    # 'unbacked_key' (an issue number found nowhere in the data) or 'unconfirmed_done' (unbacked "finished")
+    summary_flag: Optional[str] = None
 
 
 def prompt(kind: str, ctx: Context) -> str:
     return (f"{ctx.start.isoformat()} ~ {ctx.end.isoformat()} 기간의 {KINDS[kind]} 초안을 작성하세요.\n\n"
-            + json.dumps(ctx.payload, ensure_ascii=False, indent=1))
+            + dumps(ctx.payload))
 
 
 ISSUE_KEY = re.compile(r"\b[A-Z][A-Z0-9]+-\d+\b")  # GOV-1423, JIRA-12
+# Numbers that point at one piece of work: issue keys and merge / pull requests (!318, #42).
+WORK_KEY = re.compile(r"\b[A-Z][A-Z0-9]+-\d+\b|(?<![\w!#])[!#]\d+\b")
 _SENTENCE_END = re.compile(r"(?<=[.!?。])\s+|\n+|;\s*")
 
 
@@ -145,8 +150,17 @@ def _summary_backed(summary: str, user_words: dict[str, str]) -> bool:
     return True
 
 
+def unbacked_keys(text: str, refs: list[str], ref_text: dict[str, str]) -> list[str]:
+    """Issue / MR numbers in `text` that none of the cited records mention: a number taken from
+    another piece of work (GOV-1418 on the count-query work of GOV-1423)."""
+    seen = "\n".join(ref_text.get(r, "") for r in refs)
+    return [k for k in dict.fromkeys(WORK_KEY.findall(text))
+            if not re.search(rf"(?<![\w-]){re.escape(k)}(?!\d)", seen, re.I)]
+
+
 def _items(raw: Any, valid: set[str], section: str,
-           user_words: Optional[dict[str, str]] = None) -> tuple[list[Item], int]:
+           user_words: Optional[dict[str, str]] = None,
+           ref_text: Optional[dict[str, str]] = None) -> tuple[list[Item], int]:
     items, dropped = [], 0
     for entry in raw if isinstance(raw, list) else []:
         if not isinstance(entry, dict):
@@ -158,7 +172,9 @@ def _items(raw: Any, valid: set[str], section: str,
         refs = list(dict.fromkeys(r for r in given if r in valid))  # verified, de-duplicated
         dropped += len(given) - len([r for r in given if r in valid])
         flag = None
-        if section == "next":
+        if refs and unbacked_keys(text, refs, ref_text or {}):
+            flag = "unbacked_key"
+        elif section == "next":
             # Plans are not in the records: every one is the AI's suggestion, unless a title the user
             # wrote says so.
             if not any(r in (user_words or {}) for r in refs):
@@ -183,48 +199,54 @@ def validate(kind: str, ctx: Context, raw: Any) -> Report:
             continue
         name = str(entry.get("project") or "기타").strip() or "기타"
         block = blocks.setdefault(name, ProjectBlock(name, 0.0))
-        for section in ("done", "next", "issues"):
-            items, d = _items(entry.get(section), ctx.refs, section, ctx.user_words)
+        for section in ("done", "next"):
+            items, d = _items(entry.get(section), ctx.refs, section, ctx.user_words, ctx.ref_text)
             getattr(block, section).extend(items)
             dropped += d
     for block in blocks.values():
         # Time of a group = the sessions it cites (each counted once).
-        cited = {r for items in (block.done, block.next, block.issues) for it in items for r in it.refs}
+        cited = list(dict.fromkeys(r for it in block.items for r in it.refs))
         block.seconds = sum(ctx.session_seconds.get(r, 0.0) for r in cited)
+        if unbacked_keys(block.project, cited, ctx.ref_text):
+            block.name_flag = "unbacked_key"
     # Never let a work folder's recorded file changes silently disappear from the report.
-    cited_all = {r for b in blocks.values() for items in (b.done, b.next, b.issues) for it in items for r in it.refs}
+    cited_all = {r for b in blocks.values() for it in b.items for r in it.refs}
     for folder, refs in ctx.folder_changes.items():
         if not cited_all.intersection(refs):
             blocks.setdefault(f"{folder} (작업 폴더)", ProjectBlock(f"{folder} (작업 폴더)", 0.0, missing_from_ai=True))
     ordered = sorted(blocks.values(), key=lambda b: (b.missing_from_ai, b.project == "기타", -b.seconds))
     summary = str(raw.get("summary") or "").strip()
-    summary_flag = None if _summary_backed(summary, ctx.user_words) else "unconfirmed_done"
+    summary_flag = ("unbacked_key" if unbacked_keys(summary, list(ctx.ref_text), ctx.ref_text)
+                    else None if _summary_backed(summary, ctx.user_words) else "unconfirmed_done")
     return Report(kind, ctx.start.isoformat(), ctx.end.isoformat(), summary, ordered, ctx.offwork_s, dropped,
                   summary_flag)
 
 
+FLAG_TEXT = {"no_evidence": " (근거 없음 — 확인 필요)",
+             "unbacked_key": " (번호가 근거에 없음 — 확인 필요)",
+             "unconfirmed_plan": " (AI 제안 — 확인 필요)",
+             "unconfirmed_done": " (완료 근거 없음 — 확인 필요)"}
+
+
 def render_text(report: Report) -> str:
     """Plain text the user edits and pastes into the company report."""
-    done_label, next_label, issue_label = SECTION_LABELS[report.kind]
+    done_label, next_label = SECTION_LABELS[report.kind]
     period = report.start if report.start == report.end else f"{report.start} ~ {report.end}"
     lines = [f"# {KINDS[report.kind]} · {period}", ""]
     if report.summary:
-        flag = " (완료 근거 없음 — 확인 필요)" if report.summary_flag else ""
-        lines += [f"요약: {report.summary}{flag}", ""]
+        lines += [f"요약: {report.summary}{FLAG_TEXT.get(report.summary_flag or '', '')}", ""]
     for b in report.projects:
-        lines.append(f"## {b.project}" + (f" ({duration(b.seconds)})" if b.seconds else ""))
+        lines.append(f"## {b.project}" + (f" ({duration(b.seconds)})" if b.seconds else "")
+                     + FLAG_TEXT.get(b.name_flag or "", ""))
         if b.missing_from_ai:
             lines += ["- (이 작업 폴더의 파일 변경이 AI 초안에 빠졌습니다. 직접 작성하세요.)", ""]
             continue
-        for label, items in ((done_label, b.done), (next_label, b.next), (issue_label, b.issues)):
+        for label, items in ((done_label, b.done), (next_label, b.next)):
             lines.append(f"[{label}]")
             if not items:
                 lines.append("- 없음")
             for it in items:
-                suffix = {"no_evidence": " (근거 없음 — 확인 필요)",
-                          "unconfirmed_plan": " (AI 제안 — 확인 필요)",
-                          "unconfirmed_done": " (완료 근거 없음 — 확인 필요)"}.get(it.flag or "", "")
-                lines.append(f"- {it.text}{suffix}")
+                lines.append(f"- {it.text}{FLAG_TEXT.get(it.flag or '', '')}")
         lines.append("")
     if report.offwork_s >= 60:
         lines += [f"(보고서에서 제외한 업무 외 시간: {duration(report.offwork_s)})", ""]
@@ -232,8 +254,7 @@ def render_text(report: Report) -> str:
 
 
 def _cited(report: Report) -> list[str]:
-    return list(dict.fromkeys(r for b in report.projects for items in (b.done, b.next, b.issues)
-                              for it in items for r in it.refs))
+    return list(dict.fromkeys(r for b in report.projects for it in b.items for r in it.refs))
 
 
 def to_dict(report: Report, ctx: Context) -> dict:
@@ -244,8 +265,9 @@ def to_dict(report: Report, ctx: Context) -> dict:
         "kind": report.kind, "start": report.start, "end": report.end, "summary": report.summary,
         "summary_flag": report.summary_flag,
         "projects": [{"project": b.project, "seconds": b.seconds, "missing_from_ai": b.missing_from_ai,
-                      "done": [item(i) for i in b.done], "next": [item(i) for i in b.next],
-                      "issues": [item(i) for i in b.issues]} for b in report.projects],
+                      "name_flag": b.name_flag,
+                      "done": [item(i) for i in b.done], "next": [item(i) for i in b.next]}
+                     for b in report.projects],
         "offwork_s": report.offwork_s,
         "dropped_refs": report.dropped_refs,
         "sources": {ref: ctx.sources[ref] for ref in _cited(report) if ref in ctx.sources},

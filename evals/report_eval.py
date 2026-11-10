@@ -6,7 +6,8 @@ else Claude Code), and checks each draft against
 facts we know from the scenario:
 
 - required facts must appear (anywhere in the items; the model names the groups),
-- over-claims must not appear anywhere (e.g. "GOV-1423 완료" while it is not),
+- over-claims and wrong issue numbers must not appear unflagged anywhere, group names included
+  (e.g. "GOV-1423 완료" while it is not, GOV-1418 on this week's work),
 - a daily report must not contain other days' work,
 - references must all verify; flags and restored work folders are reported.
 
@@ -42,8 +43,8 @@ CASES = [
     {
         "name": "this week (weekly)", "kind": "weekly", "offset": 0,
         "require": [r"count|카운트|MR !318|!318", r"DBA"],
-        # Cursor paging (GOV-1430) is only being explored.
-        "forbid": [r"GOV-1430[^\n]{0,30}(완료|적용|해결)", r"커서[^\n]{0,20}(완료|적용 완료)"],
+        # Cursor paging (GOV-1430) is only being explored; GOV-1418 was closed last week.
+        "forbid": [r"GOV-1430[^\n]{0,30}(완료|적용|해결)", r"커서[^\n]{0,20}(완료|적용 완료)", r"GOV-1418"],
     },
     {
         "name": "fix day (daily)", "kind": "daily", "offset": -6,
@@ -58,18 +59,24 @@ CASES = [
 ]
 
 
+WARNED = {"unconfirmed_done", "unbacked_key"}
+
+
 def evaluate(case: dict, report: ai_report.Report) -> tuple[list[str], list[str]]:
-    """(failures, caught): an over-claim in a line the app flagged as 'unconfirmed_done' is shown to the
-    user with a warning, so it is counted as caught, not as a failure."""
+    """(failures, caught): a forbidden claim in a line the app flagged ('unconfirmed_done' or
+    'unbacked_key', group names included) is shown to the user with a warning, so it is counted as
+    caught, not as a failure."""
     failures, caught = [], []
-    items = [i for b in report.projects for s in (b.done, b.next, b.issues) for i in s]
+    items = [i for b in report.projects for i in b.items]
     text = "\n".join(i.text for i in items)
     for p in case["require"]:
         if not re.search(p, text):
             failures.append(f"missing: /{p}/")
     for p in case["forbid"]:
-        hits = [(text, flagged) for text, flagged in [(report.summary, report.summary_flag == "unconfirmed_done")]
-                + [(i.text, i.flag == "unconfirmed_done") for i in items] if re.search(p, text)]
+        lines = ([(report.summary, report.summary_flag in WARNED)]
+                 + [(b.project, b.name_flag in WARNED) for b in report.projects if not b.missing_from_ai]
+                 + [(i.text, i.flag in WARNED) for i in items])
+        hits = [(text, flagged) for text, flagged in lines if re.search(p, text)]
         for text, flagged in hits:
             (caught if flagged else failures).append(f"forbidden /{p}/ -> '{re.search(p, text).group(0)}'")
     return failures, caught
@@ -135,7 +142,8 @@ def main(argv=None) -> int:
                     continue
                 report = ai_report.validate(case["kind"], ctx, raw)
                 failures, caught = evaluate(case, report)
-                flags = [i.flag for b in report.projects for s in (b.done, b.next, b.issues) for i in s if i.flag]
+                flags = ([i.flag for b in report.projects for i in b.items if i.flag]
+                         + [f"name:{b.name_flag}" for b in report.projects if b.name_flag])
                 row = {"case": case["name"], "run": run + 1, "seconds": round(time.time() - started, 1),
                        "input_tokens": usage.input_tokens, "output_tokens": usage.output_tokens,
                        "thinking_tokens": usage.thinking_tokens, "dropped_refs": report.dropped_refs,
