@@ -157,8 +157,31 @@ code.command { display: block; flex: 1; padding: 6px 8px; background: var(--bg);
 .kpi .value.name { font-size: 20px; padding: 4px 0; }
 .kpi .sub { font-size: 12px; color: var(--muted); }
 .kpi .up { color: #3aa76d; } .kpi .down { color: var(--danger); }
-.dash-charts { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 12px; }
-.dash-charts .card { margin-bottom: 12px; min-width: 0; }
+/* Five cards on a grid; on a large enough window the dashboard fills it exactly (no page scroll):
+   the charts size themselves to their card and long lists scroll inside it. */
+.dash-body { display: grid; gap: 12px; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
+  grid-template-areas: "week donut" "strip strip" "work folders"; }
+.dash-body > .card { margin: 0; min-width: 0; }
+.dash-body > .card[hidden] { display: none; }
+.dash-a-week { grid-area: week; } .dash-a-donut { grid-area: donut; } .dash-a-strip { grid-area: strip; }
+.dash-a-work { grid-area: work; } .dash-a-folders { grid-area: folders; }
+@media (min-width: 1000px) and (min-height: 560px) {
+  #tab-dashboard:not([hidden]) { display: flex; flex-direction: column; height: var(--dash-h, auto); }
+  #tab-dashboard .toolbar { flex: none; }
+  .dash-kpis { flex: none; }
+  .kpi { padding: 8px 14px; }
+  .kpi .value { font-size: 22px; }
+  .kpi .value.name { font-size: 18px; padding: 2px 0; }
+  .dash-body { flex: 1; min-height: 0; grid-template-rows: minmax(0, 1.1fr) auto minmax(0, 1fr); }
+  .dash-body > .card { display: flex; flex-direction: column; min-height: 0; overflow: hidden; padding: 10px 14px; }
+  .dash-body .dash-row { padding: 5px 0; }
+  .dash-body > .card > h2 { flex: none; }
+  .dash-body > .card > div { flex: 1; min-height: 0; overflow: auto; }
+  .dash-a-strip > div { overflow: visible; }
+  #dash-week-chart, #dash-donut { overflow: hidden; }
+  .dash-a-donut .donut-wrap { height: 100%; }
+  .dash-a-donut .donut-wrap svg { height: 100%; width: auto; max-width: 150px; min-width: 70px; }
+}
 svg.chart { width: 100%; display: block; overflow: visible; }
 svg.chart text { fill: var(--muted); font-size: 12px; }
 svg.chart .bar-day { cursor: pointer; }
@@ -178,12 +201,16 @@ svg.chart text.sel { fill: var(--text); font-weight: 600; }
 .strip-axis span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
 .strip-axis span:last-child { transform: translateX(-100%); }
 .strip-axis span:first-child { transform: none; }
-.dash-row { display: grid; grid-template-columns: minmax(0, 1fr) 120px; gap: 2px 12px; padding: 8px 0; border-top: 1px solid var(--line); cursor: pointer; }
+.dash-row { display: grid; grid-template-columns: minmax(0, 1fr) 90px 92px; align-items: center; gap: 12px; padding: 6px 0; border-top: 1px solid var(--line); cursor: pointer; }
 .dash-row:first-child { border-top: none; }
 .dash-row:hover .dash-name { color: var(--accent); }
 .dash-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dash-meter { height: 8px; background: var(--bg); border-radius: 4px; overflow: hidden; align-self: center; }
+.dash-name .dash-sub { font-weight: 400; margin-left: 8px; }
+.dash-meter { height: 8px; background: var(--bg); border-radius: 4px; overflow: hidden; }
 .dash-meter div { height: 100%; border-radius: 4px; background: var(--accent); }
 .dash-sub { font-size: 12px; color: var(--muted); }
 .dash-stat { font-size: 12px; color: var(--muted); text-align: right; }
-@media (max-width: 1000px) { .dash-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .dash-charts { grid-template-columns: 1fr; } }
+@media (max-width: 999px) {
+  .dash-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dash-body { grid-template-columns: 1fr; grid-template-areas: "week" "donut" "strip" "work" "folders"; }
+}

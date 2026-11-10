@@ -865,7 +865,19 @@ async function loadDashboard() {
   if (r && seq === dashSeq) renderDashboard(r);
 }
 
+// On a large window the dashboard takes the height left below the header (style.css); the
+// week chart is drawn for the size its card ends up with, and again when the window changes.
+let dashLast = null;
+function fitDashboard() {
+  const tab = $("tab-dashboard");
+  if (tab.hidden) return;
+  tab.style.setProperty("--dash-h", `${Math.floor(window.innerHeight - tab.getBoundingClientRect().top - 16)}px`);
+}
+window.addEventListener("resize", () => { fitDashboard(); if (dashLast) renderWeekChart(dashLast); });
+
 function renderDashboard(r) {
+  dashLast = r;
+  fitDashboard();
   const isDay = r.span === "day";
   $("dash-period").textContent = isDay ? `${r.day} (${weekdayOf(r.day)})` : `${r.start} ~ ${r.end}`;
   renderKpis(r);
@@ -875,6 +887,7 @@ function renderDashboard(r) {
   if (isDay) renderStrip(r);
   renderDashWork(r);
   renderDashFolders(r);
+  renderWeekChart(r);  // again, now that the cards around it have their final size
 }
 
 function renderKpis(r) {
@@ -893,10 +906,17 @@ function renderKpis(r) {
 
 // Stacked bars, one per day of the week; clicking a day opens that day.
 function renderWeekChart(r) {
-  const W = 640, H = 220, left = 34, bottom = 34, top = 8;
+  // Drawn in the shape of its box when the box has a height of its own (the fitted layout).
+  const box = $("dash-week-chart");
+  const room = box.clientHeight - 30;  // the legend below the chart
+  const W = 640, left = 34, bottom = 34, top = 8;
+  const H = room > 0 && box.clientWidth > 0 && getComputedStyle(box).overflow === "hidden"
+    ? Math.round(Math.min(420, Math.max(120, (W * room) / box.clientWidth))) : 220;
   const totals = r.week.map((d) => r.categories.reduce((s, c) => s + d.by_kind[c.key], 0));
   const maxH = Math.max(1, Math.ceil(Math.max(...totals) / 3600));
-  const step = maxH > 8 ? 2 : 1, ceil = Math.ceil(maxH / step) * step;
+  // Hour lines at least 18 units apart, however short the chart is.
+  const step = [1, 2, 3, 4, 6, 12].find((st) => (H - bottom - top) / Math.ceil(maxH / st) >= 18) || 12;
+  const ceil = Math.ceil(maxH / step) * step;
   const y = (sec) => H - bottom - (sec / (ceil * 3600)) * (H - bottom - top);
   const colW = (W - left) / 7, barW = Math.min(44, colW * 0.55);
   const chart = svg("svg", { class: "chart", viewBox: `0 0 ${W} ${H}`, role: "img",
@@ -976,15 +996,15 @@ function renderStrip(r) {
   const axis = h("div", { class: "strip-axis" });
   for (let hr = from; hr <= to; hr += every) axis.append(h("span", { style: { left: `${((hr - from) / (to - from)) * 100}%` } }, `${hr}시`));
   $("dash-strip").replaceChildren(r.blocks.length
-    ? h("div", {}, strip, axis, dashLegend(r.categories.filter((c) => r.blocks.some((b) => b.kind === c.key))))
+    ? h("div", {}, strip, axis)  // the colors are the week chart's legend, just above
     : h("p", { class: "muted" }, "이 날짜에 기록된 활동이 없습니다."));
 }
 
+// One line: name (and what is known about it), a meter, the number.
 function dashRow({ name, sub, stat, share, onclick }) {
-  return h("div", { class: "dash-row", title: "타임라인에서 보기", onclick },
-    h("div", { class: "dash-name", title: name }, name),
+  return h("div", { class: "dash-row", title: [name, sub].filter(Boolean).join(" · ") + "\n타임라인에서 보기", onclick },
+    h("div", { class: "dash-name" }, name, sub ? h("span", { class: "dash-sub" }, sub) : null),
     h("div", { class: "dash-meter" }, h("div", { style: { width: `${share * 100}%` } })),
-    h("div", { class: "dash-sub" }, sub || ""),
     h("div", { class: "dash-stat" }, stat));
 }
 
