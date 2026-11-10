@@ -73,10 +73,8 @@ const state = {
   projects: [],
   day: isoDay(new Date()),
   reportDay: isoDay(new Date()),
-  openSessions: new Set(),
   openApps: new Set(),
   openPaths: new Set(),  // "app\ntitle" of window rows showing their path
-  timelineView: (() => { try { return localStorage.getItem("timelineView") || "apps"; } catch { return "apps"; } })(),
 };
 const projectById = (id) => state.projects.find((p) => p.id === id);
 const projectColor = (id) => projectById(id)?.color || "#9aa3b5";
@@ -172,14 +170,6 @@ $("today").addEventListener("click", () => setDay(isoDay(new Date())));
 $("prev-day").addEventListener("click", () => setDay(shiftDay(state.day, -1)));
 $("next-day").addEventListener("click", () => setDay(shiftDay(state.day, 1)));
 $("filter-app").addEventListener("change", () => loadTimeline());
-document.querySelectorAll("input[name=timeline-view]").forEach((input) => {
-  input.checked = input.value === state.timelineView;
-  input.addEventListener("change", () => {
-    state.timelineView = input.value;
-    try { localStorage.setItem("timelineView", input.value); } catch { /* the choice just isn't remembered */ }
-    loadTimeline();
-  });
-});
 
 const WARNINGS = {
   afk_missing: "이 날짜에는 유휴(AFK) 감지 기록이 없어 모든 창 시간을 활동으로 계산했습니다. 실제보다 길 수 있습니다.",
@@ -201,34 +191,15 @@ async function loadTimeline() {
     ...t.by_app.map((a) => h("option", { value: a.app }, `${appName(a.app)} (${dur(a.seconds)})`)));
   appSel.value = t.by_app.some((a) => a.app === currentApp) ? currentApp : "";
 
-  state.dayChanges = t.changes || [];  // session cards show the file changes made during them
-  const byApp = state.timelineView === "apps";
-  $("view-hint-apps").hidden = !byApp;
-  $("view-hint-sessions").hidden = byApp;
-  if (byApp) renderApps(t.apps);
-  else renderSessions(t.sessions);
-  renderChanges(state.dayChanges);
-}
-
-async function patchSession(id, body, message) {
-  await guarded(async () => {
-    await api("PATCH", `/api/sessions/${id}`, body);
-    if (message) toast(message);
-    await loadTimeline();
-  });
-}
-
-function renderSessions(sessions) {
-  $("rows-empty").hidden = sessions.length > 0;
-  // Newest first; "다음 세션과 병합" still means the session that came after it in time.
-  $("sessions").replaceChildren(...sessions.map((s, i) => sessionCard(s, sessions[i + 1])).reverse());
+  renderApps(t.apps);
+  renderChanges(t.changes || []);
 }
 
 const APP_WINDOWS_SHOWN = 5;
 
 function renderApps(apps) {
   $("rows-empty").hidden = apps.length > 0;
-  $("sessions").replaceChildren(...apps.map(appCard));
+  $("app-list").replaceChildren(...apps.map(appCard));
 }
 
 function pathBox(w) {
@@ -280,60 +251,13 @@ function appCard(a) {
     more);
 }
 
-function sessionCard(s, next) {
-  const details = h("details", { open: state.openSessions.has(s.id) },
-    h("summary", {}, `창 기록 ${s.rows.length}개 보기`), rowsTable(s));
-  details.addEventListener("toggle", () =>
-    details.open ? state.openSessions.add(s.id) : state.openSessions.delete(s.id));
-
-  if (s.offwork && !s.title_edited) {
-    return h("div", { class: "card session offwork-session" },
-      h("div", { class: "session-head" },
-        h("span", { class: "time" }, `${hhmm(s.start)}–${hhmm(s.end)}`),
-        h("span", { class: "session-title muted" }, "업무 외"),
-        badge("plain", "기록 대상 아님"),
-        h("span", { class: "num session-dur muted" }, dur(s.active_s))));
-  }
-
-  return h("div", { class: `card session${s.excluded ? " excluded" : ""}` },
-    h("div", { class: "session-head" },
-      h("span", { class: "time" }, `${hhmm(s.start)}–${hhmm(s.end)}`),
-      h("span", { class: "session-title" }, s.title),
-      s.title_edited ? badge("user", "직접 수정") : badge("inferred", "자동 추정"),
-      s.locked ? badge("plain", "범위 고정") : null,
-      s.excluded ? badge("plain", "제외됨") : null,
-      h("span", { class: "num session-dur" }, dur(s.active_s))),
-    h("div", { class: "row session-actions" },
-      h("button", { class: "small", onclick: () => {
-        const title = prompt("세션 제목 (비우면 자동 제목으로 돌아갑니다)", s.title_edited ? s.title : "");
-        if (title !== null) patchSession(s.id, { title });
-      } }, "제목 수정"),
-      h("button", { class: "small", onclick: () => patchSession(s.id, { excluded: !s.excluded },
-        s.excluded ? "다시 집계에 포함합니다." : "집계에서 제외했습니다.") }, s.excluded ? "포함" : "제외"),
-      next ? h("button", { class: "small", onclick: () => mergeWith(s, next) }, "다음 세션과 병합") : null),
-    changesLine(s),
-    details);
-}
-
 // ------------------------------------------------------------------ results (file changes)
-const SNAPSHOT_INTERVAL_S = 300;
 const kindLabel = { A: "추가", M: "수정", D: "삭제" };
 const lineDelta = (f) => (f.is_text === 0 || f.lines_added === null ? "" : ` (+${f.lines_added} −${f.lines_removed})`);
 
 function fileButton(f) {
   return h("button", { class: `link file-${f.kind}`, title: `${kindLabel[f.kind]} · 변경 내용 보기`, onclick: () => showDiff(f) },
     f.path.split("/").pop(), lineDelta(f));
-}
-
-function changesLine(s) {
-  // Snapshots run every few minutes, so a change recorded shortly after a session still belongs to it.
-  const files = (state.dayChanges || []).filter((c) => c.ts > s.start && c.ts <= s.end + SNAPSHOT_INTERVAL_S)
-    .flatMap((c) => c.files);
-  if (!files.length) return null;
-  const shown = files.slice(0, 6);
-  return h("div", { class: "session-changes" }, h("span", { class: "meta" }, "파일 변경 "),
-    ...shown.flatMap((f, i) => [i ? ", " : "", fileButton(f)]),
-    files.length > shown.length ? h("span", { class: "meta" }, ` 외 ${files.length - shown.length}개`) : null);
 }
 
 function renderChanges(changes) {
@@ -428,36 +352,6 @@ $("folder-scan").addEventListener("click", () => guarded(async () => {
   }
   loadFolders();
 }));
-
-function mergeWith(s, next) {
-  if (!confirm(`${hhmm(s.start)}–${hhmm(next.end)} 사이의 세션을 하나로 합칩니다. 계속할까요?`)) return;
-  guarded(async () => {
-    await api("POST", "/api/sessions/merge", { ids: [s.id, next.id] });
-    toast("세션을 병합했습니다.");
-    await loadTimeline();
-  });
-}
-
-function rowsTable(s) {
-  return h("table", { class: "rows" },
-    h("thead", {}, h("tr", {}, h("th", {}, "시간"), h("th", {}, "앱"), h("th", {}, "창 제목"),
-      h("th", { class: "num" }, "활동"), h("th", {}, ""))),
-    h("tbody", {}, s.rows.map((r) => {
-      const offwork = r.app === "";
-      return h("tr", { class: offwork ? "offwork-row" : null },
-        h("td", { class: "time" }, `${hhmm(r.start)}–${hhmm(r.end)}`),
-        h("td", {}, offwork ? h("span", { class: "muted" }, "업무 외") : appName(r.app)),
-        h("td", { class: "title" }, offwork ? h("span", { class: "muted" }, "(기록 대상이 아닌 앱)")
-          : r.title || h("span", { class: "muted" }, "(제목 없음)")),
-        h("td", { class: "num" }, dur(r.active_s)),
-        h("td", {}, r.start > s.start + 1 ? h("button", { class: "link", title: "이 창 기록부터 새 세션으로 나눕니다",
-          onclick: () => guarded(async () => {
-            await api("POST", `/api/sessions/${s.id}/split`, { at: r.start });
-            toast("세션을 나눴습니다.");
-            loadTimeline();
-          }) }, "여기서 분할") : null));
-    })));
-}
 
 // ------------------------------------------------------------------ AI reports
 const reportKind = () => document.querySelector('input[name="report-kind"]:checked').value;
@@ -1119,7 +1013,7 @@ function dashRow({ name, sub, stat, share, onclick }) {
     h("div", { class: "dash-stat" }, stat));
 }
 
-// The longest work by session title; a click opens that day's timeline in the per-session view.
+// The longest work by session title; a click opens that day's timeline.
 function renderDashWork(r) {
   if (!r.work.length) return $("dash-work").replaceChildren(h("p", { class: "muted" }, "이 기간에 기록된 작업 세션이 없습니다."));
   const max = Math.max(...r.work.map((w) => w.seconds), 1);
@@ -1127,7 +1021,7 @@ function renderDashWork(r) {
   $("dash-work").replaceChildren(...r.work.map((w) => dashRow({
     name: w.title, share: w.seconds / max, stat: dur(w.seconds),
     sub: r.span === "week" ? (w.days > 1 ? `${w.days}일 · 가장 오래 한 날 ${when(w.day)}` : when(w.day)) : "",
-    onclick: () => gotoSessions(w.day),
+    onclick: () => gotoDay(w.day),
   })));
 }
 
@@ -1142,12 +1036,6 @@ function renderDashFolders(r) {
     sub: `+${f.lines_added.toLocaleString()} −${f.lines_removed.toLocaleString()}줄 · 기록 ${f.changes}번`,
     onclick: () => gotoDay(f.day),
   })));
-}
-
-function gotoSessions(day) {
-  state.timelineView = "sessions";
-  document.querySelectorAll("input[name=timeline-view]").forEach((input) => (input.checked = input.value === "sessions"));
-  gotoDay(day);
 }
 
 $("dash-day").addEventListener("click", () => { dash.span = "day"; loadDashboard(); });

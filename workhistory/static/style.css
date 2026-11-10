@@ -68,19 +68,16 @@ button.primary { background: var(--accent); color: #fff; border-color: var(--acc
 .small-text { font-size: 12px; margin: 0 0 8px; }
 .badge.plain { background: var(--bg); border: 1px solid var(--line); }
 .card.session { border-left: 4px solid #9aa3b5; padding: 10px 12px; }
-.card.session.excluded { opacity: .55; }
 .session-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .session-head .time { font-variant-numeric: tabular-nums; color: var(--muted); white-space: nowrap; }
 .session-title { font-weight: 600; word-break: break-all; }
 .session-dur { margin-left: auto; font-weight: 600; }
-.session-actions select { max-width: 200px; }
 .card.session details { margin-top: 6px; }
 .card.session summary { cursor: pointer; color: var(--muted); font-size: 12px; }
 .card.session table.rows { margin-top: 6px; font-size: 13px; }
 .card.app-card .session-head .meta { font-size: 12px; color: var(--muted); }
 .card.app-card table.rows td.title { width: 100%; }
 .card.app-card table.rows td.time { font-size: 12px; }
-.view-pick { display: flex; gap: 8px; margin-left: auto; }
 .card.app-card tr.clickable { cursor: pointer; }
 .card.app-card tr.clickable:hover td { background: var(--bg); }
 .card.app-card tr.path-row td { background: var(--bg); }
@@ -95,7 +92,6 @@ ul.plain .meta, ul.plain li > .meta { white-space: nowrap; }
 
 /* 업무 외 (untracked apps) */
 .card.session.offwork-session { border-left-color: #c8ccd4; padding: 6px 12px; opacity: .75; }
-tr.offwork-row td { color: var(--muted); }
 
 /* AI */
 .badge.ai { background: linear-gradient(90deg, #4f7cff, #9b5cff); color: #fff; }
@@ -128,7 +124,6 @@ ul.report-items li { padding: 4px 0 6px; font-size: 13px; }
 .ref-chip.note, .ref-chip.project { border-color: #3aa76d; }
 
 /* results (file changes) */
-.session-changes { font-size: 12px; margin-top: 4px; }
 .change-item { display: block !important; }
 .change-files { font-size: 12px; margin-top: 2px; }
 .file-A { color: #3aa76d; }
