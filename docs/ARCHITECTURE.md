@@ -50,10 +50,13 @@ ai_report.py  – report schema, prompt, reference verification, rendering
 ai_service.py – settings, consent, run log, saved reports
    ▼
 service.py    – timeline, search, notes, projects, project overview (AI tools)
+dashboard.py  – day/week dashboard: time by kind of activity, the day strip, longest work
+                (session titles), file changes per work folder; the day before / last week to compare
+categories.py – kind of activity from the app name (rules, no AI)
    ▼
 server.py     – JSON API + static UI, bound to 127.0.0.1 only
    ▼
-static/       – timeline / report / search / settings views (Korean)
+static/       – dashboard / timeline / report / search / settings views (Korean)
 ```
 
 Collection, processing (pure functions), persistence and UI are separate

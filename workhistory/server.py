@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterable, Optional
 from urllib.parse import parse_qs, urlparse
 
-from . import ai_agent, ai_service, service, sessionstore, snapshots
+from . import ai_agent, ai_service, dashboard, service, sessionstore, snapshots
 from .ai_client import AIError
 from .autostart import Launch
 from .autostart import default as default_launch
@@ -107,6 +107,13 @@ class App:
             if project not in (None, "none") and not project.isdigit():
                 raise ApiError(400, "project 필터가 올바르지 않습니다")
             return service.timeline(conn, _day(query.get("date")), project, query.get("app") or None)
+
+        @r("GET", "/api/dashboard")
+        def dashboard_view(conn, query, body):
+            span = query.get("span", "day")
+            if span not in ("day", "week"):
+                raise ApiError(400, "span 값이 올바르지 않습니다")
+            return dashboard.dashboard(conn, _day(query.get("date")), span)
 
         @r("POST", "/api/assign")
         def assign(conn, query, body):

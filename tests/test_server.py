@@ -54,6 +54,11 @@ class ServerTests(unittest.TestCase):
         ct = resp.getheader("Content-Type", "")
         return resp.status, (json.loads(raw) if ct.startswith("application/json") else raw), ct
 
+    def test_dashboard(self):
+        status, r, _ = self.request("GET", f"/api/dashboard?date={date.today().isoformat()}&span=week")
+        self.assertEqual((status, r["span"], len(r["week"])), (200, "week", 7))
+        self.assertEqual(self.request("GET", "/api/dashboard?span=month")[0], 400)
+
     def test_save_report(self):
         day = date.today().isoformat()
         status, body, _ = self.request("POST", "/api/reports", {"kind": "daily", "day": day, "body": "a\nb"})

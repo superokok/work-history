@@ -106,10 +106,11 @@ def _update_auto(conn, row, start, end, active, offwork, title, project) -> None
         (start, end, active, offwork, title, project, row["id"]))
 
 
-def ensure_day(conn: sqlite3.Connection, day: date, now: Optional[float] = None) -> None:
+def ensure_day(conn: sqlite3.Connection, day: date, now: Optional[float] = None,
+               activities: Optional[list[Activity]] = None) -> None:
     row = conn.execute("SELECT version FROM session_days WHERE day = ?", (day.isoformat(),)).fetchone()
     if row is None or row["version"] != store.session_version(conn):
-        refresh_day(conn, day, now)
+        refresh_day(conn, day, now, activities)
 
 
 def ensure_all(conn: sqlite3.Connection, now: Optional[float] = None) -> int:
