@@ -54,11 +54,11 @@ work-history/
 | | `instance.py` | DB당 앱 하나 (이름 있는 뮤텍스), 두 번째 실행은 실행 중인 앱의 포트를 찾아 브라우저로 연다 |
 | 설정 | `config.py` | 상수 (작업 기록 시간대 간격 등), 데이터 폴더 경로 |
 | 수집 | `collector.py` | 창·유휴 수집기 (앱 안 스레드, ctypes, 2초마다) → 원본 `collector_events` (35일) |
-| | `locate.py` | 창의 위치: 브라우저 주소창(UI Automation, 쿼리 제거), 창 제목의 파일 이름 → 작업 폴더의 전체 경로 |
+| | `locate.py` | 창 제목의 파일 이름 → 작업 폴더의 전체 경로 |
 | | `sync.py` | 원본을 1분마다 가져오기, 중복 제거, 개인정보 규칙 적용 |
 | | `snapshots.py` | 작업 폴더 스냅샷 (dulwich), 변경 기록, 하위 폴더별 프로젝트 (앱은 추천만, 사람이 확인) |
 | | `extract.py` | 코드/텍스트, HWP, DOCX/XLSX/PPTX 텍스트 추출 |
-| 저장 | `db.py` | SQLite 스키마 + 마이그레이션 (`PRAGMA user_version`, 현재 v13) |
+| 저장 | `db.py` | SQLite 스키마 + 마이그레이션 (`PRAGMA user_version`, 현재 v14) |
 | | `store.py` | 공용 로더, 하루 경계 |
 | 처리 (순수 함수) | `normalize.py` | 창 − AFK − 차단 구간 − 제외, 하루 단위 자르기 |
 | | `classify.py` | 수동 지정 > 키워드 규칙 > 없음 |
@@ -93,7 +93,7 @@ uv pip install --python .venv/Scripts/python.exe -e .[claude] pip   # pip: 빌�
 .venv/Scripts/python.exe -m workhistory --demo     # 데모 데이터 (별도 demo.db)
 seed-demo.cmd                                      # 시연: 실제 앱 DB를 데모 데이터로 (기존 DB는 %LOCALAPPDATA%\WorkHistory\backup\)
 
-# 테스트 (2026-11-10 기준 210개)
+# 테스트 (2026-11-10 기준 206개)
 .venv/Scripts/python.exe -m unittest discover -s tests -t .
 
 # AI 보고서 품질 평가 (기본: llm/의 가장 큰 로컬 모델. Claude Code 기준값은 --model claude-code:sonnet, 로그인 필요)
@@ -164,10 +164,11 @@ python tools/build_portable.py                 # 인터넷용(Claude Code 포함
 - AI 보고서에서 이슈 칸을 뺐다 (2026-11-10): 칸은 한 일·다음 할 일 두 개. 이슈 번호·MR 번호는 인용한 자료에
   나온 것만 인정하고, 아니면 "번호 확인 필요"로 표시한다. 보내는 자료는 크기 예산(약 18k 토큰) 안에 맞춘다:
   한 줄에 기록 하나인 JSON, 가까운 스냅샷은 변경 하나로 합치고, 넘치면 창 수·파일 수를 줄이고 마지막에 짧은 기록을 뺀다.
-- 타임라인 앱별 보기에서 창을 누르면 경로를 보여 주고 복사할 수 있다 (2026-11-05). 브라우저는 주소창을
-  UI Automation(ctypes)으로 읽어 쿼리·`#`·계정 정보를 뗀 주소를 저장하고(v13 `path`, 기록 대상 앱만),
-  IDE·편집기는 Windows가 열린 파일을 알려 주지 않아 창 제목의 파일 이름을 작업 폴더에서 찾는다.
-  주소는 AI에 보내지 않는다.
+- 타임라인 앱별 보기에서 창을 누르면 경로를 보여 주고 복사할 수 있다 (2026-11-05). IDE·편집기는 Windows가
+  열린 파일을 알려 주지 않아 창 제목의 파일 이름을 작업 폴더에서 찾는다.
+- 브라우저 주소를 읽지 않는다 (2026-11-10): 주소창을 UI Automation으로 읽으면 Chrome·Edge가 접근성 트리를 켜서
+  브라우저가 무거워질 수 있고, 주소는 타임라인 복사에만 쓰였다. 읽는 코드를 빼고 v14에서 저장된 주소(`path` 열)를
+  지웠다. 브라우저는 창 제목만 남는다.
 - 프로젝트 분류는 화면에서 뺐다: 설정에는 작업 폴더만 남고, 프로젝트·키워드 규칙·다음 할 일·하위 폴더별
   프로젝트를 만들거나 고치는 화면이 없다. 손으로 나누는 일이 귀찮고 대부분 미분류로 남아서, 일을 묶는 것은
   AI에 맡기는 방향이다. 백엔드(API·스키마)와 이미 있는 프로젝트 데이터는 그대로 두어 분류·보고서에 계속 쓰인다

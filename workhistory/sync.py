@@ -66,22 +66,21 @@ def store_events(
         if kind == "window":
             app = ev["app"] or "unknown"
             title = ev["title"] or ""
-            path = ev["path"] or ""
             if matches_any(exclusions, app, title):
                 skipped += 1
                 continue
             # The lock screen stays as-is: it is idle time, not "업무 외".
             if (tracking is not None and app.casefold() not in IDLE_APPS
                     and not is_tracked(tracking, app, title)):
-                app, title, path = OFFWORK_APP, "", ""
+                app, title = OFFWORK_APP, ""
             conn.execute(
-                "INSERT INTO window_events (source_id, aw_id, start_ts, end_ts, app, title, path) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?) "
+                "INSERT INTO window_events (source_id, aw_id, start_ts, end_ts, app, title) "
+                "VALUES (?, ?, ?, ?, ?, ?) "
                 "ON CONFLICT (source_id, aw_id) DO UPDATE SET "
                 "start_ts = MIN(start_ts, excluded.start_ts), "
                 "end_ts = MAX(end_ts, excluded.end_ts), "
-                "app = excluded.app, title = excluded.title, path = excluded.path",
-                (source_id, raw_id, start, end, app, title, path),
+                "app = excluded.app, title = excluded.title",
+                (source_id, raw_id, start, end, app, title),
             )
         else:
             if ev["status"] not in ("afk", "not-afk"):
@@ -113,7 +112,7 @@ def sync_once(db: Database, collector=None, now: Optional[float] = None) -> Sync
             start = (source["cursor_ts"] - SYNC_OVERLAP_S) if source["cursor_ts"] else 0.0
             # Overlapping, not only starting after: a long open event is extended every time.
             raw = conn.execute(
-                "SELECT id, start_ts, end_ts, app, title, path, status FROM collector_events "
+                "SELECT id, start_ts, end_ts, app, title, status FROM collector_events "
                 "WHERE kind = ? AND end_ts >= ? AND start_ts <= ?", (kind, start, now)).fetchall()
             stored, skipped = store_events(conn, source["id"], kind, raw, load_exclusions(conn),
                                            load_blocked(conn, now), load_tracking(conn))

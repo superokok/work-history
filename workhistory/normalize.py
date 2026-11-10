@@ -21,7 +21,6 @@ class WindowEvent:
     app: str
     title: str
     project_id: Optional[int] = None  # manual override
-    path: str = ""  # browser address, if recorded
 
 
 @dataclass(frozen=True)
@@ -40,7 +39,6 @@ class Activity:
     title: str
     project_id: Optional[int] = None
     project_source: Optional[str] = None
-    path: str = ""
 
     @property
     def duration(self) -> float:
@@ -147,7 +145,7 @@ def build_activities(
             continue
         project_id, source = resolve_project(ev.project_id, rules, ev.app, ev.title)
         for s, e in clip(start, ev.end, allowed):
-            activities.append(Activity(ev.id, s, e, ev.app, ev.title, project_id, source, ev.path))
+            activities.append(Activity(ev.id, s, e, ev.app, ev.title, project_id, source))
         covered_until = max(covered_until, ev.end)
     return activities, warnings
 

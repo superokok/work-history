@@ -13,17 +13,12 @@ from tests.helpers import TempDB
 class FakeProbe:
     def __init__(self):
         self.app, self.title, self.idle = "Code.exe", "main.py", 0.0
-        self.address, self.location_reads = "", 0
 
     def foreground(self):
         return self.app, self.title
 
     def idle_seconds(self):
         return self.idle
-
-    def location(self, app):
-        self.location_reads += 1
-        return self.address
 
 
 class CollectorTests(unittest.TestCase):
@@ -105,20 +100,6 @@ class CollectorTests(unittest.TestCase):
             service.delete_data(conn, {"all": True})
         self.assertEqual(self.raw() + self.raw("afk"), [])
 
-    def test_browser_address_kept_without_query_and_only_for_recorded_apps(self):
-        self.probe.app, self.probe.title = "chrome.exe", "GOV-1418 - Jira"
-        self.probe.address = "https://user:pw@jira.example.com/browse/GOV-1418?token=abc#c1"
-        self.run_ticks(0, 20)
-        self.assertEqual(self.probe.location_reads, 1)  # read again only when the window changes
-        self.assertEqual([r["path"] for r in self.raw()], ["https://jira.example.com/browse/GOV-1418"])
-        with self.db.connect() as conn:
-            service.add_track_rule(conn, {"app": "code"})
-            service.set_track_mode(conn, {"mode": "selected"})
-        self.probe.title = "쇼핑"
-        self.run_ticks(22, 30)
-        self.assertEqual(self.raw()[-1]["path"], "")  # not a recorded app: the address is not read
-        self.assertEqual(self.probe.location_reads, 1)
-
     def test_old_raw_events_are_pruned(self):
         self.c.tick(self.t - RAW_RETENTION_S - 100)
         self.c._last_prune = 0
@@ -132,13 +113,10 @@ class CollectorTests(unittest.TestCase):
         with self.db.connect() as conn:
             service.add_track_rule(conn, {"app": "code"})
             service.set_track_mode(conn, {"mode": "selected"})
-        with self.db.connect() as conn:  # an address recorded earlier is dropped with the app and title
-            conn.execute("UPDATE collector_events SET path = 'https://chat.example.com' WHERE app = 'Slack.exe'")
         r = sync_once(self.db, self.c, now=self.t + 130)
         self.assertTrue(r.ok)
         with self.db.connect() as conn:
             rows = [(x["app"], x["title"]) for x in conn.execute("SELECT app, title FROM window_events ORDER BY start_ts")]
-            self.assertEqual([x[0] for x in conn.execute("SELECT path FROM window_events")], ["", ""])
             self.assertEqual(conn.execute("SELECT COUNT(*) FROM afk_events").fetchone()[0], 1)
         self.assertEqual(rows, [("Code.exe", "main.py"), ("", "")])  # 업무 외: no app, no title
         # The app list still sees untracked apps (from the raw events).
@@ -163,7 +141,7 @@ class WindowsProbeTests(unittest.TestCase):
         self.assertTrue(app)
         self.assertIsInstance(title, str)
         self.assertGreaterEqual(probe.idle_seconds(), 0)
-        self.assertIsInstance(probe.location(app), str)
+        self.assertFalse(hasattr(probe, "location"))  # browser addresses are not read (2026-11-10)
 
 
 if __name__ == "__main__":

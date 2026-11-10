@@ -96,7 +96,7 @@ def timeline(conn: sqlite3.Connection, day: date, project: Any = None, app: Opti
         "by_app": [{"app": k, "seconds": v}
                    for k, v in sorted(by_app.items(), key=lambda kv: -kv[1])],
         "rows": [r.__dict__ for r in merge_rows(shown)],
-        "apps": app_summary(shown, locate.file_paths(conn, list({a.title for a in shown if not a.path}))),
+        "apps": app_summary(shown, locate.file_paths(conn, list({a.title for a in shown}))),
         "warnings": warnings,
         "notes": list_notes(conn, day),
         "changes": list_changes(conn, day),
@@ -107,8 +107,7 @@ def app_summary(activities: list, file_paths: Optional[dict[str, str]] = None) -
     """One entry per app with its time added up over the whole day, however often it came back.
 
     Most recently used app first; inside an app, window titles by total time. Each window
-    has a `path`: the latest recorded browser address, else the work-folder file its title
-    names (`file_paths`, title → path), else "".
+    has a `path`: the work-folder file its title names (`file_paths`, title → path), else "".
     """
     file_paths = file_paths or {}
     apps: dict[str, dict] = {}
@@ -119,21 +118,17 @@ def app_summary(activities: list, file_paths: Optional[dict[str, str]] = None) -
         entry["seconds"] += a.duration
         entry["first"], entry["last"] = min(entry["first"], a.start), max(entry["last"], a.end)
         w = entry["windows"].setdefault(a.title, {"title": a.title, "seconds": 0.0, "last": a.end,
-                                                  "path": "", "path_end": 0.0,
                                                   "projects": defaultdict(float)})
         w["seconds"] += a.duration
         w["last"] = max(w["last"], a.end)
         w["projects"][a.project_id] += a.duration
-        if a.path and a.end >= w["path_end"]:
-            w["path"], w["path_end"] = a.path, a.end
     out = []
     for entry in sorted(apps.values(), key=lambda e: -e["last"]):
         windows = []
         for w in sorted(entry["windows"].values(), key=lambda w: -w["seconds"]):
             projects = w.pop("projects")
-            del w["path_end"]
-            path = w["path"] or file_paths.get(w["title"], "")
-            windows.append({**w, "path": path, "path_kind": locate.location_kind(path),
+            path = file_paths.get(w["title"], "")
+            windows.append({**w, "path": path, "path_kind": "file" if path else None,
                             "project_id": max(projects, key=projects.get)})
         out.append({**entry, "windows": windows})
     return out

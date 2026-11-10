@@ -63,10 +63,9 @@ def load_rules(conn: sqlite3.Connection) -> list[Rule]:
 
 
 def load_events(conn: sqlite3.Connection, start: float, end: float):
-    window = [WindowEvent(r["id"], r["start_ts"], r["end_ts"], r["app"], r["title"], r["project_id"],
-                          r["path"])
+    window = [WindowEvent(r["id"], r["start_ts"], r["end_ts"], r["app"], r["title"], r["project_id"])
               for r in conn.execute(
-                  "SELECT id, start_ts, end_ts, app, title, project_id, path FROM window_events "
+                  "SELECT id, start_ts, end_ts, app, title, project_id FROM window_events "
                   "WHERE end_ts > ? AND start_ts < ?", (start, end))]
     afk = [AfkEvent(r["start_ts"], r["end_ts"], r["status"]) for r in conn.execute(
         "SELECT start_ts, end_ts, status FROM afk_events WHERE end_ts > ? AND start_ts < ?",

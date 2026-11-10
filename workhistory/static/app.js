@@ -205,7 +205,7 @@ function renderApps(apps) {
 function pathBox(w) {
   const input = h("input", { class: "path-text", readonly: true, value: w.path, onclick: (e) => e.target.select() });
   return h("div", { class: "row path-box" },
-    h("span", { class: "meta" }, w.path_kind === "url" ? "주소" : "파일"), input,
+    h("span", { class: "meta" }, "파일"), input,
     h("button", { class: "small", onclick: async () => {
       try {
         await navigator.clipboard.writeText(w.path);
@@ -229,13 +229,13 @@ function appCard(a) {
     const key = `${a.app}\n${w.title}`;
     const pathRow = h("tr", { class: "path-row", hidden: !state.openPaths.has(key) },
       h("td", { colspan: 3 }, w.path ? pathBox(w) : h("span", { class: "muted" },
-        "경로 없음 · 브라우저 주소와 작업 폴더 안의 파일만 경로가 남습니다.")));
+        "경로 없음 · 작업 폴더 안의 파일만 경로가 나옵니다.")));
     const row = h("tr", { class: "clickable", title: "눌러서 경로 보기", onclick: () => {
       pathRow.hidden = !pathRow.hidden;
       pathRow.hidden ? state.openPaths.delete(key) : state.openPaths.add(key);
     } },
     h("td", { class: "title" }, w.title || h("span", { class: "muted" }, "(제목 없음)"),
-      w.path_kind ? badge("plain", w.path_kind === "url" ? "주소" : "파일") : null),
+      w.path ? badge("plain", "파일") : null),
     h("td", { class: "time" }, `마지막 ${hhmm(w.last)}`),
     h("td", { class: "num" }, dur(w.seconds)));
     return [row, pathRow];

@@ -6,8 +6,9 @@ in `collector_events` for RAW_RETENTION_S. sync.py imports them into window_even
 afk_events with the current rules; the raw events let "다시 적용" and the app list work.
 
 Nothing is recorded while paused or for windows matching an exclusion. Only the window
-title, the app name and, for browsers of recorded apps, the address (locate.py, without
-query string) are read: no keystrokes, clipboard, screen or document contents.
+title and the app name are read: no addresses, keystrokes, clipboard, screen or document
+contents. (Browser addresses were read through UI Automation until 2026-11-10; that made
+browsers build their accessibility tree, and the title is enough.)
 """
 
 import logging
@@ -18,11 +19,10 @@ import time
 from dataclasses import dataclass
 from typing import Optional, Protocol
 
-from .classify import is_tracked, matches_any
+from .classify import matches_any
 from .config import AFK_AFTER_S, COLLECT_FLUSH_S, COLLECT_POLL_S, RAW_RETENTION_S
 from .db import Database
-from .locate import clean_url, is_browser
-from .store import load_exclusions, load_tracking
+from .store import load_exclusions
 
 log = logging.getLogger(__name__)
 
@@ -36,9 +36,6 @@ class Probe(Protocol):
 
     def idle_seconds(self) -> float:
         """Seconds since the last keyboard or mouse input."""
-
-    def location(self, app: str) -> str:
-        """Raw address of the window last returned by foreground() if it is a browser, else ""."""
 
 
 class WindowsProbe:
@@ -67,12 +64,10 @@ class WindowsProbe:
             _fields_ = [("cbSize", wintypes.UINT), ("dwTime", wintypes.DWORD)]
 
         self._lii = LASTINPUTINFO(ctypes.sizeof(LASTINPUTINFO), 0)
-        self._hwnd = None
-        self._address_bar = None
 
     def foreground(self) -> tuple[str, str]:
         ct, wt, u = self._ct, self._wt, self._user32
-        hwnd = self._hwnd = u.GetForegroundWindow()
+        hwnd = u.GetForegroundWindow()
         if not hwnd:
             return "unknown", ""
         n = u.GetWindowTextLengthW(hwnd)
@@ -81,17 +76,6 @@ class WindowsProbe:
         pid = wt.DWORD()
         u.GetWindowThreadProcessId(hwnd, ct.byref(pid))
         return self._exe_name(pid.value) or "unknown", buf.value
-
-    def location(self, app: str) -> str:
-        if not self._hwnd or not is_browser(app):
-            return ""
-        if self._address_bar is None:
-            from .locate import AddressBarReader
-            self._address_bar = AddressBarReader()
-        try:
-            return self._address_bar.address(self._hwnd)
-        except OSError:  # the browser closed or doesn't expose its address bar
-            return ""
 
     def _exe_name(self, pid: int) -> str:
         # Limited query rights also work for most elevated (admin) processes.
@@ -165,7 +149,7 @@ class Collector:
             if matches_any(load_exclusions(conn), app, title):
                 self._close(conn, "window")
             else:
-                self._beat(conn, "window", now, now, (app, title, self._location(conn, app, title)))
+                self._beat(conn, "window", now, now, (app, title))
             if idle >= AFK_AFTER_S:
                 # Away since the last input: the active stretch ends there and the away one starts.
                 last_input = now - idle
@@ -188,16 +172,6 @@ class Collector:
                 conn.execute("DELETE FROM collector_events WHERE end_ts < ?", (now - RAW_RETENTION_S,))
                 self._last_prune = now
 
-    def _location(self, conn: sqlite3.Connection, app: str, title: str) -> str:
-        """The browser address, read again only when the window changes and only for recorded apps."""
-        current = self._open["window"]
-        if current and current.key[:2] == (app, title):
-            return current.key[2]
-        tracking = load_tracking(conn)
-        if tracking is not None and not is_tracked(tracking, app, title):
-            return ""
-        return clean_url(self.probe.location(app))
-
     def _beat(self, conn: sqlite3.Connection, kind: str, now: float, start: float, key: tuple) -> None:
         current = self._open[kind]
         if current and current.key == key and now - current.end <= MAX_GAP_S:
@@ -212,11 +186,11 @@ class Collector:
 
     def _persist(self, conn: sqlite3.Connection, kind: str, ev: _Open) -> None:
         if ev.id is None:
-            app, title, path = ev.key if kind == "window" else ("", "", "")
+            app, title = ev.key if kind == "window" else ("", "")
             status = ev.key[0] if kind == "afk" else ""
             ev.id = conn.execute(
-                "INSERT INTO collector_events (kind, start_ts, end_ts, app, title, path, status) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)", (kind, ev.start, ev.end, app, title, path, status)).lastrowid
+                "INSERT INTO collector_events (kind, start_ts, end_ts, app, title, status) "
+                "VALUES (?, ?, ?, ?, ?, ?)", (kind, ev.start, ev.end, app, title, status)).lastrowid
         else:
             conn.execute("UPDATE collector_events SET end_ts = ? WHERE id = ?", (ev.end, ev.id))
 

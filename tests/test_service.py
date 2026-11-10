@@ -51,6 +51,9 @@ class MigrationTests(unittest.TestCase):
                 self.assertEqual(conn.execute("PRAGMA user_version").fetchone()[0], SCHEMA_VERSION)
                 tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
                 self.assertNotIn("daily_reviews", tables)  # v12: the daily review tab is gone
+                for table in ("window_events", "collector_events"):  # v14: browser addresses deleted
+                    columns = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
+                    self.assertNotIn("path", columns)
 
     def test_refuses_newer_schema(self):
         with TempDB() as db:

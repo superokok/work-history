@@ -157,8 +157,8 @@ one class plus a factory entry (`ai_local.LocalModel` is the second one).
   one), and work records (W, `work.py`): each work folder's time on each day,
   or the day's 웹 / 소통 / 기타 time, with spans of the day and the window
   titles that took the most time. Projects, next actions and notes are not sent to the report
-  (2026-11-05: the app has no screens for them any more), nor are browser
-  addresses.
+  (2026-11-05: the app has no screens for them any more). Browser addresses
+  are not recorded at all.
   "업무 외" time is sent as a total only.
 - Every free-text field passes `redact.py` (keys, tokens, passwords, resident
   registration and card numbers) before it is sent.

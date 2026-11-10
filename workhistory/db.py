@@ -294,6 +294,11 @@ MIGRATIONS: list[str] = [
     ALTER TABLE collector_events ADD COLUMN path TEXT NOT NULL DEFAULT '';
     ALTER TABLE window_events ADD COLUMN path TEXT NOT NULL DEFAULT '';
     """,
+    # v14: browser addresses are no longer read; the ones recorded since v13 are deleted.
+    """
+    ALTER TABLE collector_events DROP COLUMN path;
+    ALTER TABLE window_events DROP COLUMN path;
+    """,
 ]
 
 SCHEMA_VERSION = len(MIGRATIONS)
