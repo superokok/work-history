@@ -539,7 +539,8 @@ $("report-generate").addEventListener("click", () => {
   guarded(async () => {
     reportBusy = true;
     for (const id of ["report-generate", "report-save", "report-cancel"]) $(id).disabled = true;
-    $("report-generate").textContent = "AI가 작성 중… (1~3분)";
+    $("report-generate").textContent = reportKind() === "weekly"
+      ? "AI가 작성 중… (기록이 많으면 하루씩 정리해 합쳐서 더 걸립니다)" : "AI가 작성 중… (1~3분)";
     try {
       const r = await api("POST", "/api/ai/report", { kind: reportKind(), day: state.reportDay });
       $("report-body").value = r.text;
@@ -604,6 +605,7 @@ function renderReportSide(r) {
   $("report-side").replaceChildren(
     h("div", { class: "card" },
       h("h2", {}, "AI 초안과 근거"),
+      ...(r.notes || []).map((n) => h("p", { class: "warning" }, n)),
       factLegend(),
       r.summary ? aiText(r.summary) : null,
       ...r.projects.map((p) => h("div", { class: "report-project" },

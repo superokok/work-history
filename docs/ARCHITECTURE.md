@@ -48,7 +48,7 @@ mcp_server.py – the history tools over MCP (Claude Code, development only), co
 autostart.py  – start at logon (Startup shortcut), switched from the app
 ai_context.py – the exact payload for the AI with verifiable references (W/C), within a size budget
 ai_report.py  – report schema, prompt, reference checks, rendering
-ai_service.py – settings, consent, run log, saved reports
+ai_service.py – settings, consent, run log, saved reports; a week too big for one request is drafted day by day, then merged
    ▼
 service.py    – timeline, search, notes, projects
 dashboard.py  – day/week dashboard: time by kind of activity, the day strip, time per work

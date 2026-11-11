@@ -135,30 +135,72 @@ def period(kind: str, day: date) -> tuple[date, date]:
     raise Invalid("kind는 'daily' 또는 'weekly'여야 합니다")
 
 
+def _plan(conn: sqlite3.Connection, kind: str, start: date, end: date,
+          repos_dir: Optional[Path]) -> tuple[ai_context.Context, list[ai_context.Context]]:
+    """(context of the whole period, contexts of its days when the week is sent day by day).
+
+    A week whose records fit the budget as they are goes in one request. A bigger one would lose
+    detail (fewer window titles, shorter diff excerpts, short records left out), so each day is
+    written from its own records first and the drafts are merged: nothing is left out."""
+    whole = ai_context.build(conn, start, end, repos_dir)
+    if kind != "weekly" or not whole.trimmed:
+        return whole, []
+    days, ref = [], 1
+    d = start
+    while d <= end:
+        c = ai_context.build(conn, d, d, repos_dir, first_ref=ref)
+        ref = c.next_ref
+        if not c.empty:
+            days.append(c)
+        d += timedelta(days=1)
+    return ai_context.merge(days, start, end), days
+
+
 def preview(conn: sqlite3.Connection, kind: str, day: date, repos_dir: Optional[Path] = None) -> dict:
     """Exactly what would be sent to the AI (nothing is sent)."""
     start, end = period(kind, day)
-    ctx = ai_context.build(conn, start, end, repos_dir)
-    return {"start": start.isoformat(), "end": end.isoformat(),
-            "prompt": ai_report.prompt(kind, ctx), "system": ai_report.SYSTEM}
+    ctx, days = _plan(conn, kind, start, end, repos_dir)
+    if not days:
+        return {"start": start.isoformat(), "end": end.isoformat(),
+                "prompt": ai_report.prompt(kind, ctx), "system": ai_report.SYSTEM}
+    parts = [f"--- {c.start.isoformat()} (날짜별 초안 {i + 1}/{len(days)}) ---\n" + ai_report.prompt("daily", c)
+             for i, c in enumerate(days)]
+    parts.append("--- 합치기: 위 날짜별 초안(한 일과 근거 번호)을 보내 주간보고로 합칩니다 ---")
+    return {"start": start.isoformat(), "end": end.isoformat(), "prompt": "\n\n".join(parts),
+            "system": ai_report.SYSTEM + "\n\n[합치기 지시문]\n" + ai_report.MERGE_SYSTEM}
 
 
 def generate_report(conn: sqlite3.Connection, kind: str, day: date, demo: bool,
                     factory: ModelFactory = default_factory, repos_dir: Optional[Path] = None) -> dict:
     check_allowed(conn, demo)
     start, end = period(kind, day)
-    ctx = ai_context.build(conn, start, end, repos_dir)
+    ctx, days = _plan(conn, kind, start, end, repos_dir)
     if ctx.empty:
         raise Invalid("이 기간에는 보고서로 만들 업무 기록이 없습니다")
     model_name = _model_name(conn, demo)
     started, usage = time.time(), Usage()
     try:
         model = _model(conn, demo, factory)
-        raw, usage = model.generate_json(ai_report.SYSTEM, ai_report.prompt(kind, ctx), ai_report.SCHEMA)
+        if not days:
+            raw, usage = model.generate_json(ai_report.SYSTEM, ai_report.prompt(kind, ctx), ai_report.SCHEMA)
+        else:
+            drafts = []
+            for c in days:
+                raw, used = model.generate_json(ai_report.SYSTEM, ai_report.prompt("daily", c), ai_report.SCHEMA)
+                usage.add(used)
+                drafts.append(ai_report.validate("daily", c, raw))
+            raw, used = model.generate_json(ai_report.MERGE_SYSTEM,
+                                            ai_report.merge_prompt(start.isoformat(), end.isoformat(), drafts),
+                                            ai_report.SCHEMA)
+            usage.add(used)
     except AIError as e:
         log_run(conn, f"report_{kind}", model_name, started, usage, 0, False, e.kind)
         raise
     report = ai_report.validate(kind, ctx, raw)
+    if days:
+        report.notes.append(f"기록이 많아 {len(days)}일을 하루씩 정리한 뒤 주간보고로 합쳤습니다.")
+    if ctx.trimmed:
+        report.notes.append("하루 기록도 많아 줄여서 보낸 날이 있습니다: " + ", ".join(ctx.trimmed))
     log_run(conn, f"report_{kind}", model_name, started, usage, 0, True, None)
     out = ai_report.to_dict(report, ctx)
     out["usage"] = usage.__dict__

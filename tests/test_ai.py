@@ -433,5 +433,80 @@ class ChangesContextTests(unittest.TestCase):
         self.assertIsNone(block.done[0].flag)
 
 
+class EchoModel:
+    """Cites every reference it was sent: one group per daily draft, everything merged for the week."""
+
+    name = "echo"
+
+    def __init__(self):
+        self.calls = []
+
+    def check(self):
+        pass
+
+    def generate_json(self, system, prompt, schema, max_output_tokens=16000, thinking=None):
+        self.calls.append((system, prompt))
+        body = json.loads(prompt[prompt.index("{"):])
+        if "days" in body:  # the merge step
+            refs = [r for d in body["days"] for w in d["work"] for it in w["done"] for r in it["refs"]]
+            reply = {"summary": "주간", "projects": [{"project": "합친 일", "done": [{"text": "합친 실적", "refs": refs}]}]}
+        else:
+            refs = [w["ref"] for w in body["work"]] + [c["ref"] for c in body["changes"]]
+            reply = {"summary": "하루", "projects": [{"project": "하루 일", "done": [{"text": "실적", "refs": refs}]}]}
+        return reply, Usage(input_tokens=10, output_tokens=5, thinking_tokens=0, requests=1)
+
+
+@unittest.skipUnless(HAS_DULWICH, "dulwich not installed (run tests with .venv python)")
+class SplitWeekTests(unittest.TestCase):
+    """A week too big for one request is written day by day, then merged: nothing is left out."""
+
+    def setUp(self):
+        from pathlib import Path
+        from workhistory import demo
+        self._tmp = TempDB()
+        self.db = self._tmp.__enter__()
+        self.repos = Path(self.db.path).parent / "snapshots"
+        demo.seed(self.db, self.repos)
+        today = date.today()
+        self.last_monday = today - timedelta(days=today.weekday() + 7)
+
+    def tearDown(self):
+        self._tmp.__exit__(None, None, None)
+
+    def generate(self, model):
+        with self.db.connect() as conn:
+            return ai_service.generate_report(conn, "weekly", self.last_monday, demo=True,
+                                              factory=lambda n: model, repos_dir=self.repos)
+
+    def test_a_week_that_fits_is_one_request(self):
+        model = EchoModel()
+        out = self.generate(model)
+        self.assertEqual(len(model.calls), 1)
+        self.assertEqual(out["notes"], [])
+
+    def test_a_big_week_is_written_day_by_day_and_merged(self):
+        model = EchoModel()
+        with mock.patch.object(ai_context, "PAYLOAD_CHARS", 9000):  # the whole week no longer fits
+            out = self.generate(model)
+            with self.db.connect() as conn:
+                preview = ai_service.preview(conn, "weekly", self.last_monday, self.repos)
+        daily, merge = model.calls[:-1], model.calls[-1]
+        self.assertGreater(len(daily), 1)
+        self.assertEqual(merge[0], ai_report.MERGE_SYSTEM)
+        # Every day was sent with its own W numbers: no number is used by two days.
+        sent = [w["ref"] for _, prompt in daily for w in json.loads(prompt[prompt.index("{"):])["work"]]
+        self.assertEqual(len(sent), len(set(sent)))
+        # The merged draft keeps every reference the days had, so nothing is restored or dropped.
+        self.assertEqual(out["dropped_refs"], 0)
+        self.assertEqual([p["project"] for p in out["projects"]], ["합친 일"])
+        self.assertEqual(set(out["projects"][0]["done"][0]["refs"]), set(sent) | {
+            c["ref"] for _, prompt in daily for c in json.loads(prompt[prompt.index("{"):])["changes"]})
+        self.assertGreater(out["projects"][0]["seconds"], 0)
+        self.assertIn(f"{len(daily)}일을 하루씩 정리한 뒤", out["notes"][0])
+        self.assertEqual(out["usage"]["input_tokens"], 10 * len(model.calls))
+        self.assertIn("합치기", preview["prompt"])
+        self.assertIn(ai_report.MERGE_SYSTEM, preview["system"])
+
+
 if __name__ == "__main__":
     unittest.main()

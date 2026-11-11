@@ -3,6 +3,7 @@
 The model writes what was done, from the records; plans (차주 계획 / 다음 할 일) are
 the user's to write, so that section is left empty in the draft."""
 
+import json
 import re
 from dataclasses import dataclass, field
 from typing import Any, Optional
@@ -103,11 +104,38 @@ class Report:
     offwork_s: float
     dropped_refs: int = 0
     outside_s: dict[str, float] = field(default_factory=dict)  # time outside the work folders: 웹 / 소통 / 기타
+    notes: list[str] = field(default_factory=list)  # how the draft was made, when not in one request
 
 
 def prompt(kind: str, ctx: Context) -> str:
     return (f"{ctx.start.isoformat()} ~ {ctx.end.isoformat()} 기간의 {KINDS[kind]} 초안을 작성하세요.\n\n"
             + dumps(ctx.payload))
+
+
+# A week too big for one request is written day by day (each day from its own records, with
+# SYSTEM), then the daily drafts are merged into the week: every reference still points at a
+# record that was sent, and the merged draft is checked like any other.
+MERGE_SYSTEM = """당신은 주간보고 초안을 작성합니다.
+입력은 같은 주의 날짜별 업무일지 초안입니다. 각 항목은 업무 기록에서 나온 한 일(text)과 그 근거(refs)입니다.
+
+- 날짜별 업무 묶음 중 같은 일(같은 작업 폴더, 같은 이슈 번호나 주제)을 업무 하나로 합칩니다. 같은 업무를 여러 묶음으로 나누지 않습니다.
+- 업무 이름(project)은 날짜별 이름 중 가장 맞는 것을 고르거나 그 표현을 합쳐 짓습니다. 입력에 없는 이름이나 번호를 지어내지 않습니다.
+- 여러 날에 걸친 같은 일은 한 항목으로 합치고, 합친 항목들의 refs를 모두 넣습니다. 입력에 없는 내용, 결과, 수치를 더하지 않습니다.
+- refs는 입력 항목의 refs만 씁니다. 입력에 있는 refs는 하나도 빠짐없이 결과의 어느 항목에 넣습니다 (업무별 시간 계산에 씁니다).
+- '완료', '해결', '종료' 같은 단정은 쓰지 않고 한 일로 씁니다. 다음 계획은 쓰지 않습니다.
+- 요약(summary)은 주 전체를 1~2문장으로 씁니다.
+- 업무 묶음은 일을 많이 한 순서로, 한국어 업무 보고 문체로 한 항목은 한 줄로 씁니다 (명사형 종결)."""
+
+
+def merge_prompt(start: str, end: str, days: list["Report"]) -> str:
+    """The daily drafts as the merge step's input: groups and lines with their references."""
+    data = {"period": {"from": start, "to": end}, "days": [
+        {"date": r.start, "summary": r.summary,
+         "work": [{"project": b.project, "done": [{"text": it.text, "refs": it.refs} for it in b.done]}
+                  for b in r.projects if b.done]}
+        for r in days]}
+    return (f"{start} ~ {end} 주간보고 초안을 날짜별 업무일지 초안으로 작성하세요.\n\n"
+            + json.dumps(data, ensure_ascii=False, indent=1))
 
 
 def _items(raw: Any, valid: set[str]) -> tuple[list[Item], int]:
@@ -206,6 +234,7 @@ def to_dict(report: Report, ctx: Context) -> dict:
         "offwork_s": report.offwork_s,
         "outside_s": report.outside_s,
         "dropped_refs": report.dropped_refs,
+        "notes": report.notes,
         "sources": {ref: ctx.sources[ref] for ref in _cited(report) if ref in ctx.sources},
         "text": render_text(report),
     }

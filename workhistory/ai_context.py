@@ -69,6 +69,9 @@ class Context:
     folder_seconds: dict[str, float] = field(default_factory=dict)
     outside_s: dict[str, float] = field(default_factory=dict)  # 웹 / 소통 / 기타 -> seconds
     offwork_s: float = 0.0
+    # What was cut to fit the budget, in words for the user ([] = everything was sent as is).
+    trimmed: list[str] = field(default_factory=list)
+    next_ref: int = 1  # the W number after this context's last record (to number the next day on)
 
     @property
     def empty(self) -> bool:
@@ -115,13 +118,15 @@ def _excerpt(repo, path: str, old_blob: Optional[str], new_blob: Optional[str], 
 
 # ---------------------------------------------------------------- work records
 
-def _records(conn: sqlite3.Connection, ctx: Context, start: date, end: date) -> list[tuple[str, work.Record]]:
-    """(W ref, record) for every work record of the period; trimmed later."""
+def _records(conn: sqlite3.Connection, ctx: Context, start: date, end: date,
+             first_ref: int = 1) -> list[tuple[str, work.Record]]:
+    """(W ref, record) for every work record of the period, numbered from `first_ref`; trimmed later."""
     out = []
     for _day, recs, offwork in work.period(conn, start, end):
         ctx.offwork_s += offwork
         for r in recs:
-            out.append((f"W{len(out) + 1}", r))
+            out.append((f"W{first_ref + len(out)}", r))
+    ctx.next_ref = first_ref + len(out)
     return out
 
 
@@ -253,14 +258,17 @@ def _add_diffs(changes: list[tuple[dict, list, list[dict]]], total: int, limit: 
 
 # ---------------------------------------------------------------- build
 
-def build(conn: sqlite3.Connection, start: date, end: date, repos_dir: Optional[Path] = None) -> Context:
+def build(conn: sqlite3.Connection, start: date, end: date, repos_dir: Optional[Path] = None,
+          first_ref: int = 1) -> Context:
+    """The payload for one request. `first_ref`: the first W number, so that the days of a week
+    split into several requests (ai_service) never share a number."""
     if end < start:
         raise store.Invalid("종료일이 시작일보다 빠릅니다")
     if (end - start).days + 1 > MAX_DAYS:
         raise store.Invalid(f"한 번에 {MAX_DAYS}일까지만 보낼 수 있습니다")
 
     ctx = Context(start, end, {})
-    records = _records(conn, ctx, start, end)
+    records = _records(conn, ctx, start, end, first_ref)
     rows, files = _change_rows(conn, start, end)
 
     def payload(level) -> tuple[dict, list]:
@@ -296,7 +304,18 @@ def build(conn: sqlite3.Connection, start: date, end: date, repos_dir: Optional[
                 lo = mid + 1
         level = (windows, lengths[lo] if lo < len(lengths) else float("inf"), gap, limit)
         data, changes = payload(level)
-    windows, min_s, _, limit = level
+    windows, min_s, gap, limit = level
+    if level != FIT_LEVELS[0]:
+        ctx.trimmed.append(f"창 제목은 기록마다 {windows}개까지")
+        if gap > FIT_LEVELS[0][2]:
+            ctx.trimmed.append("같은 폴더의 파일 변경은 " + ("하루" if gap >= 24 * 3600 else f"{gap // 3600}시간")
+                               + " 단위로 묶음")
+        if limit < FIT_LEVELS[0][3]:
+            ctx.trimmed.append(f"파일 이름은 변경마다 {limit}개까지")
+        left_out = sum(1 for _, r in records if 60 <= r.seconds < min_s)
+        if left_out:
+            ctx.trimmed.append(f"작업 기록 {left_out}건 모두 제외" if min_s == float("inf")
+                               else f"{round(min_s / 60)}분 미만 기록 {left_out}건 제외")
     for ref, r in records:
         if r.folder_id:
             ctx.folder_seconds[r.name] = ctx.folder_seconds.get(r.name, 0.0) + r.seconds
@@ -319,6 +338,8 @@ def build(conn: sqlite3.Connection, start: date, end: date, repos_dir: Optional[
             if _size(data) <= PAYLOAD_CHARS or "diff_excerpt" not in item:
                 break
             del item["diff_excerpt"]
+            if "바뀐 줄 일부 생략" not in ctx.trimmed:
+                ctx.trimmed.append("바뀐 줄 일부 생략")
     for item, burst, merged in changes:
         ref, first = item["ref"], burst[0]
         ctx.refs.add(ref)
@@ -328,3 +349,25 @@ def build(conn: sqlite3.Connection, start: date, end: date, repos_dir: Optional[
                                 f["path"].rsplit("/", 1)[-1] for f in merged[:3])}
     ctx.payload = data
     return ctx
+
+
+def merge(parts: list[Context], start: date, end: date) -> Context:
+    """One context over several (the days of a week sent one by one): every reference any of
+    them sent stays valid, with its time and its place."""
+    out = Context(start, end, {"work": [], "changes": []})
+    for c in parts:
+        out.payload["work"] += c.payload["work"]
+        out.payload["changes"] += c.payload["changes"]
+        out.refs |= c.refs
+        out.sources.update(c.sources)
+        out.work_seconds.update(c.work_seconds)
+        for folder, refs in c.folder_refs.items():
+            out.folder_refs.setdefault(folder, []).extend(refs)
+        for folder, sec in c.folder_seconds.items():
+            out.folder_seconds[folder] = out.folder_seconds.get(folder, 0.0) + sec
+        for name, sec in c.outside_s.items():
+            out.outside_s[name] = out.outside_s.get(name, 0.0) + sec
+        out.offwork_s += c.offwork_s
+        out.trimmed += [f"{c.start.month}/{c.start.day}: {t}" for t in c.trimmed]
+        out.next_ref = max(out.next_ref, c.next_ref)
+    return out

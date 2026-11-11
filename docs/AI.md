@@ -170,6 +170,15 @@ one class plus a factory entry (`ai_local.LocalModel` is the second one).
   tried in order: fewer windows per record, wider merging of a folder's
   changes (up to one per folder per day), fewer files listed per change, and
   only then leaving out the shortest records.
+- A weekly report whose records do not fit as they are is not trimmed
+  (2026-11-11, `ai_service._plan`): each day with records is drafted on its own
+  (`SYSTEM`, the day's records, W numbers continuing from the day before so
+  none is shared), and the daily drafts (groups, lines and their references)
+  are merged into the week by one more request (`ai_report.MERGE_SYSTEM`). The
+  merged draft is checked against all the days' references like any draft;
+  the report shows a note that it was made this way (and what was cut if a
+  single day was still too big). A week that fits stays one request. Cost: one
+  request per day plus one; with a local model several minutes.
 - Diff excerpts use what room is left, at most 600 lines per request, 50 per
   change, 25 per file, 200 characters per line, shared fairly: each change gets
   an equal share of what is left, so early changes cannot use up the room.
