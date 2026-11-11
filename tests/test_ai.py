@@ -142,23 +142,21 @@ class ValidationTests(AIDataTestCase):
         self.assertEqual(ai_report.unbacked_keys("GOV-14 정리", [w], self.context().ref_text), ["GOV-14"])
         text = ai_report.render_text(report)
         self.assertIn("## GOV-1418 토큰 버그 (40분) (번호가 근거에 없음 — 확인 필요)", text)
-        self.assertIn("- GOV-1418 AuthService 수정 (번호가 근거에 없음 — 확인 필요)", text)
+        self.assertIn("- GOV-1418 AuthService 수정 (번호가 근거에 없음 — 확인 필요) (진행 중)", text)
 
-    def test_finished_claims_are_marked(self):
+    def test_what_was_done_starts_in_progress(self):
+        """Finished or not is the user's call: every line of what was done is 진행 중 in the draft."""
         f = self.folder
-        raw = {"summary": "토큰 갱신 버그를 해결함.", "projects": [{"project": "Gov24 백엔드", "next": [], "done": [
-            {"text": "토큰 갱신 버그 수정 완료", "refs": [f]},   # records show work, not that it is done
-            {"text": "해결 방안 검토", "refs": [f]},             # not a claim
+        raw = {"summary": "토큰 갱신 로직 수정 진행", "projects": [{"project": "Gov24 백엔드", "done": [
             {"text": "토큰 갱신 로직 수정", "refs": [f]},
-        ]}]}
+            {"text": "AuthService 정리 (완료)", "refs": [f]},  # a status from the model is replaced
+        ], "next": [{"text": "리뷰 반영", "refs": [f]}]}]}
         report = ai_report.validate("weekly", self.context(), raw)
-        [block] = report.projects
-        self.assertEqual([i.flag for i in block.done], ["unconfirmed_done", None, None])
-        self.assertEqual(report.summary_flag, "unconfirmed_done")
-        self.assertIn("토큰 갱신 버그 수정 완료 (완료 근거 없음 — 확인 필요)", ai_report.render_text(report))
-        self.assertEqual(ai_report.to_dict(report, self.context())["summary_flag"], "unconfirmed_done")
-        raw["summary"] = "토큰 갱신 로직 수정 진행."
-        self.assertIsNone(ai_report.validate("weekly", self.context(), raw).summary_flag)
+        self.assertEqual([i.flag for i in report.projects[0].done], [None, None])  # no word checks
+        self.assertIsNone(report.summary_flag)
+        text = ai_report.render_text(report)
+        self.assertIn("[금주 실적]\n- 토큰 갱신 로직 수정 (진행 중)\n- AuthService 정리 (진행 중)", text)
+        self.assertIn("- 리뷰 반영 (AI 제안 — 확인 필요)\n", text)  # plans have no status
 
     def test_work_folder_left_out_by_ai_is_restored(self):
         ctx = self.context()
@@ -198,7 +196,8 @@ class ValidationTests(AIDataTestCase):
         text = ai_report.render_text(ai_report.validate("weekly", self.context(), self.raw()))
         self.assertIn("# 주간보고 · 2026-09-30", text)
         self.assertIn("## Gov24 백엔드 (40분)", text)
-        self.assertIn("[금주 실적]\n- 리프레시 토큰 처리 분석\n- 근거 없는 성과 (근거 없음 — 확인 필요)", text)
+        self.assertIn("[금주 실적]\n- 리프레시 토큰 처리 분석 (진행 중)\n- 근거 없는 성과 (근거 없음 — 확인 필요) (진행 중)",
+                      text)
         self.assertIn("- AI가 지어낸 계획 (AI 제안 — 확인 필요)", text)
         self.assertIn("(작업 폴더 밖: 웹 20분)", text)  # 40 seconds of 소통 is left out
         self.assertIn("(보고서에서 제외한 업무 외 시간: 30분)", text)

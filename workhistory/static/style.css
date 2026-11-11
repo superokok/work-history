@@ -109,6 +109,10 @@ pre.preview { max-height: 360px; overflow: auto; background: var(--bg); border: 
 .row[hidden] { display: none; }
 .report-columns:has(#report-side:empty) { grid-template-columns: 1fr; }  /* no draft evidence: full width */
 .report-empty { text-align: center; padding: 48px 0; }
+.status-chip { margin-left: 8px; padding: 0 9px; font-size: 12px; line-height: 20px; border-radius: 10px;
+  border: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer; vertical-align: 1px; }
+.status-chip:hover { border-color: var(--accent); color: var(--text); }
+.status-chip.done { border-color: #3aa76d; color: #3aa76d; background: rgba(58, 167, 109, .12); }
 .report-empty p { margin: 0 0 14px; }
 .report-project h3 { margin: 12px 0 4px; }
 ul.report-items { list-style: none; padding: 0; margin: 0 0 8px; }

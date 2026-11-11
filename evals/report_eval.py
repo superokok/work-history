@@ -59,13 +59,13 @@ CASES = [
 ]
 
 
-WARNED = {"unconfirmed_done", "unbacked_key"}
+WARNED = {"unbacked_key"}
 
 
 def evaluate(case: dict, report: ai_report.Report) -> tuple[list[str], list[str]]:
-    """(failures, caught): a forbidden claim in a line the app flagged ('unconfirmed_done' or
-    'unbacked_key', group names included) is shown to the user with a warning, so it is counted as
-    caught, not as a failure."""
+    """(failures, caught): a forbidden claim in a line the app flagged ('unbacked_key', group names
+    included) is shown to the user with a warning, so it is counted as caught, not as a failure.
+    Claims of being finished are failures: the draft must leave 완료 to the user."""
     failures, caught = [], []
     items = [i for b in report.projects for i in b.items]
     text = "\n".join(i.text for i in items)

@@ -12,11 +12,10 @@ SECTION_LABELS = {
     "daily": ("오늘 한 일", "다음 할 일"),
     "weekly": ("금주 실적", "차주 계획"),
 }
-# Words that say something is finished. File changes and window titles show work, not that it is
-# done: a draft line that says so is marked for the user to check.
-DONE_WORDS = re.compile(r"완료|종료|마무리|마쳤|끝냈|끝났|끝냄|완성(?!도)|"
-                        r"해결(?!\s*(?:방안|방법|책|을\s*위|하기\s*위|해야|필요))|"
-                        r"\b(?:resolved|closed|done)\b", re.I)
+# Whether a piece of work is finished is the user's call (the records show work, not that it is
+# done): every line of what was done starts as 진행 중, and the user marks it 완료 in the report.
+IN_PROGRESS = "진행 중"
+STATUS_SUFFIX = re.compile(r"\s*\((진행 중|완료)\)\s*$")
 
 _ITEM = {
     "type": "object",
@@ -71,17 +70,17 @@ SYSTEM = """당신은 업무 보고서 초안을 작성합니다.
 - 모든 항목의 refs에는 그 항목의 근거가 된 ref를 넣습니다. 업무 묶음마다 그 일을 한 작업 폴더의 W를 빠짐없이 넣습니다 (업무별 시간 계산에 씁니다).
 - 파일 변경(C)은 실제로 만들거나 고친 결과물이므로 실적의 가장 좋은 근거입니다. diff_excerpt와 파일 이름, 같은 날 그 폴더의 W 창 제목을 함께 보고 무엇을 바꿨는지 업무 언어로 요약합니다. 코드나 경로를 길게 옮기지 말고 필요하면 클래스나 파일 이름만 괄호로 붙입니다.
 - 한 일(done)을 먼저 씁니다. 기간 안의 파일 변경(C)은 하나도 빠짐없이 어느 업무의 한 일(done) 항목 refs에 넣습니다.
-- 창 제목은 무엇을 보고 작업했는지를 보여줄 뿐, 끝냈다는 증거가 아닙니다. 파일 변경(C)이 있으면 '추가', '수정', '작성'처럼 쓰고, 창 제목에 보이는 사실(예: 'MR !312 등록')은 그대로 쓸 수 있습니다. '완료', '해결', '종료' 같은 단정은 쓰지 않고 '~ 작업', '~ 검토', '~ 분석', '~ 진행'처럼 활동으로 씁니다.
+- 창 제목은 무엇을 보고 작업했는지를 보여줄 뿐, 끝냈다는 증거가 아닙니다. 파일 변경(C)이 있으면 '추가', '수정', '작성'처럼 쓰고, 창 제목에 보이는 사실(예: 'MR !312 등록')은 그대로 쓸 수 있습니다. '완료', '해결', '종료' 같은 단정은 쓰지 않고 '~ 작업', '~ 검토', '~ 분석'처럼 한 일로 씁니다. 끝났는지는 사용자가 보고서에서 직접 표시합니다.
 - 다음 계획(next): 기록에서 자연스럽게 이어지는 다음 단계(예: 올린 MR의 리뷰 반영, 검토 중인 작업의 적용)를 업무마다 1~2개까지 제안하고 근거 ref를 넣습니다. 이런 제안은 사용자에게 'AI 제안'으로 표시됩니다. 기록과 관계없는 새 일을 지어내지 않습니다.
 - 같은 일을 여러 날 했으면 한 항목으로 합치고 ref를 모두 넣습니다.
-- 요약(summary)에도 같은 규칙을 적용합니다. '완료', '해결' 대신 '진행', '작업'으로 씁니다.
+- 요약(summary)에도 같은 규칙을 적용합니다. '완료', '해결' 대신 '진행', '작업'으로 씁니다. 항목 끝에 '(진행 중)' 같은 상태를 붙이지 않습니다 (앱이 붙입니다).
 - 한국어 업무 보고 문체로, 한 항목은 한 줄로 간결하게 씁니다 (명사형 종결)."""
 
 @dataclass
 class Item:
     text: str
     refs: list[str]
-    # None | 'no_evidence' | 'unbacked_key' | 'unconfirmed_plan' | 'unconfirmed_done'
+    # None | 'no_evidence' | 'unbacked_key' | 'unconfirmed_plan'
     flag: Optional[str] = None
 
 
@@ -109,7 +108,7 @@ class Report:
     projects: list[ProjectBlock]
     offwork_s: float
     dropped_refs: int = 0
-    # 'unbacked_key' (an issue number found nowhere in the data) or 'unconfirmed_done' ("finished")
+    # 'unbacked_key': an issue number found nowhere in the data
     summary_flag: Optional[str] = None
     outside_s: dict[str, float] = field(default_factory=dict)  # time outside the work folders: 웹 / 소통 / 기타
 
@@ -121,10 +120,6 @@ def prompt(kind: str, ctx: Context) -> str:
 
 # Numbers that point at one piece of work: issue keys (GOV-1423) and merge / pull requests (!318, #42).
 WORK_KEY = re.compile(r"\b[A-Z][A-Z0-9]+-\d+\b|(?<![\w!#])[!#]\d+\b")
-
-
-def claims_done(text: str) -> bool:
-    return bool(DONE_WORDS.search(text))
 
 
 def unbacked_keys(text: str, refs: list[str], ref_text: dict[str, str]) -> list[str]:
@@ -154,8 +149,6 @@ def _items(raw: Any, valid: set[str], section: str,
             flag = "unconfirmed_plan"  # plans are not in the records: every one is the AI's suggestion
         elif not refs:
             flag = "no_evidence"
-        elif claims_done(text):
-            flag = "unconfirmed_done"
         items.append(Item(text, refs, flag))
     return items, dropped
 
@@ -193,16 +186,14 @@ def validate(kind: str, ctx: Context, raw: Any) -> Report:
             blocks.setdefault(name, ProjectBlock(name, ctx.folder_seconds.get(folder, 0.0), missing_from_ai=True))
     ordered = sorted(blocks.values(), key=lambda b: (b.missing_from_ai, b.project == "기타", -b.seconds))
     summary = str(raw.get("summary") or "").strip()
-    summary_flag = ("unbacked_key" if unbacked_keys(summary, list(ctx.ref_text), ctx.ref_text)
-                    else "unconfirmed_done" if claims_done(summary) else None)
+    summary_flag = "unbacked_key" if unbacked_keys(summary, list(ctx.ref_text), ctx.ref_text) else None
     return Report(kind, ctx.start.isoformat(), ctx.end.isoformat(), summary, ordered, ctx.offwork_s, dropped,
                   summary_flag, dict(ctx.outside_s))
 
 
 FLAG_TEXT = {"no_evidence": " (근거 없음 — 확인 필요)",
              "unbacked_key": " (번호가 근거에 없음 — 확인 필요)",
-             "unconfirmed_plan": " (AI 제안 — 확인 필요)",
-             "unconfirmed_done": " (완료 근거 없음 — 확인 필요)"}
+             "unconfirmed_plan": " (AI 제안 — 확인 필요)"}
 
 
 def render_text(report: Report) -> str:
@@ -223,7 +214,9 @@ def render_text(report: Report) -> str:
             if not items:
                 lines.append("- 없음")
             for it in items:
-                lines.append(f"- {it.text}{FLAG_TEXT.get(it.flag or '', '')}")
+                # What was done starts as 진행 중; the user marks it 완료 (a click on the saved report).
+                status = f" ({IN_PROGRESS})" if label == done_label else ""
+                lines.append(f"- {STATUS_SUFFIX.sub('', it.text)}{FLAG_TEXT.get(it.flag or '', '')}{status}")
         lines.append("")
     outside = [f"{name} {duration(sec)}" for name, sec in report.outside_s.items() if sec >= 60]
     if outside:

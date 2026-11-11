@@ -399,25 +399,46 @@ function reportInline(text) {
   return parts;
 }
 
+// "(진행 중)" / "(완료)" at the end of a line of what was done: the user's own call, one click away.
+const REPORT_STATUS = /\s*\((진행 중|완료)\)\s*$/;
+const statusChip = (status, index) => h("button", {
+  class: `status-chip${status === "완료" ? " done" : ""}`, title: "눌러서 완료 / 진행 중으로 바꾸기",
+  onclick: () => guarded(() => toggleReportStatus(index)) }, status);
+
+async function toggleReportStatus(index) {
+  if (!reportSaved || reportEditing) return;
+  const lines = reportSaved.body.split("\n");
+  const m = lines[index].match(REPORT_STATUS);
+  if (!m) return;
+  const next = m[1] === "완료" ? "진행 중" : "완료";
+  lines[index] = lines[index].slice(0, m.index) + ` (${next})`;
+  const r = await api("POST", "/api/reports", { kind: reportKind(), day: state.reportDay, body: lines.join("\n") });
+  reportSaved = r.saved;
+  renderReportView();
+  setReportState();
+  toast(next === "완료" ? "완료로 표시했습니다." : "진행 중으로 되돌렸습니다.");
+}
+
 // The saved text laid out: "# 제목", "## 업무", "[칸]", "- 항목", "(참고)" and plain lines.
 function reportView(text) {
   const out = [];
   let list = null;
-  for (const line of text.split("\n")) {
+  text.split("\n").forEach((line, index) => {
     const t = line.trim();
     if (/^[-*•] /.test(t)) {
       if (!list) out.push(list = h("ul"));
-      list.append(h("li", {}, reportInline(t.slice(2))));
-      continue;
+      const m = t.match(REPORT_STATUS);
+      list.append(h("li", {}, reportInline(m ? t.slice(2, m.index) : t.slice(2)), m ? statusChip(m[1], index) : null));
+      return;
     }
     list = null;
-    if (!t) continue;
+    if (!t) return;
     if (t.startsWith("## ")) out.push(h("h3", { class: "rv-group" }, reportInline(t.slice(3))));
     else if (t.startsWith("# ")) out.push(h("h2", { class: "rv-title" }, t.slice(2)));
     else if (/^\[[^\]]+\]$/.test(t)) out.push(h("div", { class: "rv-label" }, t.slice(1, -1)));
     else if (/^\(.*\)$/.test(t)) out.push(h("p", { class: "muted small-text" }, t.slice(1, -1)));
     else out.push(h("p", {}, reportInline(t)));
-  }
+  });
   return out;
 }
 
@@ -576,7 +597,7 @@ const factLegend = () => h("div", { class: "legend" },
 
 function renderReportSide(r) {
   const flagBadge = { no_evidence: badge("plain", "근거 없음"), unconfirmed_plan: badge("plain", "AI 제안"),
-    unconfirmed_done: badge("plain", "완료 확인 필요"), unbacked_key: badge("plain", "번호 확인 필요") };
+    unbacked_key: badge("plain", "번호 확인 필요") };
   const aiText = (text, flag) => h("div", { class: `ai-text${flag ? " flagged" : ""}` },
     badge("ai", "AI"), " ", text, flag ? [" ", flagBadge[flag].cloneNode(true)] : null);
   const [doneLabel, nextLabel] = r.kind === "daily" ? ["오늘 한 일", "다음 할 일"] : ["금주 실적", "차주 계획"];

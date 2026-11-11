@@ -77,8 +77,8 @@ entry-level 4 GB NVIDIA GPU + Intel integrated graphics), `evals/report_eval.py`
 
 - No run dropped a reference or left out a project (project-based prompt, before 2026-11-05).
 - 9B is the recommended model: it passed every case on the GPU run. 4B is
-  faster; when it calls unfinished work "완료", the honesty check marks the
-  sentence "완료 확인 필요" (below).
+  faster but more often calls unfinished work "완료" (the eval counts that as a
+  failure; finished or not is the user's call, below).
 - A PC without an NVIDIA or AMD card runs at about CPU speed; the report is
   generated in the background while the user keeps working.
 
@@ -187,10 +187,11 @@ one class plus a factory entry (`ai_local.LocalModel` is the second one).
   against all records its bullets cite, and the summary against all records
   sent, so a number taken from another piece of work (GOV-1418 on the
   count-query work of GOV-1423) is marked.
-- A 실적 bullet that says something is finished (완료, 해결, 종료, 마무리, …;
-  `ai_report.DONE_WORDS`) is shown as "완료 확인 필요": file changes and window
-  titles show work, not that it is done, and the prompt asks for "진행·작업"
-  wording. The summary is checked the same way.
+- Finished or not is the user's call (2026-11-11): file changes and window
+  titles show work, not that it is done. The prompt asks for what was done
+  without "완료·해결", and every 실적 / 오늘 한 일 line of the draft ends in
+  "(진행 중)". On the saved report the user clicks it to switch to "(완료)"
+  (and back), or edits the text. There is no word check in code any more.
 - Clicking a "파일 변경" (C) citation opens that change's diffs directly.
 - 차주 계획 is not in the records: the model may suggest one or two next
   steps per group that follow from them, and each is marked "AI 제안 — 확인
