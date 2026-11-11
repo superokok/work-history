@@ -6,7 +6,7 @@ else Claude Code), and checks each draft against
 facts we know from the scenario:
 
 - required facts must appear (anywhere in the items; the model names the groups),
-- over-claims and wrong issue numbers must not appear unflagged anywhere, group names included
+- over-claims and wrong issue numbers must not appear anywhere, group names included
   (e.g. "GOV-1423 완료" while it is not, GOV-1418 on this week's work),
 - a daily report must not contain other days' work,
 - references must all verify; flags and restored work folders are reported.
@@ -59,27 +59,21 @@ CASES = [
 ]
 
 
-WARNED = {"unbacked_key"}
-
-
-def evaluate(case: dict, report: ai_report.Report) -> tuple[list[str], list[str]]:
-    """(failures, caught): a forbidden claim in a line the app flagged ('unbacked_key', group names
-    included) is shown to the user with a warning, so it is counted as caught, not as a failure.
-    Claims of being finished are failures: the draft must leave 완료 to the user."""
-    failures, caught = [], []
-    items = [i for b in report.projects for i in b.items]
+def evaluate(case: dict, report: ai_report.Report) -> list[str]:
+    """Failures: a required fact missing, or a forbidden claim (another day's work, a wrong issue
+    number, "완료") anywhere in the summary, the group names or the lines."""
+    failures = []
+    items = [i for b in report.projects for i in b.done]
     text = "\n".join(i.text for i in items)
     for p in case["require"]:
         if not re.search(p, text):
             failures.append(f"missing: /{p}/")
     for p in case["forbid"]:
-        lines = ([(report.summary, report.summary_flag in WARNED)]
-                 + [(b.project, b.name_flag in WARNED) for b in report.projects if not b.missing_from_ai]
-                 + [(i.text, i.flag in WARNED) for i in items])
-        hits = [(text, flagged) for text, flagged in lines if re.search(p, text)]
-        for text, flagged in hits:
-            (caught if flagged else failures).append(f"forbidden /{p}/ -> '{re.search(p, text).group(0)}'")
-    return failures, caught
+        lines = [report.summary] + [b.project for b in report.projects if not b.missing_from_ai] + [i.text for i in items]
+        for line in lines:
+            if re.search(p, line):
+                failures.append(f"forbidden /{p}/ -> '{re.search(p, line).group(0)}'")
+    return failures
 
 
 def _generate_with_patience(model, case, ctx, args):
@@ -141,14 +135,13 @@ def main(argv=None) -> int:
                     all_ok = False
                     continue
                 report = ai_report.validate(case["kind"], ctx, raw)
-                failures, caught = evaluate(case, report)
-                flags = ([i.flag for b in report.projects for i in b.items if i.flag]
-                         + [f"name:{b.name_flag}" for b in report.projects if b.name_flag])
+                failures = evaluate(case, report)
+                flags = [i.flag for b in report.projects for i in b.done if i.flag]
                 row = {"case": case["name"], "run": run + 1, "seconds": round(time.time() - started, 1),
                        "input_tokens": usage.input_tokens, "output_tokens": usage.output_tokens,
                        "thinking_tokens": usage.thinking_tokens, "dropped_refs": report.dropped_refs,
                        "flags": flags, "restored": [b.project for b in report.projects if b.missing_from_ai],
-                       "failures": failures, "caught": caught, "text": ai_report.render_text(report)}
+                       "failures": failures, "text": ai_report.render_text(report)}
                 results.append(row)
                 ok = not failures and not report.dropped_refs and not row["restored"]
                 all_ok &= ok
@@ -157,8 +150,6 @@ def main(argv=None) -> int:
                       f"dropped {report.dropped_refs}, flags {flags}, restored {row['restored']}")
                 for f in failures:
                     print(f"       - {f}")
-                for c in caught:
-                    print(f"       ~ caught by the app's '완료 확인 필요' flag: {c}")
     finally:
         shutil.rmtree(work, ignore_errors=True)
 

@@ -118,31 +118,12 @@ class ValidationTests(AIDataTestCase):
         [block] = report.projects
         self.assertEqual([(i.text, i.refs, i.flag) for i in block.done],
                          [("리프레시 토큰 처리 분석", ["W1", "W2"], None), ("근거 없는 성과", [], "no_evidence")])
-        self.assertEqual([i.flag for i in block.next], ["unconfirmed_plan"])
         self.assertNotIn("예전 형식의 이슈 칸", ai_report.render_text(report))
+        self.assertNotIn("AI가 지어낸 계획", ai_report.render_text(report))  # plans are the user's to write
         self.assertNotIn("issues", json.dumps(ai_report.SCHEMA))
+        self.assertNotIn("next", json.dumps(ai_report.SCHEMA))
         self.assertEqual(report.dropped_refs, 2)
         self.assertEqual(block.seconds, 40 * 60)  # the work folder's time; 웹 adds none
-
-    def test_issue_numbers_must_come_from_the_cited_records(self):
-        f, w = self.folder, self.web  # W2's windows include "[GOV-1423] 토큰 정리 - Jira"
-        raw = {"summary": "GOV-1423 작업과 GOV-9999 검토", "projects": [
-            {"project": "GOV-1418 토큰 버그", "done": [
-                {"text": "GOV-1418 AuthService 수정", "refs": [f]},       # number from another piece of work
-                {"text": "GOV-1423 토큰 정리 (MR !77)", "refs": [w]},     # GOV-1423 yes, !77 no
-                {"text": "AuthService.java 정리", "refs": [f]}],
-             "next": [{"text": "gov-1423 리뷰 반영", "refs": [w]}]},       # case does not matter
-            {"project": "GOV-1423 정리", "done": [{"text": "정리", "refs": [w]}], "next": []}]}
-        report = ai_report.validate("weekly", self.context(), raw)
-        wrong, right = report.projects
-        self.assertEqual((wrong.name_flag, right.name_flag), ("unbacked_key", None))
-        self.assertEqual([i.flag for i in wrong.done], ["unbacked_key", "unbacked_key", None])
-        self.assertEqual([i.flag for i in wrong.next], ["unconfirmed_plan"])
-        self.assertEqual(report.summary_flag, "unbacked_key")  # GOV-9999 is nowhere in the data
-        self.assertEqual(ai_report.unbacked_keys("GOV-14 정리", [w], self.context().ref_text), ["GOV-14"])
-        text = ai_report.render_text(report)
-        self.assertIn("## GOV-1418 토큰 버그 (40분) (번호가 근거에 없음 — 확인 필요)", text)
-        self.assertIn("- GOV-1418 AuthService 수정 (번호가 근거에 없음 — 확인 필요) (진행 중)", text)
 
     def test_what_was_done_starts_in_progress(self):
         """Finished or not is the user's call: every line of what was done is 진행 중 in the draft."""
@@ -153,10 +134,18 @@ class ValidationTests(AIDataTestCase):
         ], "next": [{"text": "리뷰 반영", "refs": [f]}]}]}
         report = ai_report.validate("weekly", self.context(), raw)
         self.assertEqual([i.flag for i in report.projects[0].done], [None, None])  # no word checks
-        self.assertIsNone(report.summary_flag)
         text = ai_report.render_text(report)
         self.assertIn("[금주 실적]\n- 토큰 갱신 로직 수정 (진행 중)\n- AuthService 정리 (진행 중)", text)
-        self.assertIn("- 리뷰 반영 (AI 제안 — 확인 필요)\n", text)  # plans have no status
+        self.assertIn("[차주 계획]\n- \n", text)  # left empty for the user
+        self.assertNotIn("리뷰 반영", text)
+
+    def test_issue_numbers_are_not_checked(self):
+        """A wrong issue number is for the user to notice: no mark on the line, the name or the summary."""
+        raw = {"summary": "GOV-9999 검토", "projects": [{"project": "GOV-1418 토큰 버그", "done": [
+            {"text": "GOV-1418 AuthService 수정 (MR !77)", "refs": [self.folder]}]}]}
+        report = ai_report.validate("weekly", self.context(), raw)
+        self.assertEqual([i.flag for i in report.projects[0].done], [None])
+        self.assertNotIn("확인 필요", ai_report.render_text(report))
 
     def test_work_folder_left_out_by_ai_is_restored(self):
         ctx = self.context()
@@ -198,7 +187,7 @@ class ValidationTests(AIDataTestCase):
         self.assertIn("## Gov24 백엔드 (40분)", text)
         self.assertIn("[금주 실적]\n- 리프레시 토큰 처리 분석 (진행 중)\n- 근거 없는 성과 (근거 없음 — 확인 필요) (진행 중)",
                       text)
-        self.assertIn("- AI가 지어낸 계획 (AI 제안 — 확인 필요)", text)
+        self.assertIn("[차주 계획]\n- \n", text)
         self.assertIn("(작업 폴더 밖: 웹 20분)", text)  # 40 seconds of 소통 is left out
         self.assertIn("(보고서에서 제외한 업무 외 시간: 30분)", text)
         self.assertNotIn("W1", text)  # references stay out of the pasted text
@@ -439,10 +428,9 @@ class ChangesContextTests(unittest.TestCase):
         ctx = self.build(-6)
         ref = ctx.payload["changes"][0]["ref"]
         report = ai_report.validate("daily", ctx, {"summary": "", "projects": [
-            {"project": "Gov24 민원 API", "done": [{"text": "리프레시 토큰 재사용 차단", "refs": [ref]}],
-             "next": [{"text": "변경만 근거인 계획", "refs": [ref]}]}]})
+            {"project": "Gov24 민원 API", "done": [{"text": "리프레시 토큰 재사용 차단", "refs": [ref]}]}]})
         block = next(b for b in report.projects if b.project == "Gov24 민원 API")
-        self.assertEqual((block.done[0].flag, block.next[0].flag), (None, "unconfirmed_plan"))
+        self.assertIsNone(block.done[0].flag)
 
 
 if __name__ == "__main__":

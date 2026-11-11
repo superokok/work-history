@@ -67,8 +67,6 @@ class Context:
     # work folder -> its W and C refs, to notice a folder the draft leaves out
     folder_refs: dict[str, list[str]] = field(default_factory=dict)
     folder_seconds: dict[str, float] = field(default_factory=dict)
-    # ref -> the text the model saw for it (titles, paths, diff lines), to check issue numbers against.
-    ref_text: dict[str, str] = field(default_factory=dict)
     outside_s: dict[str, float] = field(default_factory=dict)  # 웹 / 소통 / 기타 -> seconds
     offwork_s: float = 0.0
 
@@ -312,9 +310,6 @@ def build(conn: sqlite3.Connection, start: date, end: date, repos_dir: Optional[
         if r.folder_id:
             ctx.work_seconds[ref] = r.seconds
             ctx.folder_refs.setdefault(r.name, []).append(ref)
-    for item in data["work"]:
-        name = item.get("folder") or item.get("kind")
-        ctx.ref_text[item["ref"]] = "\n".join([name] + [w["title"] for w in item["windows"]])
 
     if repos_dir is not None and changes:
         room = (PAYLOAD_CHARS - _size(data)) // DIFF_LINE_COST
@@ -331,6 +326,5 @@ def build(conn: sqlite3.Connection, start: date, end: date, repos_dir: Optional[
         ctx.sources[ref] = {"type": "change", "day": item["date"], "start": first["ts"],
                             "label": f"{item['folder']}: " + ", ".join(
                                 f["path"].rsplit("/", 1)[-1] for f in merged[:3])}
-        ctx.ref_text[ref] = "\n".join([item["folder"]] + item["files"] + item.get("diff_excerpt", []))
     ctx.payload = data
     return ctx

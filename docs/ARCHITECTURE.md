@@ -47,7 +47,7 @@ ai_agent.py   – "AI에게 묻기": read-only history tools + citation check
 mcp_server.py – the history tools over MCP (Claude Code, development only), consent-checked
 autostart.py  – start at logon (Startup shortcut), switched from the app
 ai_context.py – the exact payload for the AI with verifiable references (W/C), within a size budget
-ai_report.py  – report schema, prompt, reference and issue-number checks, rendering
+ai_report.py  – report schema, prompt, reference checks, rendering
 ai_service.py – settings, consent, run log, saved reports
    ▼
 service.py    – timeline, search, notes, projects
@@ -221,8 +221,8 @@ local timezone.
   its file path (a work-folder file named in the title) to copy. The timeline shows no project totals,
   project pickers or notes (the API still returns them).
 - **Next action:** each project may keep a user-written "다음 할 일" (API only
-  since 2026-11-05). The app never claims to know the next task: AI reports mark
-  every next step as an AI suggestion.
+  since 2026-11-05). The app never claims to know the next task: AI reports leave
+  차주 계획 / 다음 할 일 empty for the user.
 - **Tabs:** 대시보드 (2026-11-10), 타임라인, 보고서, 검색, 설정. The template daily review
   and the 이어서 하기 tab were removed (2026-11-05: the AI 업무일지 and "AI에게 묻기" cover
   them); work folders are in 설정.

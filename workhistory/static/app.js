@@ -425,6 +425,7 @@ function reportView(text) {
   let list = null;
   text.split("\n").forEach((line, index) => {
     const t = line.trim();
+    if (/^[-*•]$/.test(t)) return;  // an empty bullet: a plan line left for the user
     if (/^[-*•] /.test(t)) {
       if (!list) out.push(list = h("ul"));
       const m = t.match(REPORT_STATUS);
@@ -596,25 +597,22 @@ const factLegend = () => h("div", { class: "legend" },
   h("span", { class: "legend-ai" }, "AI가 쓴 문장"), h("span", { class: "legend-fact" }, "기록에 있는 사실 (누르면 열림)"));
 
 function renderReportSide(r) {
-  const flagBadge = { no_evidence: badge("plain", "근거 없음"), unconfirmed_plan: badge("plain", "AI 제안"),
-    unbacked_key: badge("plain", "번호 확인 필요") };
+  const flagBadge = { no_evidence: badge("plain", "근거 없음") };
   const aiText = (text, flag) => h("div", { class: `ai-text${flag ? " flagged" : ""}` },
     badge("ai", "AI"), " ", text, flag ? [" ", flagBadge[flag].cloneNode(true)] : null);
-  const [doneLabel, nextLabel] = r.kind === "daily" ? ["오늘 한 일", "다음 할 일"] : ["금주 실적", "차주 계획"];
+  const doneLabel = r.kind === "daily" ? "오늘 한 일" : "금주 실적";
   $("report-side").replaceChildren(
     h("div", { class: "card" },
       h("h2", {}, "AI 초안과 근거"),
       factLegend(),
-      r.summary ? aiText(r.summary, r.summary_flag) : null,
+      r.summary ? aiText(r.summary) : null,
       ...r.projects.map((p) => h("div", { class: "report-project" },
-        h("h3", {}, p.project, p.seconds ? h("span", { class: "meta" }, ` · ${dur(p.seconds)}`) : null,
-          p.name_flag ? [" ", flagBadge[p.name_flag].cloneNode(true)] : null),
-        p.missing_from_ai ? h("p", { class: "warning" }, "이 작업 폴더의 파일 변경이 AI 초안에 빠졌습니다. 직접 작성하세요.") : null,
-        ...[[doneLabel, p.done], [nextLabel, p.next]].filter(([, items]) => items.length).map(([label, items]) =>
-          h("div", {}, h("div", { class: "meta" }, label),
-            h("ul", { class: "report-items" }, items.map((it) => h("li", {},
-              aiText(it.text, it.flag),
-              it.refs.length ? factList(it.refs, r.sources) : null)))))))),
+        h("h3", {}, p.project, p.seconds ? h("span", { class: "meta" }, ` · ${dur(p.seconds)}`) : null),
+        p.missing_from_ai ? h("p", { class: "warning" }, "이 작업 폴더의 기록이 AI 초안에 빠졌습니다. 직접 작성하세요.") : null,
+        p.done.length ? h("div", {}, h("div", { class: "meta" }, doneLabel),
+          h("ul", { class: "report-items" }, p.done.map((it) => h("li", {},
+            aiText(it.text, it.flag),
+            it.refs.length ? factList(it.refs, r.sources) : null)))) : null))),
     h("p", { class: "muted small-text" },
       `AI 사용: 입력 ${r.usage.input_tokens.toLocaleString()} · 출력 ${(r.usage.output_tokens + r.usage.thinking_tokens).toLocaleString()} 토큰`,
       r.dropped_refs ? ` · 확인되지 않은 근거 ${r.dropped_refs}개는 제외했습니다` : ""),

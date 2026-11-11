@@ -105,7 +105,7 @@ def build(db: Database, repos_dir: Optional[Path], demo_mode: bool = False,
             ctx = ai_context.build(conn, start, end, repos_dir)
             labels = ai_report.SECTION_LABELS[kind]
             return {"kind": ai_report.KINDS[kind], "period": ctx.payload["period"],
-                    "sections": {"done": labels[0], "next": labels[1]},
+                    "sections": {"done": labels[0], "next (사용자가 직접 씀)": labels[1]},
                     "rules": ai_report.SYSTEM, "data": ctx.payload}
         return run(report, "get_report_data", {"kind": kind, "date": date})
 

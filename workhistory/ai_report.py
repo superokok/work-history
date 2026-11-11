@@ -1,4 +1,7 @@
-"""AI work report drafts (daily 업무일지 / weekly 주간보고) with verified citations."""
+"""AI work report drafts (daily 업무일지 / weekly 주간보고) with verified citations.
+
+The model writes what was done, from the records; plans (차주 계획 / 다음 할 일) are
+the user's to write, so that section is left empty in the draft."""
 
 import re
 from dataclasses import dataclass, field
@@ -40,10 +43,8 @@ SCHEMA = {
                     "project": {"type": "string",
                                 "description": "업무 이름: 기록에 나온 이슈 번호·저장소·주제로 짧게, 묶기 어려우면 '기타'"},
                     "done": {"type": "array", "items": _ITEM, "description": "한 일 (실적)"},
-                    "next": {"type": "array", "items": _ITEM,
-                             "description": "다음 계획: 기록에서 이어지는 다음 단계 제안"},
                 },
-                "required": ["project", "done", "next"],
+                "required": ["project", "done"],
             },
         },
     },
@@ -71,7 +72,7 @@ SYSTEM = """당신은 업무 보고서 초안을 작성합니다.
 - 파일 변경(C)은 실제로 만들거나 고친 결과물이므로 실적의 가장 좋은 근거입니다. diff_excerpt와 파일 이름, 같은 날 그 폴더의 W 창 제목을 함께 보고 무엇을 바꿨는지 업무 언어로 요약합니다. 코드나 경로를 길게 옮기지 말고 필요하면 클래스나 파일 이름만 괄호로 붙입니다.
 - 한 일(done)을 먼저 씁니다. 기간 안의 파일 변경(C)은 하나도 빠짐없이 어느 업무의 한 일(done) 항목 refs에 넣습니다.
 - 창 제목은 무엇을 보고 작업했는지를 보여줄 뿐, 끝냈다는 증거가 아닙니다. 파일 변경(C)이 있으면 '추가', '수정', '작성'처럼 쓰고, 창 제목에 보이는 사실(예: 'MR !312 등록')은 그대로 쓸 수 있습니다. '완료', '해결', '종료' 같은 단정은 쓰지 않고 '~ 작업', '~ 검토', '~ 분석'처럼 한 일로 씁니다. 끝났는지는 사용자가 보고서에서 직접 표시합니다.
-- 다음 계획(next): 기록에서 자연스럽게 이어지는 다음 단계(예: 올린 MR의 리뷰 반영, 검토 중인 작업의 적용)를 업무마다 1~2개까지 제안하고 근거 ref를 넣습니다. 이런 제안은 사용자에게 'AI 제안'으로 표시됩니다. 기록과 관계없는 새 일을 지어내지 않습니다.
+- 한 일만 씁니다. 다음 계획은 사용자가 직접 쓰므로 제안하지 않습니다.
 - 같은 일을 여러 날 했으면 한 항목으로 합치고 ref를 모두 넣습니다.
 - 요약(summary)에도 같은 규칙을 적용합니다. '완료', '해결' 대신 '진행', '작업'으로 씁니다. 항목 끝에 '(진행 중)' 같은 상태를 붙이지 않습니다 (앱이 붙입니다).
 - 한국어 업무 보고 문체로, 한 항목은 한 줄로 간결하게 씁니다 (명사형 종결)."""
@@ -80,8 +81,7 @@ SYSTEM = """당신은 업무 보고서 초안을 작성합니다.
 class Item:
     text: str
     refs: list[str]
-    # None | 'no_evidence' | 'unbacked_key' | 'unconfirmed_plan'
-    flag: Optional[str] = None
+    flag: Optional[str] = None  # 'no_evidence': none of its references is a record that was sent
 
 
 @dataclass
@@ -90,13 +90,7 @@ class ProjectBlock:
     project: str
     seconds: float
     done: list[Item] = field(default_factory=list)
-    next: list[Item] = field(default_factory=list)
     missing_from_ai: bool = False
-    name_flag: Optional[str] = None  # 'unbacked_key' when the name has an issue number its records lack
-
-    @property
-    def items(self) -> list[Item]:
-        return self.done + self.next
 
 
 @dataclass
@@ -108,8 +102,6 @@ class Report:
     projects: list[ProjectBlock]
     offwork_s: float
     dropped_refs: int = 0
-    # 'unbacked_key': an issue number found nowhere in the data
-    summary_flag: Optional[str] = None
     outside_s: dict[str, float] = field(default_factory=dict)  # time outside the work folders: 웹 / 소통 / 기타
 
 
@@ -118,20 +110,7 @@ def prompt(kind: str, ctx: Context) -> str:
             + dumps(ctx.payload))
 
 
-# Numbers that point at one piece of work: issue keys (GOV-1423) and merge / pull requests (!318, #42).
-WORK_KEY = re.compile(r"\b[A-Z][A-Z0-9]+-\d+\b|(?<![\w!#])[!#]\d+\b")
-
-
-def unbacked_keys(text: str, refs: list[str], ref_text: dict[str, str]) -> list[str]:
-    """Issue / MR numbers in `text` that none of the cited records mention: a number taken from
-    another piece of work (GOV-1418 on the count-query work of GOV-1423)."""
-    seen = "\n".join(ref_text.get(r, "") for r in refs)
-    return [k for k in dict.fromkeys(WORK_KEY.findall(text))
-            if not re.search(rf"(?<![\w-]){re.escape(k)}(?!\d)", seen, re.I)]
-
-
-def _items(raw: Any, valid: set[str], section: str,
-           ref_text: Optional[dict[str, str]] = None) -> tuple[list[Item], int]:
+def _items(raw: Any, valid: set[str]) -> tuple[list[Item], int]:
     items, dropped = [], 0
     for entry in raw if isinstance(raw, list) else []:
         if not isinstance(entry, dict):
@@ -142,14 +121,7 @@ def _items(raw: Any, valid: set[str], section: str,
         given = [str(r).strip() for r in entry.get("refs") or [] if str(r).strip()]
         refs = list(dict.fromkeys(r for r in given if r in valid))  # verified, de-duplicated
         dropped += len(given) - len([r for r in given if r in valid])
-        flag = None
-        if refs and unbacked_keys(text, refs, ref_text or {}):
-            flag = "unbacked_key"
-        elif section == "next":
-            flag = "unconfirmed_plan"  # plans are not in the records: every one is the AI's suggestion
-        elif not refs:
-            flag = "no_evidence"
-        items.append(Item(text, refs, flag))
+        items.append(Item(text, refs, None if refs else "no_evidence"))
     return items, dropped
 
 
@@ -164,21 +136,18 @@ def validate(kind: str, ctx: Context, raw: Any) -> Report:
             continue
         name = str(entry.get("project") or "기타").strip() or "기타"
         block = blocks.setdefault(name, ProjectBlock(name, 0.0))
-        for section in ("done", "next"):
-            items, d = _items(entry.get(section), ctx.refs, section, ctx.ref_text)
-            getattr(block, section).extend(items)
-            dropped += d
+        items, d = _items(entry.get("done"), ctx.refs)  # anything else the model sends is ignored
+        block.done.extend(items)
+        dropped += d
     # Time of a group = the work folder records it cites. A record cited by several groups (one folder,
     # two pieces of work) is shared evenly between them, so no time is counted twice.
-    cited = {name: list(dict.fromkeys(r for it in b.items for r in it.refs)) for name, b in blocks.items()}
+    cited = {name: list(dict.fromkeys(r for it in b.done for r in it.refs)) for name, b in blocks.items()}
     groups_of: dict[str, int] = {}
     for refs in cited.values():
         for r in refs:
             groups_of[r] = groups_of.get(r, 0) + 1
     for name, block in blocks.items():
         block.seconds = sum(ctx.work_seconds.get(r, 0.0) / groups_of[r] for r in cited[name])
-        if unbacked_keys(block.project, cited[name], ctx.ref_text):
-            block.name_flag = "unbacked_key"
     # Never let a work folder's time or file changes silently disappear from the report.
     for folder, refs in ctx.folder_refs.items():
         if not groups_of.keys() & set(refs):
@@ -186,14 +155,11 @@ def validate(kind: str, ctx: Context, raw: Any) -> Report:
             blocks.setdefault(name, ProjectBlock(name, ctx.folder_seconds.get(folder, 0.0), missing_from_ai=True))
     ordered = sorted(blocks.values(), key=lambda b: (b.missing_from_ai, b.project == "기타", -b.seconds))
     summary = str(raw.get("summary") or "").strip()
-    summary_flag = "unbacked_key" if unbacked_keys(summary, list(ctx.ref_text), ctx.ref_text) else None
     return Report(kind, ctx.start.isoformat(), ctx.end.isoformat(), summary, ordered, ctx.offwork_s, dropped,
-                  summary_flag, dict(ctx.outside_s))
+                  dict(ctx.outside_s))
 
 
-FLAG_TEXT = {"no_evidence": " (근거 없음 — 확인 필요)",
-             "unbacked_key": " (번호가 근거에 없음 — 확인 필요)",
-             "unconfirmed_plan": " (AI 제안 — 확인 필요)"}
+FLAG_TEXT = {"no_evidence": " (근거 없음 — 확인 필요)"}
 
 
 def render_text(report: Report) -> str:
@@ -202,22 +168,19 @@ def render_text(report: Report) -> str:
     period = report.start if report.start == report.end else f"{report.start} ~ {report.end}"
     lines = [f"# {KINDS[report.kind]} · {period}", ""]
     if report.summary:
-        lines += [f"요약: {report.summary}{FLAG_TEXT.get(report.summary_flag or '', '')}", ""]
+        lines += [f"요약: {report.summary}", ""]
     for b in report.projects:
-        lines.append(f"## {b.project}" + (f" ({duration(b.seconds)})" if b.seconds else "")
-                     + FLAG_TEXT.get(b.name_flag or "", ""))
+        lines.append(f"## {b.project}" + (f" ({duration(b.seconds)})" if b.seconds else ""))
         if b.missing_from_ai:
             lines += ["- (이 작업 폴더의 기록이 AI 초안에 빠졌습니다. 직접 작성하세요.)", ""]
             continue
-        for label, items in ((done_label, b.done), (next_label, b.next)):
-            lines.append(f"[{label}]")
-            if not items:
-                lines.append("- 없음")
-            for it in items:
-                # What was done starts as 진행 중; the user marks it 완료 (a click on the saved report).
-                status = f" ({IN_PROGRESS})" if label == done_label else ""
-                lines.append(f"- {STATUS_SUFFIX.sub('', it.text)}{FLAG_TEXT.get(it.flag or '', '')}{status}")
-        lines.append("")
+        lines.append(f"[{done_label}]")
+        if not b.done:
+            lines.append("- 없음")
+        for it in b.done:
+            # What was done starts as 진행 중; the user marks it 완료 (a click on the saved report).
+            lines.append(f"- {STATUS_SUFFIX.sub('', it.text)}{FLAG_TEXT.get(it.flag or '', '')} ({IN_PROGRESS})")
+        lines += [f"[{next_label}]", "- ", ""]  # the user's plans
     outside = [f"{name} {duration(sec)}" for name, sec in report.outside_s.items() if sec >= 60]
     if outside:
         lines += [f"(작업 폴더 밖: {' · '.join(outside)})"]
@@ -229,7 +192,7 @@ def render_text(report: Report) -> str:
 
 
 def _cited(report: Report) -> list[str]:
-    return list(dict.fromkeys(r for b in report.projects for it in b.items for r in it.refs))
+    return list(dict.fromkeys(r for b in report.projects for it in b.done for r in it.refs))
 
 
 def to_dict(report: Report, ctx: Context) -> dict:
@@ -238,11 +201,8 @@ def to_dict(report: Report, ctx: Context) -> dict:
         return {"text": it.text, "refs": it.refs, "flag": it.flag}
     return {
         "kind": report.kind, "start": report.start, "end": report.end, "summary": report.summary,
-        "summary_flag": report.summary_flag,
         "projects": [{"project": b.project, "seconds": b.seconds, "missing_from_ai": b.missing_from_ai,
-                      "name_flag": b.name_flag,
-                      "done": [item(i) for i in b.done], "next": [item(i) for i in b.next]}
-                     for b in report.projects],
+                      "done": [item(i) for i in b.done]} for b in report.projects],
         "offwork_s": report.offwork_s,
         "outside_s": report.outside_s,
         "dropped_refs": report.dropped_refs,

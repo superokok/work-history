@@ -7,9 +7,10 @@ supports.
 ## Features
 
 1. **Work report drafts** (daily 업무일지 / weekly 주간보고): per group of work,
-   금주 실적 / 차주 계획 (오늘 한 일 / 다음 할 일). Every bullet cites the records
-   it came from. (An 이슈 section was dropped on 2026-11-10: with no notes or
-   user-written titles it had nothing to come from.)
+   금주 실적 (오늘 한 일), every bullet citing the records it came from, and an
+   empty 차주 계획 (다음 할 일) section for the user to write (2026-11-11: plans
+   are the user's, the model no longer suggests them). (An 이슈 section was
+   dropped on 2026-11-10: it had nothing to come from.)
    There are no projects (2026-11-05): the model groups the records itself by
    issue key, MR, work folder or topic and names each group from the records
    ("기타" for the rest); a group's time is the work folder records it cites
@@ -181,21 +182,18 @@ one class plus a factory entry (`ai_local.LocalModel` is the second one).
 - Every reference the model returns is checked against the records that were
   actually sent; unknown references are dropped.
 - A bullet without a valid reference is shown as "근거 없음".
-- Issue and MR numbers (GOV-1423, !318, #42; `ai_report.WORK_KEY`) must appear
-  in the records the bullet cites (window titles, file names, diff lines);
-  otherwise the bullet is shown as "번호 확인 필요". A group name is checked
-  against all records its bullets cite, and the summary against all records
-  sent, so a number taken from another piece of work (GOV-1418 on the
-  count-query work of GOV-1423) is marked.
+- Issue and MR numbers are not checked in code (2026-11-11: the groups follow
+  the work folders, the user reads the draft, and the check also caught words
+  such as UTF-8). The prompt still asks for numbers that appear in the cited
+  records, and the eval treats a wrong number as a failure.
 - Finished or not is the user's call (2026-11-11): file changes and window
   titles show work, not that it is done. The prompt asks for what was done
   without "완료·해결", and every 실적 / 오늘 한 일 line of the draft ends in
   "(진행 중)". On the saved report the user clicks it to switch to "(완료)"
   (and back), or edits the text. There is no word check in code any more.
 - Clicking a "파일 변경" (C) citation opens that change's diffs directly.
-- 차주 계획 is not in the records: the model may suggest one or two next
-  steps per group that follow from them, and each is marked "AI 제안 — 확인
-  필요".
+- 차주 계획 / 다음 할 일 is not in the records, so the model does not write it:
+  each group gets an empty section (`- `) for the user.
 - Missing work: a work folder whose records (W) and file changes (C) in the
   period are not cited anywhere in the draft is added as "<folder> (작업 폴더)"
   with its time and "이 작업 폴더의 기록이 AI 초안에 빠졌습니다".
