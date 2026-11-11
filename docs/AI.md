@@ -14,8 +14,10 @@ supports.
    There are no projects (2026-11-05): the model groups the records itself by
    issue key, MR, work folder or topic and names each group from the records
    ("기타" for the rest); a group's time is the work folder records it cites
-   (a record cited by several groups is shared evenly; 웹/소통/기타 records add
-   no time and are listed under the report as "작업 폴더 밖").
+   (a record cited by several groups is shared day by day: a day goes to the
+   groups that cite a file change of that folder on that day, a day without
+   one evenly; 웹/소통/기타 records add no time and are listed under the report
+   as "작업 폴더 밖").
 2. **Ask your history** ("지난주 로그인 버그 어디까지 했지?"): an agent that
    searches the local history with tools and answers with citations.
 
@@ -155,9 +157,13 @@ one class plus a factory entry (`ai_local.LocalModel` is the second one).
 - Only work data is sent: recorded file changes (C: files, line counts and
   a bounded excerpt of changed lines; snapshots of one folder less than 30
   minutes apart go as one change, from the first old version to the last new
-  one), and work records (W, `work.py`): each work folder's time on each day,
-  or the day's 웹 / 소통 / 기타 time, with spans of the day and the window
-  titles that took the most time. Projects, next actions and notes are not sent to the report
+  one), and work records (W, `work.py`). A day: each work folder's time that
+  day, or the day's 웹 / 소통 / 기타 time, with spans of the day and the window
+  titles that took the most time. A week (2026-11-11): one record per work
+  folder (and 웹 / 소통 / 기타) over the whole week, with its minutes per day
+  ("월 11/2 244분, 화 11/3 207분 …") and the window titles of the week, so a
+  folder worked on every day is sent once. The demo week went from 12,960 to
+  8,616 characters, and the fictional busy week now fits without trimming. Projects, next actions and notes are not sent to the report
   (2026-11-05: the app has no screens for them any more). Browser addresses
   are not recorded at all.
   "업무 외" time is sent as a total only.

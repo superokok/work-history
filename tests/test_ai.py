@@ -424,6 +424,28 @@ class ChangesContextTests(unittest.TestCase):
         self.assertEqual([(b.project, b.missing_from_ai) for b in report.projects],
                          [("gov24-minwon-api (작업 폴더)", True)])
 
+    def test_a_weeks_folder_time_is_shared_by_the_days_each_work_changed_files(self):
+        """One folder, two pieces of work in one week: each gets the days it changed files on."""
+        monday = self.monday - timedelta(days=7)
+        with self.db.connect() as conn:
+            ctx = ai_context.build(conn, monday, monday + timedelta(days=6), self.repos)
+        [w] = [x["ref"] for x in ctx.payload["work"] if x.get("folder") == "gov24-minwon-api"]
+        changes = {c["ref"]: c["date"] for c in ctx.payload["changes"] if c["folder"] == "gov24-minwon-api"}
+        token_days = {(monday + timedelta(days=i)).isoformat() for i in (0, 1)}   # Mon, Tue: the token bug
+        token = [r for r, d in changes.items() if d in token_days]
+        index = [r for r, d in changes.items() if d not in token_days]           # later: the index work
+        raw = {"summary": "", "projects": [
+            {"project": "토큰 버그", "done": [{"text": "토큰", "refs": [w, *token]}]},
+            {"project": "조회 성능", "done": [{"text": "인덱스", "refs": [w, *index]}]}]}
+        report = ai_report.validate("weekly", ctx, raw)
+        got = {b.project: b.seconds for b in report.projects if not b.missing_from_ai}
+        days = ctx.work_days[w]
+        index_days = {changes[r] for r in index}
+        neither = sum(sec for d, sec in days.items() if d not in token_days | index_days)
+        self.assertAlmostEqual(got["토큰 버그"], sum(days.get(d, 0) for d in token_days) + neither / 2)
+        self.assertAlmostEqual(got["조회 성능"], sum(days.get(d, 0) for d in index_days) + neither / 2)
+        self.assertAlmostEqual(sum(got.values()), ctx.work_seconds[w])  # nothing counted twice
+
     def test_change_refs_count_as_evidence(self):
         ctx = self.build(-6)
         ref = ctx.payload["changes"][0]["ref"]
@@ -483,10 +505,19 @@ class SplitWeekTests(unittest.TestCase):
         out = self.generate(model)
         self.assertEqual(len(model.calls), 1)
         self.assertEqual(out["notes"], [])
+        # A week is sent as one record per work folder (and 웹/소통/기타), with its minutes per day.
+        work = json.loads(model.calls[0][1][model.calls[0][1].index("{"):])["work"]
+        names = [w.get("folder") or w.get("kind") for w in work]
+        self.assertEqual(len(names), len(set(names)))
+        api = next(w for w in work if w.get("folder") == "gov24-minwon-api")
+        self.assertNotIn("date", api)
+        self.assertRegex(api["days"], r"^월 \d+/\d+ \d+분, 화 ")
+        per_day = [int(m) for m in re.findall(r"(\d+)분", api["days"])]
+        self.assertLessEqual(abs(api["minutes"] - sum(per_day)), len(per_day))  # the days add up (rounding)
 
     def test_a_big_week_is_written_day_by_day_and_merged(self):
         model = EchoModel()
-        with mock.patch.object(ai_context, "PAYLOAD_CHARS", 9000):  # the whole week no longer fits
+        with mock.patch.object(ai_context, "PAYLOAD_CHARS", 3000):  # the whole week no longer fits
             out = self.generate(model)
             with self.db.connect() as conn:
                 preview = ai_service.preview(conn, "weekly", self.last_monday, self.repos)

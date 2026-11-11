@@ -84,6 +84,7 @@ class Record:
     seconds: float = 0.0
     spans: list[list[float]] = field(default_factory=list)  # [start, end] times of day it was worked on
     windows: dict[tuple[str, str], float] = field(default_factory=lambda: defaultdict(float))  # (app, title)
+    per_day: dict[date, float] = field(default_factory=dict)  # a record over several days: seconds per day
 
     @property
     def key(self) -> str:
@@ -91,6 +92,26 @@ class Record:
 
     def top_windows(self, n: int) -> list[tuple[tuple[str, str], float]]:
         return sorted(self.windows.items(), key=lambda kv: -kv[1])[:n]
+
+
+def over_period(days: list[list[Record]]) -> list[Record]:
+    """The records of several days as one per work folder (and 웹 / 소통 / 기타): time added up,
+    seconds per day kept, window titles added up over the days. `day` is the day with the most of it."""
+    by_key: dict[str, Record] = {}
+    for recs in days:
+        for r in recs:
+            c = by_key.get(r.key)
+            if c is None:
+                c = by_key[r.key] = Record(r.day, r.name, r.folder_id)
+            c.seconds += r.seconds
+            c.spans += r.spans
+            c.per_day[r.day] = c.per_day.get(r.day, 0.0) + r.seconds
+            for w, sec in r.windows.items():
+                c.windows[w] += sec
+    for c in by_key.values():
+        c.day = max(c.per_day, key=c.per_day.get)
+    folders = sorted((c for c in by_key.values() if c.folder_id), key=lambda c: -c.seconds)
+    return folders + [by_key[n] for n in OUTSIDE if n in by_key]
 
 
 def outside_name(app: str) -> str:

@@ -54,7 +54,7 @@ SCHEMA = {
 
 SYSTEM = """당신은 업무 보고서 초안을 작성합니다.
 입력 JSON은 이 사람의 업무 기록입니다.
-- work(W): 하루 동안의 활동 시간. folder가 있으면 그 작업 폴더의 파일을 다룬 시간(창 제목으로 확인한 것), kind가 있으면 작업 폴더 밖의 활동(웹·소통·기타)입니다. times는 그 일을 한 시간대, windows는 오래 본 창입니다.
+- work(W): 활동 시간. folder가 있으면 그 작업 폴더의 파일을 다룬 시간(창 제목으로 확인한 것), kind가 있으면 작업 폴더 밖의 활동(웹·소통·기타)입니다. 하루치 자료에서는 date와 times(그 일을 한 시간대)가, 여러 날 자료에서는 기간 합계와 days(요일별 분)가 있습니다. windows는 오래 본 창입니다.
 - changes(C): 작업 폴더에서 기록한 파일 변경. C 하나는 한 작업 폴더에서 이어서 바꾼 것을 묶은 것입니다 (time이 '09:10-11:40'처럼 범위일 수 있음).
 프로젝트 분류나 메모는 없습니다. 일을 묶는 것은 당신이 합니다.
 
@@ -74,7 +74,7 @@ SYSTEM = """당신은 업무 보고서 초안을 작성합니다.
 - 한 일(done)을 먼저 씁니다. 기간 안의 파일 변경(C)은 하나도 빠짐없이 어느 업무의 한 일(done) 항목 refs에 넣습니다.
 - 창 제목은 무엇을 보고 작업했는지를 보여줄 뿐, 끝냈다는 증거가 아닙니다. 파일 변경(C)이 있으면 '추가', '수정', '작성'처럼 쓰고, 창 제목에 보이는 사실(예: 'MR !312 등록')은 그대로 쓸 수 있습니다. '완료', '해결', '종료' 같은 단정은 쓰지 않고 '~ 작업', '~ 검토', '~ 분석'처럼 한 일로 씁니다. 끝났는지는 사용자가 보고서에서 직접 표시합니다.
 - 한 일만 씁니다. 다음 계획은 사용자가 직접 쓰므로 제안하지 않습니다.
-- 같은 일을 여러 날 했으면 한 항목으로 합치고 ref를 모두 넣습니다.
+- 같은 일을 여러 날 했으면 한 항목으로 합치고 ref를 모두 넣습니다. 여러 날 자료에서는 파일 변경(C)의 date로 어느 날 무엇을 했는지 알 수 있습니다.
 - 요약(summary)에도 같은 규칙을 적용합니다. '완료', '해결' 대신 '진행', '작업'으로 씁니다. 항목 끝에 '(진행 중)' 같은 상태를 붙이지 않습니다 (앱이 붙입니다).
 - 한국어 업무 보고 문체로, 한 항목은 한 줄로 간결하게 씁니다 (명사형 종결)."""
 
@@ -167,18 +167,34 @@ def validate(kind: str, ctx: Context, raw: Any) -> Report:
         items, d = _items(entry.get("done"), ctx.refs)  # anything else the model sends is ignored
         block.done.extend(items)
         dropped += d
-    # Time of a group = the work folder records it cites. A record cited by several groups (one folder,
-    # two pieces of work) is shared evenly between them, so no time is counted twice.
+    # Time of a group = the work folder records it cites, never counted twice. A record cited by
+    # several groups (one folder, two pieces of work) is shared day by day: a day goes to the groups
+    # that cite a file change of that folder on that day, a day without such evidence evenly.
     cited = {name: list(dict.fromkeys(r for it in b.done for r in it.refs)) for name, b in blocks.items()}
-    groups_of: dict[str, int] = {}
-    for refs in cited.values():
+    groups_of: dict[str, list[str]] = {}
+    for name, refs in cited.items():
         for r in refs:
-            groups_of[r] = groups_of.get(r, 0) + 1
+            groups_of.setdefault(r, []).append(name)
+    changed_on = {name: {(ctx.ref_folder.get(r), ctx.sources[r]["day"]) for r in refs
+                         if r.startswith("C") and r in ctx.sources}
+                  for name, refs in cited.items()}
+    seconds = {name: 0.0 for name in blocks}
+    for r, names in groups_of.items():
+        if r not in ctx.work_seconds:
+            continue
+        if len(names) == 1:
+            seconds[names[0]] += ctx.work_seconds[r]
+            continue
+        folder = ctx.ref_folder.get(r)
+        for day, sec in ctx.work_days.get(r, {}).items():
+            share = [n for n in names if (folder, day) in changed_on[n]] or names
+            for n in share:
+                seconds[n] += sec / len(share)
     for name, block in blocks.items():
-        block.seconds = sum(ctx.work_seconds.get(r, 0.0) / groups_of[r] for r in cited[name])
+        block.seconds = seconds[name]
     # Never let a work folder's time or file changes silently disappear from the report.
     for folder, refs in ctx.folder_refs.items():
-        if not groups_of.keys() & set(refs):
+        if not set(groups_of) & set(refs):
             name = f"{folder} (작업 폴더)"
             blocks.setdefault(name, ProjectBlock(name, ctx.folder_seconds.get(folder, 0.0), missing_from_ai=True))
     ordered = sorted(blocks.values(), key=lambda b: (b.missing_from_ai, b.project == "기타", -b.seconds))

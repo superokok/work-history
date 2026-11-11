@@ -64,6 +64,10 @@ class Context:
     sources: dict[str, dict] = field(default_factory=dict)
     # W ref of a work folder -> its seconds (records of 웹/소통/기타 add no time to a group of work)
     work_seconds: dict[str, float] = field(default_factory=dict)
+    # W ref of a work folder -> {iso day: seconds}; ref (W or C) -> its work folder. They let a week's
+    # folder time be shared between two pieces of work by the days each one changed files.
+    work_days: dict[str, dict[str, float]] = field(default_factory=dict)
+    ref_folder: dict[str, str] = field(default_factory=dict)
     # work folder -> its W and C refs, to notice a folder the draft leaves out
     folder_refs: dict[str, list[str]] = field(default_factory=dict)
     folder_seconds: dict[str, float] = field(default_factory=dict)
@@ -120,12 +124,15 @@ def _excerpt(repo, path: str, old_blob: Optional[str], new_blob: Optional[str], 
 
 def _records(conn: sqlite3.Connection, ctx: Context, start: date, end: date,
              first_ref: int = 1) -> list[tuple[str, work.Record]]:
-    """(W ref, record) for every work record of the period, numbered from `first_ref`; trimmed later."""
-    out = []
+    """(W ref, record), numbered from `first_ref`; trimmed later. One day: a record per work
+    folder (and 웹/소통/기타). Several days (a week): one per work folder over the whole period,
+    with its minutes per day, so a folder worked on every day is sent once, not five times."""
+    days = []
     for _day, recs, offwork in work.period(conn, start, end):
         ctx.offwork_s += offwork
-        for r in recs:
-            out.append((f"W{first_ref + len(out)}", r))
+        days.append(recs)
+    records = days[0] if len(days) == 1 else work.over_period(days)
+    out = [(f"W{first_ref + i}", r) for i, r in enumerate(records)]
     ctx.next_ref = first_ref + len(out)
     return out
 
@@ -136,12 +143,16 @@ def _spans(r: work.Record) -> str:
     return ", ".join(shown) + (f" 외 {more}번" if more > 0 else "")
 
 
+_WEEKDAYS = "월화수목금토일"
+
+
 def _record_item(ref: str, r: work.Record, windows: int) -> dict:
+    when = ({"days": ", ".join(f"{_WEEKDAYS[d.weekday()]} {d.month}/{d.day} {round(sec / 60)}분"
+                               for d, sec in sorted(r.per_day.items()) if sec >= 60)}
+            if r.per_day else {"date": r.day.isoformat(), "times": _spans(r)})
     return {
-        "ref": ref, "date": r.day.isoformat(),
-        **({"folder": r.name} if r.folder_id else {"kind": r.name}),
-        "minutes": round(r.seconds / 60),
-        "times": _spans(r),
+        "ref": ref, **({"folder": r.name} if r.folder_id else {"kind": r.name}),
+        "minutes": round(r.seconds / 60), **when,
         "windows": [{"app": app, "title": redact(title), "minutes": round(sec / 60)}
                     for (app, title), sec in r.top_windows(windows) if sec >= MIN_WINDOW_S],
     }
@@ -328,6 +339,8 @@ def build(conn: sqlite3.Connection, start: date, end: date, repos_dir: Optional[
                             "start": r.spans[0][0], "end": r.spans[-1][1]}
         if r.folder_id:
             ctx.work_seconds[ref] = r.seconds
+            ctx.work_days[ref] = {d.isoformat(): sec for d, sec in (r.per_day or {r.day: r.seconds}).items()}
+            ctx.ref_folder[ref] = r.name
             ctx.folder_refs.setdefault(r.name, []).append(ref)
 
     if repos_dir is not None and changes:
@@ -344,6 +357,7 @@ def build(conn: sqlite3.Connection, start: date, end: date, repos_dir: Optional[
         ref, first = item["ref"], burst[0]
         ctx.refs.add(ref)
         ctx.folder_refs.setdefault(item["folder"], []).append(ref)
+        ctx.ref_folder[ref] = item["folder"]
         ctx.sources[ref] = {"type": "change", "day": item["date"], "start": first["ts"],
                             "label": f"{item['folder']}: " + ", ".join(
                                 f["path"].rsplit("/", 1)[-1] for f in merged[:3])}
@@ -361,6 +375,8 @@ def merge(parts: list[Context], start: date, end: date) -> Context:
         out.refs |= c.refs
         out.sources.update(c.sources)
         out.work_seconds.update(c.work_seconds)
+        out.work_days.update(c.work_days)
+        out.ref_folder.update(c.ref_folder)
         for folder, refs in c.folder_refs.items():
             out.folder_refs.setdefault(folder, []).extend(refs)
         for folder, sec in c.folder_seconds.items():
