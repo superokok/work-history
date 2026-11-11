@@ -354,9 +354,13 @@ $("folder-scan").addEventListener("click", () => guarded(async () => {
 }));
 
 // ------------------------------------------------------------------ AI reports
+// A report is shown read-only first; "작성" / "수정" opens the editor, and only "저장" or "취소"
+// leaves it. While editing, the period cannot change, so unsaved text is never lost by a click.
 const reportKind = () => document.querySelector('input[name="report-kind"]:checked').value;
 let reportSaved = null;
 let reportBusy = false;
+let reportEditing = false;
+let reportLoaded = ""; // "kind|day" shown (and being edited)
 
 function reportPeriod(kind, day) {
   if (kind === "daily") return [day, day];
@@ -365,15 +369,16 @@ function reportPeriod(kind, day) {
   return [monday, shiftDay(monday, 6)];
 }
 
+const reportDirty = () => reportEditing && $("report-body").value !== (reportSaved ? reportSaved.body : "");
+
 function setReportState() {
   const el = $("report-state");
-  const body = $("report-body").value;
-  if (reportSaved && body === reportSaved.body) {
+  if (reportEditing) {
+    el.className = "badge plain";
+    el.textContent = reportDirty() ? "편집 중 · 저장하지 않음" : "편집 중";
+  } else if (reportSaved) {
     el.className = "badge user";
     el.textContent = `저장됨 · ${new Date(reportSaved.updated_at * 1000).toLocaleString("ko-KR")}`;
-  } else if (body.trim()) {
-    el.className = "badge plain";
-    el.textContent = "저장하지 않음";
   } else {
     el.className = "badge";
     el.textContent = "";
@@ -381,29 +386,93 @@ function setReportState() {
 }
 $("report-body").addEventListener("input", () => setReportState());
 
-let reportLoaded = ""; // "kind|day" shown in the editor
+// The marks the app puts on draft lines ("(AI 제안 — 확인 필요)") become badges in the view.
+const REPORT_MARK = /\s*\(([^()]*?) — 확인 필요\)/g;
+function reportInline(text) {
+  const parts = [];
+  let last = 0;
+  for (const m of text.matchAll(REPORT_MARK)) {
+    parts.push(text.slice(last, m.index), badge("plain", `${m[1]} · 확인 필요`));
+    last = m.index + m[0].length;
+  }
+  parts.push(text.slice(last));
+  return parts;
+}
+
+// The saved text laid out: "# 제목", "## 업무", "[칸]", "- 항목", "(참고)" and plain lines.
+function reportView(text) {
+  const out = [];
+  let list = null;
+  for (const line of text.split("\n")) {
+    const t = line.trim();
+    if (/^[-*•] /.test(t)) {
+      if (!list) out.push(list = h("ul"));
+      list.append(h("li", {}, reportInline(t.slice(2))));
+      continue;
+    }
+    list = null;
+    if (!t) continue;
+    if (t.startsWith("## ")) out.push(h("h3", { class: "rv-group" }, reportInline(t.slice(3))));
+    else if (t.startsWith("# ")) out.push(h("h2", { class: "rv-title" }, t.slice(2)));
+    else if (/^\[[^\]]+\]$/.test(t)) out.push(h("div", { class: "rv-label" }, t.slice(1, -1)));
+    else if (/^\(.*\)$/.test(t)) out.push(h("p", { class: "muted small-text" }, t.slice(1, -1)));
+    else out.push(h("p", {}, reportInline(t)));
+  }
+  return out;
+}
+
+function renderReportView() {
+  const [start, end] = reportPeriod(reportKind(), state.reportDay);
+  const what = reportKind() === "daily" ? "업무일지" : "주간보고";
+  $("report-view").replaceChildren(...(reportSaved && reportSaved.body.trim()
+    ? reportView(reportSaved.body)
+    : [h("div", { class: "report-empty muted" },
+        h("p", {}, `${start === end ? start : `${start} ~ ${end}`} ${what}가 아직 없습니다.`),
+        h("button", { class: "primary", onclick: () => setReportEditing(true) }, "작성하기"))]));
+}
+
+function setReportEditing(on) {
+  reportEditing = on;
+  if (on) {
+    $("report-body").value = reportSaved ? reportSaved.body : "";
+    $("report-preview-box").hidden = true;
+  } else {
+    $("report-side").replaceChildren();
+  }
+  $("report-view").hidden = on;
+  $("report-editor").hidden = !on;
+  $("report-view-actions").hidden = on;
+  $("report-edit-actions").hidden = !on;
+  $("report-edit").textContent = reportSaved ? "수정" : "작성";
+  $("report-copy").disabled = !reportSaved;
+  // The period is fixed while editing.
+  for (const el of [$("report-prev"), $("report-next"), $("report-day"),
+                    ...document.querySelectorAll('input[name="report-kind"]')]) {
+    el.disabled = on;
+    el.title = on ? "편집 중에는 기간을 바꿀 수 없습니다. 저장하거나 취소하세요." : "";
+  }
+  if (on) $("report-body").focus();
+  else renderReportView();
+  setReportState();
+}
 
 async function loadReport() {
   const kind = reportKind(), day = state.reportDay;
   $("report-day").value = day;
   const [start, end] = reportPeriod(kind, day);
   $("report-period").textContent = start === end ? start : `${start} ~ ${end}`;
-  $("report-preview-box").hidden = true;
   const [r, ai] = await Promise.all([
     guarded(() => api("GET", `/api/reports?kind=${kind}&date=${day}`)),
     guarded(() => api("GET", "/api/ai/settings")),
   ]);
   if (!r || kind !== reportKind() || day !== state.reportDay) return;
-  // Coming back to the same report (e.g. after opening a cited record) keeps unsaved edits and the draft's evidence.
-  const unsaved = $("report-body").value !== (reportSaved ? reportSaved.body : "");
   reportSaved = r.saved;
-  if (reportLoaded !== `${kind}|${day}` || !unsaved) {
-    reportLoaded = `${kind}|${day}`;
-    $("report-body").value = r.saved ? r.saved.body : "";
-    $("report-side").replaceChildren();
-  }
-  setReportState();
   renderReportNotice(ai);
+  // Coming back to the report being edited (e.g. after opening a cited record) keeps the editor,
+  // its text and the draft's evidence.
+  if (reportEditing && reportLoaded === `${kind}|${day}`) return setReportState();
+  reportLoaded = `${kind}|${day}`;
+  setReportEditing(false);
 }
 
 function renderReportNotice(ai) {
@@ -426,6 +495,14 @@ $("report-prev").addEventListener("click", () => setReportDay(shiftDay(state.rep
 $("report-next").addEventListener("click", () => setReportDay(shiftDay(state.reportDay, reportKind() === "daily" ? 1 : 7)));
 document.querySelectorAll('input[name="report-kind"]').forEach((el) => el.addEventListener("change", loadReport));
 
+$("report-edit").addEventListener("click", () => setReportEditing(true));
+$("report-cancel").addEventListener("click", () => {
+  if (reportBusy) return;
+  if (reportDirty() && !confirm("저장하지 않은 내용을 버리고 저장된 보고서로 돌아갈까요?")) return;
+  setReportEditing(false);
+});
+window.addEventListener("beforeunload", (e) => { if (reportDirty()) e.preventDefault(); });
+
 $("report-preview").addEventListener("click", () => guarded(async () => {
   const p = await api("GET", `/api/ai/preview?kind=${reportKind()}&date=${state.reportDay}`);
   $("report-preview-text").textContent = `[지시문]\n${p.system}\n\n[업무 기록]\n${p.prompt}`;
@@ -439,7 +516,7 @@ $("report-generate").addEventListener("click", () => {
   if (body.trim() && !confirm("편집 중인 내용을 AI 초안으로 바꿉니다. 저장된 보고서는 '저장'을 누르기 전까지 그대로입니다.")) return;
   guarded(async () => {
     reportBusy = true;
-    $("report-generate").disabled = true;
+    for (const id of ["report-generate", "report-save", "report-cancel"]) $(id).disabled = true;
     $("report-generate").textContent = "AI가 작성 중… (1~3분)";
     try {
       const r = await api("POST", "/api/ai/report", { kind: reportKind(), day: state.reportDay });
@@ -448,7 +525,7 @@ $("report-generate").addEventListener("click", () => {
       renderReportSide(r);
     } finally {
       reportBusy = false;
-      $("report-generate").disabled = false;
+      for (const id of ["report-generate", "report-save", "report-cancel"]) $(id).disabled = false;
       $("report-generate").textContent = "AI 초안 만들기";
     }
   });
@@ -524,14 +601,16 @@ function renderReportSide(r) {
 }
 
 $("report-save").addEventListener("click", () => guarded(async () => {
+  if (reportBusy) return;
   const r = await api("POST", "/api/reports", { kind: reportKind(), day: state.reportDay, body: $("report-body").value });
   reportSaved = r.saved;
-  setReportState();
+  setReportEditing(false);
   toast(r.saved ? "보고서를 저장했습니다." : "빈 보고서라 저장된 내용을 지웠습니다.");
 }));
 
 $("report-copy").addEventListener("click", () => guarded(async () => {
-  await navigator.clipboard.writeText($("report-body").value);
+  if (!reportSaved) return;
+  await navigator.clipboard.writeText(reportSaved.body);
   toast("클립보드에 복사했습니다.");
 }));
 
