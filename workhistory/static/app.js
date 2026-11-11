@@ -539,20 +539,38 @@ $("report-generate").addEventListener("click", () => {
   guarded(async () => {
     reportBusy = true;
     for (const id of ["report-generate", "report-save", "report-cancel"]) $(id).disabled = true;
-    $("report-generate").textContent = reportKind() === "weekly"
-      ? "AI가 작성 중… (기록이 많으면 하루씩 정리해 합쳐서 더 걸립니다)" : "AI가 작성 중… (1~3분)";
+    $("report-generate").textContent = "AI가 작성 중…";
+    $("report-stop").disabled = false;
+    $("report-stop").textContent = "멈추기";
+    // A report too big for one request goes in several: show which one is being written, and let
+    // the user stop it before the next one (a single request cannot be stopped midway).
+    const poll = setInterval(() => api("GET", "/api/ai/report/progress").then((p) => {
+      if (!reportBusy || !p.running || p.total < 2) return;
+      $("report-stop").hidden = false;
+      $("report-generate").textContent = p.step >= p.total
+        ? `AI가 작성 중… (요약 ${p.step}/${p.total})`
+        : `AI가 작성 중… (${p.step}/${p.total}, 기록이 많아 나눠 보냄)`;
+    }).catch(() => {}), 1500);
     try {
       const r = await api("POST", "/api/ai/report", { kind: reportKind(), day: state.reportDay });
       $("report-body").value = r.text;
       setReportState();
       renderReportSide(r);
     } finally {
+      clearInterval(poll);
       reportBusy = false;
       for (const id of ["report-generate", "report-save", "report-cancel"]) $(id).disabled = false;
       $("report-generate").textContent = "AI 초안 만들기";
+      $("report-stop").hidden = true;
     }
   });
 });
+
+$("report-stop").addEventListener("click", () => guarded(async () => {
+  $("report-stop").disabled = true;
+  $("report-stop").textContent = "멈추는 중… (지금 보낸 요청이 끝나면)";
+  await api("POST", "/api/ai/report/cancel");
+}));
 
 // ---- Citations. What the AI wrote and what is in the records must never look alike:
 // AI text sits in a tinted "AI" box; records show their own content (the note, the files, the work folder).

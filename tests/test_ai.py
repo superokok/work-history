@@ -456,31 +456,43 @@ class ChangesContextTests(unittest.TestCase):
 
 
 class EchoModel:
-    """Cites every reference it was sent: one group per daily draft, everything merged for the week."""
+    """Cites every reference it was sent: one group per work folder (and one for 웹/소통/기타)."""
 
     name = "echo"
 
-    def __init__(self):
+    def __init__(self, during=None, join_last=False):
         self.calls = []
+        self.during = during  # called inside each request (to stop the report midway)
+        self.join_last = join_last  # the summary step names the last two groups as one piece of work
 
     def check(self):
         pass
 
     def generate_json(self, system, prompt, schema, max_output_tokens=16000, thinking=None):
         self.calls.append((system, prompt))
+        if self.during:
+            self.during()
+        usage = Usage(input_tokens=10, output_tokens=5, thinking_tokens=0, requests=1)
+        if system == ai_report.SUMMARY_SYSTEM:
+            names = [w["project"] for w in _sent(prompt)["work"]]
+            return {"summary": "요약", "same_work": [names[-2:]] if self.join_last else []}, usage
         body = json.loads(prompt[prompt.index("{"):])
-        if "days" in body:  # the merge step
-            refs = [r for d in body["days"] for w in d["work"] for it in w["done"] for r in it["refs"]]
-            reply = {"summary": "주간", "projects": [{"project": "합친 일", "done": [{"text": "합친 실적", "refs": refs}]}]}
-        else:
-            refs = [w["ref"] for w in body["work"]] + [c["ref"] for c in body["changes"]]
-            reply = {"summary": "하루", "projects": [{"project": "하루 일", "done": [{"text": "실적", "refs": refs}]}]}
-        return reply, Usage(input_tokens=10, output_tokens=5, thinking_tokens=0, requests=1)
+        groups: dict[str, list[str]] = {}
+        for w in body["work"]:
+            groups.setdefault(w.get("folder") or "기타", []).append(w["ref"])
+        for c in body["changes"]:
+            groups.setdefault(c["folder"], []).append(c["ref"])
+        return {"summary": "부분", "projects": [{"project": f"{name} 작업", "done": [{"text": "실적", "refs": refs}]}
+                                                for name, refs in groups.items()]}, usage
+
+
+def _sent(prompt: str) -> dict:
+    return json.loads(prompt[prompt.index("{"):])
 
 
 @unittest.skipUnless(HAS_DULWICH, "dulwich not installed (run tests with .venv python)")
 class SplitWeekTests(unittest.TestCase):
-    """A week too big for one request is written day by day, then merged: nothing is left out."""
+    """Records too big for one request go in several, work folders packed together: nothing is left out."""
 
     def setUp(self):
         from pathlib import Path
@@ -491,6 +503,7 @@ class SplitWeekTests(unittest.TestCase):
         demo.seed(self.db, self.repos)
         today = date.today()
         self.last_monday = today - timedelta(days=today.weekday() + 7)
+        self.week = (self.last_monday, self.last_monday + timedelta(days=6))
 
     def tearDown(self):
         self._tmp.__exit__(None, None, None)
@@ -506,7 +519,7 @@ class SplitWeekTests(unittest.TestCase):
         self.assertEqual(len(model.calls), 1)
         self.assertEqual(out["notes"], [])
         # A week is sent as one record per work folder (and 웹/소통/기타), with its minutes per day.
-        work = json.loads(model.calls[0][1][model.calls[0][1].index("{"):])["work"]
+        work = _sent(model.calls[0][1])["work"]
         names = [w.get("folder") or w.get("kind") for w in work]
         self.assertEqual(len(names), len(set(names)))
         api = next(w for w in work if w.get("folder") == "gov24-minwon-api")
@@ -515,28 +528,94 @@ class SplitWeekTests(unittest.TestCase):
         per_day = [int(m) for m in re.findall(r"(\d+)분", api["days"])]
         self.assertLessEqual(abs(api["minutes"] - sum(per_day)), len(per_day))  # the days add up (rounding)
 
-    def test_a_big_week_is_written_day_by_day_and_merged(self):
+    def test_a_big_week_goes_in_parts_with_nothing_left_out(self):
+        with self.db.connect() as conn:
+            whole = ai_context.build(conn, *self.week, self.repos)
+            with mock.patch.object(ai_context, "PAYLOAD_CHARS", 3000):  # the whole week no longer fits
+                parts = ai_context.plan(conn, *self.week, self.repos)
+        self.assertGreater(len(parts), 1)
+        self.assertEqual([c.part for c in parts], [(i + 1, len(parts)) for i in range(len(parts))])
+        self.assertTrue(all(c.level == 0 for c in parts))      # every part as it is: nothing trimmed
+        # Every work folder, all its time and all its file changes are in some part, once.
+        self.assertEqual({f for c in parts for f in c.folder_refs}, set(whole.folder_refs))
+        for folder, sec in whole.folder_seconds.items():
+            self.assertAlmostEqual(sum(c.folder_seconds.get(folder, 0.0) for c in parts), sec)
+        files = lambda ctxs: sorted(f for c in ctxs for ch in c.payload["changes"] for f in ch["files"])  # noqa: E731
+        self.assertEqual(len(files(parts)), len(files([whole])))
+        refs = [r for c in parts for r in c.refs]
+        self.assertEqual(len(refs), len(set(refs)))              # no number is used twice
+
+    def test_the_parts_are_joined_by_code_and_summarised(self):
         model = EchoModel()
-        with mock.patch.object(ai_context, "PAYLOAD_CHARS", 3000):  # the whole week no longer fits
+        with mock.patch.object(ai_context, "PAYLOAD_CHARS", 3000):
             out = self.generate(model)
             with self.db.connect() as conn:
                 preview = ai_service.preview(conn, "weekly", self.last_monday, self.repos)
-        daily, merge = model.calls[:-1], model.calls[-1]
-        self.assertGreater(len(daily), 1)
-        self.assertEqual(merge[0], ai_report.MERGE_SYSTEM)
-        # Every day was sent with its own W numbers: no number is used by two days.
-        sent = [w["ref"] for _, prompt in daily for w in json.loads(prompt[prompt.index("{"):])["work"]]
-        self.assertEqual(len(sent), len(set(sent)))
-        # The merged draft keeps every reference the days had, so nothing is restored or dropped.
+        drafts, last = model.calls[:-1], model.calls[-1]
+        self.assertGreater(len(drafts), 1)
+        self.assertEqual(last[0], ai_report.SUMMARY_SYSTEM)
+        self.assertIn("번째입니다", drafts[0][1])
+        self.assertEqual(out["summary"], "요약")
+        # A folder sent in several parts is one group in the report; every reference stays.
+        names = [p["project"] for p in out["projects"]]
+        self.assertEqual(len(names), len(set(names)))
+        self.assertFalse(any(p["missing_from_ai"] for p in out["projects"]))
         self.assertEqual(out["dropped_refs"], 0)
-        self.assertEqual([p["project"] for p in out["projects"]], ["합친 일"])
-        self.assertEqual(set(out["projects"][0]["done"][0]["refs"]), set(sent) | {
-            c["ref"] for _, prompt in daily for c in json.loads(prompt[prompt.index("{"):])["changes"]})
-        self.assertGreater(out["projects"][0]["seconds"], 0)
-        self.assertIn(f"{len(daily)}일을 하루씩 정리한 뒤", out["notes"][0])
+        sent = {w["ref"] for _, p in drafts for w in _sent(p)["work"]} | {
+            c["ref"] for _, p in drafts for c in _sent(p)["changes"]}
+        cited = {r for p in out["projects"] for it in p["done"] for r in it["refs"]}
+        self.assertEqual(cited, sent)
+        self.assertIn(f"{len(drafts)}번에 나눠", out["notes"][0])
         self.assertEqual(out["usage"]["input_tokens"], 10 * len(model.calls))
-        self.assertIn("합치기", preview["prompt"])
-        self.assertIn(ai_report.MERGE_SYSTEM, preview["system"])
+        self.assertIn("번째 요청", preview["prompt"])
+        self.assertIn(ai_report.SUMMARY_SYSTEM, preview["system"])
+
+    def test_groups_the_summary_step_names_as_one_work_are_joined(self):
+        with mock.patch.object(ai_context, "PAYLOAD_CHARS", 3000):
+            apart = self.generate(EchoModel())
+            joined = self.generate(EchoModel(join_last=True))
+        self.assertEqual(len(joined["projects"]), len(apart["projects"]) - 1)
+        lines = lambda out: sorted(it["text"] for p in out["projects"] for it in p["done"])  # noqa: E731
+        self.assertEqual(lines(joined), lines(apart))            # no line lost or rewritten
+        self.assertEqual(joined["dropped_refs"], 0)
+
+    def test_a_report_in_parts_can_be_stopped(self):
+        model = EchoModel(during=ai_service.cancel_report)
+        with mock.patch.object(ai_context, "PAYLOAD_CHARS", 3000), self.assertRaises(AIError) as err:
+            self.generate(model)
+        self.assertEqual(err.exception.kind, "cancelled")
+        self.assertEqual(len(model.calls), 1)                   # stopped before the next request
+        self.assertFalse(ai_service.report_progress()["running"])
+
+
+class JoinPartsTests(unittest.TestCase):
+    def ctx(self, folders: dict[str, str]):
+        c = ai_context.Context(DAY, DAY, {"work": [], "changes": []})
+        c.ref_folder = folders
+        return c
+
+    def test_a_folder_sent_in_two_parts_is_one_group(self):
+        first = self.ctx({"W1": "api", "C1": "api", "W2": "web"})
+        second = self.ctx({"W3": "api", "C2": "api"})
+        joined = ai_report.join_parts([
+            (first, {"projects": [{"project": "API 토큰", "done": [{"text": "a", "refs": ["W1", "C1"]}]},
+                                  {"project": "웹 화면", "done": [{"text": "b", "refs": ["W2"]}]}]}),
+            (second, {"projects": [{"project": "API 토큰 재발급", "done": [{"text": "c", "refs": ["W3", "C2"]}]}]}),
+        ])
+        self.assertEqual([(g["project"], [d["text"] for d in g["done"]]) for g in joined],
+                         [("API 토큰", ["a", "c"]), ("웹 화면", ["b"])])
+
+    def test_two_pieces_of_work_in_one_folder_stay_apart(self):
+        first = self.ctx({"W1": "api", "C1": "api", "C2": "api"})
+        second = self.ctx({"W2": "api", "C3": "api"})
+        joined = ai_report.join_parts([
+            (first, {"projects": [{"project": "토큰", "done": [{"text": "a", "refs": ["W1", "C1"]}]},
+                                  {"project": "인덱스", "done": [{"text": "b", "refs": ["W1", "C2"]}]}]}),
+            (second, {"projects": [{"project": "로그", "done": [{"text": "c", "refs": ["W2", "C3"]}]},
+                                   {"project": "인덱스", "done": [{"text": "d", "refs": ["C3"]}]}]}),
+        ])
+        self.assertEqual([(g["project"], [d["text"] for d in g["done"]]) for g in joined],
+                         [("토큰", ["a"]), ("인덱스", ["b", "d"]), ("로그", ["c"])])
 
 
 if __name__ == "__main__":

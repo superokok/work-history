@@ -7,10 +7,13 @@ itself (issue keys, work folders, topics). Nothing outside this payload is sent
 to the model, every free-text field passes the secret redaction, and every
 reference the model returns is checked against `refs`.
 
-The payload is kept within a size budget so a busy week fits the model's
-context: snapshots of one folder taken close together go as one piece of work,
-and when that is not enough, fewer windows per record and the shortest records
-are left out (`FIT_LEVELS`). Diff excerpts share what room is left.
+The payload is kept within a size budget so it fits the model's context. When a
+period's records do not fit as they are, `plan` sends them in several requests,
+work folders packed together until each request is full: nothing is left out
+(a folder too big on its own goes day by day, a day too big in pieces of its
+file changes). `build` (one request, used by the MCP tool) makes a period fit by
+sending less instead: snapshots grouped more coarsely, fewer windows per record,
+the shortest records left out (`FIT_LEVELS`). Diff excerpts share what room is left.
 """
 
 import difflib
@@ -75,7 +78,9 @@ class Context:
     offwork_s: float = 0.0
     # What was cut to fit the budget, in words for the user ([] = everything was sent as is).
     trimmed: list[str] = field(default_factory=list)
-    next_ref: int = 1  # the W number after this context's last record (to number the next day on)
+    level: int = 0  # index of the FIT_LEVELS step used (0 = records sent as they are)
+    next_ref: int = 1  # the W number after this context's last record (to number the next request on)
+    part: Optional[tuple[int, int]] = None  # (i, n): request i of n when the period is sent in parts
 
     @property
     def empty(self) -> bool:
@@ -122,19 +127,40 @@ def _excerpt(repo, path: str, old_blob: Optional[str], new_blob: Optional[str], 
 
 # ---------------------------------------------------------------- work records
 
-def _records(conn: sqlite3.Connection, ctx: Context, start: date, end: date,
-             first_ref: int = 1) -> list[tuple[str, work.Record]]:
-    """(W ref, record), numbered from `first_ref`; trimmed later. One day: a record per work
-    folder (and 웹/소통/기타). Several days (a week): one per work folder over the whole period,
-    with its minutes per day, so a folder worked on every day is sent once, not five times."""
-    days = []
-    for _day, recs, offwork in work.period(conn, start, end):
-        ctx.offwork_s += offwork
-        days.append(recs)
-    records = days[0] if len(days) == 1 else work.over_period(days)
-    out = [(f"W{first_ref + i}", r) for i, r in enumerate(records)]
-    ctx.next_ref = first_ref + len(out)
-    return out
+@dataclass
+class Gathered:
+    """A period's records, read once: each day's work records and the file changes."""
+    start: date
+    end: date
+    days: list[tuple[date, list[work.Record], float]]
+    rows: list
+    files: dict[int, list]
+    whole: list[work.Record] = field(default_factory=list)
+
+    @property
+    def offwork_s(self) -> float:
+        return sum(o for _, _, o in self.days)
+
+
+def gather(conn: sqlite3.Connection, start: date, end: date) -> Gathered:
+    """One day: a record per work folder (and 웹/소통/기타). Several days (a week): one per work
+    folder over the whole period, with its minutes per day, so a folder worked on every day is
+    sent once, not five times."""
+    if end < start:
+        raise store.Invalid("종료일이 시작일보다 빠릅니다")
+    if (end - start).days + 1 > MAX_DAYS:
+        raise store.Invalid(f"한 번에 {MAX_DAYS}일까지만 보낼 수 있습니다")
+    rows, files = _change_rows(conn, start, end)
+    g = Gathered(start, end, work.period(conn, start, end), rows, files)
+    recs = [r for _, r, _ in g.days]
+    g.whole = recs[0] if len(recs) == 1 else work.over_period(recs)
+    return g
+
+
+def _ordered(records: list[work.Record]) -> list[work.Record]:
+    """Work folders by time, then 웹 / 소통 / 기타."""
+    return (sorted((r for r in records if r.folder_id), key=lambda r: -r.seconds)
+            + sorted((r for r in records if not r.folder_id), key=lambda r: work.OUTSIDE.index(r.name)))
 
 
 def _spans(r: work.Record) -> str:
@@ -269,18 +295,23 @@ def _add_diffs(changes: list[tuple[dict, list, list[dict]]], total: int, limit: 
 
 # ---------------------------------------------------------------- build
 
-def build(conn: sqlite3.Connection, start: date, end: date, repos_dir: Optional[Path] = None,
-          first_ref: int = 1) -> Context:
-    """The payload for one request. `first_ref`: the first W number, so that the days of a week
-    split into several requests (ai_service) never share a number."""
-    if end < start:
-        raise store.Invalid("종료일이 시작일보다 빠릅니다")
-    if (end - start).days + 1 > MAX_DAYS:
-        raise store.Invalid(f"한 번에 {MAX_DAYS}일까지만 보낼 수 있습니다")
+def build(conn: sqlite3.Connection, start: date, end: date, repos_dir: Optional[Path] = None) -> Context:
+    """The whole period in one request, made to fit by sending less when needed."""
+    g = gather(conn, start, end)
+    return assemble(g, g.whole, g.rows, repos_dir)
 
-    ctx = Context(start, end, {})
-    records = _records(conn, ctx, start, end, first_ref)
-    rows, files = _change_rows(conn, start, end)
+
+def assemble(g: Gathered, records: list[work.Record], rows: list, repos_dir: Optional[Path] = None,
+             first_ref: int = 1, offwork_s: Optional[float] = None,
+             part: Optional[tuple[int, int]] = None) -> Context:
+    """The payload of one request: these work records and these file changes of the period.
+    W refs are numbered from `first_ref`, so that the requests of one report never share a number."""
+    start, end = g.start, g.end
+    ctx = Context(start, end, {}, part=part)
+    ctx.offwork_s = g.offwork_s if offwork_s is None else offwork_s
+    records = [(f"W{first_ref + i}", r) for i, r in enumerate(_ordered(records))]
+    ctx.next_ref = first_ref + len(records)
+    files = g.files
 
     def payload(level) -> tuple[dict, list]:
         windows, min_s, gap, limit = level
@@ -292,18 +323,20 @@ def build(conn: sqlite3.Connection, start: date, end: date, repos_dir: Optional[
         return {
             "period": {"from": start.isoformat(), "to": end.isoformat()},
             "work_minutes": round(sum(r.seconds for _, r in records) / 60),
-            "offwork_minutes": round(ctx.offwork_s / 60),
+            "offwork_minutes": round(g.offwork_s / 60),
             "work": [_record_item(ref, r, windows) for ref, r in chosen],
             "changes": [c[0] for c in changes],
         }, changes
 
     fits = lambda d: _size(d) <= PAYLOAD_CHARS * FIT_SHARE  # noqa: E731
-    for level in FIT_LEVELS:
+    for i, level in enumerate(FIT_LEVELS):
         data, changes = payload(level)
         if fits(data):
+            ctx.level = i
             break
     else:
         # Still too big (a long period): keep the longest records that fit.
+        ctx.level = len(FIT_LEVELS)
         windows, _, gap, limit = FIT_LEVELS[-1]
         lengths = sorted({r.seconds for _, r in records})
         lo, hi = 0, len(lengths)  # threshold index; hi = no records at all
@@ -316,7 +349,7 @@ def build(conn: sqlite3.Connection, start: date, end: date, repos_dir: Optional[
         level = (windows, lengths[lo] if lo < len(lengths) else float("inf"), gap, limit)
         data, changes = payload(level)
     windows, min_s, gap, limit = level
-    if level != FIT_LEVELS[0]:
+    if ctx.level:
         ctx.trimmed.append(f"창 제목은 기록마다 {windows}개까지")
         if gap > FIT_LEVELS[0][2]:
             ctx.trimmed.append("같은 폴더의 파일 변경은 " + ("하루" if gap >= 24 * 3600 else f"{gap // 3600}시간")
@@ -365,9 +398,92 @@ def build(conn: sqlite3.Connection, start: date, end: date, repos_dir: Optional[
     return ctx
 
 
+# ---------------------------------------------------------------- several requests
+
+Unit = tuple[list[work.Record], list]  # work records and file changes sent together
+
+
+def _fits(g: Gathered, records: list[work.Record], rows: list) -> bool:
+    return assemble(g, records, rows).level == 0
+
+
+def _by_time(rows: list) -> list:
+    return sorted(rows, key=lambda c: (c["ts"], c["id"]))
+
+
+def _units(g: Gathered) -> list[Unit]:
+    """The pieces a period can be sent in, each small enough for one request: a work folder over
+    the period (its record and its file changes), 웹 / 소통 / 기타 together; a folder too big for
+    one request goes day by day, and a day too big in runs of its file changes."""
+    by_folder = {r.folder_id: r for r in g.whole if r.folder_id}
+    folders = sorted(by_folder.keys() | {c["folder_id"] for c in g.rows},
+                     key=lambda f: -(by_folder[f].seconds if f in by_folder else 0.0))
+    wanted = [({f"folder:{f}"}, [by_folder[f]] if f in by_folder else [],
+               [c for c in g.rows if c["folder_id"] == f]) for f in folders]
+    outside = [r for r in g.whole if not r.folder_id]
+    if outside:
+        wanted.append((set(work.OUTSIDE), outside, []))
+    units: list[Unit] = []
+    for keys, records, rows in wanted:
+        if _fits(g, records, rows) or (g.start == g.end and not rows):
+            units.append((records, rows))
+            continue
+        for d, day_records, _ in g.days if g.start != g.end else [(g.start, records, 0.0)]:
+            recs = [r for r in day_records if r.key in keys]
+            day_rows = [c for c in rows if datetime.fromtimestamp(c["ts"]).date() == d]
+            if not recs and not day_rows:
+                continue
+            if _fits(g, recs, day_rows):
+                units.append((recs, day_rows))
+                continue
+            # Runs of the day's file changes, as long as fit; the record goes with the first run.
+            i = 0
+            while i < len(day_rows) or (recs and i == 0):
+                first = recs if i == 0 else []
+                lo, hi = i + 1, len(day_rows)
+                while lo < hi:
+                    mid = (lo + hi + 1) // 2
+                    if _fits(g, first, day_rows[i:mid]):
+                        lo = mid
+                    else:
+                        hi = mid - 1
+                units.append((first, day_rows[i:lo]))
+                i = max(lo, i + 1)
+    return units
+
+
+def plan(conn: sqlite3.Connection, start: date, end: date, repos_dir: Optional[Path] = None) -> list[Context]:
+    """The requests a report of the period is written from. One when its records fit as they are;
+    otherwise several, work folders packed together (largest first) until each request is full,
+    so that every record is sent as it is, at the cost of more requests."""
+    g = gather(conn, start, end)
+    whole = assemble(g, g.whole, g.rows, repos_dir)
+    if whole.level == 0 or whole.empty:
+        return [whole]
+    sized = sorted(_units(g), key=lambda u: -_size(assemble(g, *u).payload))
+    groups: list[Unit] = []
+    for records, rows in sized:
+        for i, (g_records, g_rows) in enumerate(groups):
+            joined = (g_records + records, _by_time(g_rows + rows))
+            if _fits(g, *joined):
+                groups[i] = joined
+                break
+        else:
+            groups.append((records, rows))
+    out, ref = [], 1
+    for i, (records, rows) in enumerate(groups):
+        c = assemble(g, records, rows, repos_dir, first_ref=ref,
+                     offwork_s=g.offwork_s if i == 0 else 0.0, part=(i + 1, len(groups)))
+        ref = c.next_ref
+        out.append(c)
+    return out
+
+
 def merge(parts: list[Context], start: date, end: date) -> Context:
-    """One context over several (the days of a week sent one by one): every reference any of
-    them sent stays valid, with its time and its place."""
+    """One context over the requests of a report: every reference any of them sent stays valid,
+    with its time and its place."""
+    if len(parts) == 1:
+        return parts[0]
     out = Context(start, end, {"work": [], "changes": []})
     for c in parts:
         out.payload["work"] += c.payload["work"]
@@ -384,6 +500,7 @@ def merge(parts: list[Context], start: date, end: date) -> Context:
         for name, sec in c.outside_s.items():
             out.outside_s[name] = out.outside_s.get(name, 0.0) + sec
         out.offwork_s += c.offwork_s
-        out.trimmed += [f"{c.start.month}/{c.start.day}: {t}" for t in c.trimmed]
+        out.trimmed += [t for t in c.trimmed if t not in out.trimmed]
+        out.level = max(out.level, c.level)
         out.next_ref = max(out.next_ref, c.next_ref)
     return out

@@ -108,34 +108,88 @@ class Report:
 
 
 def prompt(kind: str, ctx: Context) -> str:
-    return (f"{ctx.start.isoformat()} ~ {ctx.end.isoformat()} 기간의 {KINDS[kind]} 초안을 작성하세요.\n\n"
+    part = ""
+    if ctx.part:
+        i, n = ctx.part
+        part = (f"기록이 많아 {n}번에 나눠 보내며, 이것은 {i}번째입니다. 이 자료에 있는 기록만 정리하세요 "
+                "(다른 작업 폴더는 따로 정리해 합칩니다).\n")
+    return (f"{ctx.start.isoformat()} ~ {ctx.end.isoformat()} 기간의 {KINDS[kind]} 초안을 작성하세요.\n{part}\n"
             + dumps(ctx.payload))
 
 
-# A week too big for one request is written day by day (each day from its own records, with
-# SYSTEM), then the daily drafts are merged into the week: every reference still points at a
-# record that was sent, and the merged draft is checked like any other.
-MERGE_SYSTEM = """당신은 주간보고 초안을 작성합니다.
-입력은 같은 주의 날짜별 업무일지 초안입니다. 각 항목은 업무 기록에서 나온 한 일(text)과 그 근거(refs)입니다.
+# A period too big for one request is sent in parts (ai_context.plan): each part is written with
+# SYSTEM, the parts' groups are joined by code (`join_parts`), and one small request writes the
+# summary and names the groups that are the same work (`same_work`, joined by code too). The
+# lines and their references are never rewritten by a merge step.
+SUMMARY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "summary": {"type": "string", "description": "기간 전체를 1~2문장으로 요약"},
+        "same_work": {"type": "array", "items": {"type": "array", "items": {"type": "string"}},
+                      "description": "같은 업무인 묶음 이름 목록들 (목록마다 이름 2개 이상), 없으면 빈 배열"},
+    },
+    "required": ["summary", "same_work"],
+}
 
-- 날짜별 업무 묶음 중 같은 일(같은 작업 폴더, 같은 이슈 번호나 주제)을 업무 하나로 합칩니다. 같은 업무를 여러 묶음으로 나누지 않습니다.
-- 업무 이름(project)은 날짜별 이름 중 가장 맞는 것을 고르거나 그 표현을 합쳐 짓습니다. 입력에 없는 이름이나 번호를 지어내지 않습니다.
-- 여러 날에 걸친 같은 일은 한 항목으로 합치고, 합친 항목들의 refs를 모두 넣습니다. 입력에 없는 내용, 결과, 수치를 더하지 않습니다.
-- refs는 입력 항목의 refs만 씁니다. 입력에 있는 refs는 하나도 빠짐없이 결과의 어느 항목에 넣습니다 (업무별 시간 계산에 씁니다).
-- '완료', '해결', '종료' 같은 단정은 쓰지 않고 한 일로 씁니다. 다음 계획은 쓰지 않습니다.
-- 요약(summary)은 주 전체를 1~2문장으로 씁니다.
-- 업무 묶음은 일을 많이 한 순서로, 한국어 업무 보고 문체로 한 항목은 한 줄로 씁니다 (명사형 종결)."""
+SUMMARY_SYSTEM = """당신은 업무 보고서의 요약을 씁니다.
+입력은 보고서에 들어갈 업무 묶음과 그 한 일 목록입니다. 기록이 많아 나눠 정리했기 때문에 같은 일이 두 묶음으로 나뉘었을 수 있습니다.
+- same_work: 서로 다른 묶음이 같은 업무이면(같은 이슈 번호, 같은 작업 폴더나 같은 주제) 그 묶음 이름들을 입력에 적힌 그대로 한 목록으로 넣습니다. 확실할 때만 넣고, 없으면 빈 배열입니다.
+- summary: 기간 전체를 1~2문장으로 요약합니다. 일을 많이 한 업무를 먼저 씁니다.
+- 입력에 있는 내용만 씁니다. 결과, 수치, 원인을 지어내지 않습니다.
+- '완료', '해결', '종료' 같은 단정은 쓰지 않고 '진행', '작업'으로 씁니다. 다음 계획은 쓰지 않습니다.
+- 한국어 업무 보고 문체로 씁니다."""
 
 
-def merge_prompt(start: str, end: str, days: list["Report"]) -> str:
-    """The daily drafts as the merge step's input: groups and lines with their references."""
-    data = {"period": {"from": start, "to": end}, "days": [
-        {"date": r.start, "summary": r.summary,
-         "work": [{"project": b.project, "done": [{"text": it.text, "refs": it.refs} for it in b.done]}
-                  for b in r.projects if b.done]}
-        for r in days]}
-    return (f"{start} ~ {end} 주간보고 초안을 날짜별 업무일지 초안으로 작성하세요.\n\n"
-            + json.dumps(data, ensure_ascii=False, indent=1))
+def summary_prompt(kind: str, start: str, end: str, projects: list[dict]) -> str:
+    data = [{"project": p.get("project"), "done": [d.get("text") for d in p.get("done") or [] if isinstance(d, dict)]}
+            for p in projects if isinstance(p, dict)]
+    return (f"{start} ~ {end} {KINDS[kind]}의 요약을 쓰세요.\n\n"
+            + json.dumps({"work": data}, ensure_ascii=False, indent=1))
+
+
+def join_same_work(projects: list[dict], same: Any) -> list[dict]:
+    """Groups the model named as one piece of work, joined into the first of them (in report order)."""
+    out = list(projects)
+    for names in same if isinstance(same, list) else []:
+        if not isinstance(names, list):
+            continue
+        wanted = {str(n).strip() for n in names}
+        group = [p for p in out if p["project"] in wanted]
+        for other in group[1:]:
+            group[0]["done"] = group[0]["done"] + other["done"]
+            out.remove(other)
+    return out
+
+
+def _main_folder(entry: dict, ctx: Context) -> Optional[str]:
+    """The work folder most of a group's references belong to."""
+    folders = [ctx.ref_folder[str(r).strip()] for d in entry.get("done") or [] if isinstance(d, dict)
+               for r in d.get("refs") or [] if str(r).strip() in ctx.ref_folder]
+    return max(set(folders), key=folders.count) if folders else None
+
+
+def join_parts(parts: list[tuple[Context, Any]]) -> list[dict]:
+    """The groups of work of several requests as one list. A group joins an earlier one with the
+    same name, or, when a work folder was sent in several requests, the one group each of them
+    wrote for that folder; anything else stays a group of its own."""
+    out: list[dict] = []
+    folder_of: dict[int, Optional[str]] = {}
+    for ctx, raw in parts:
+        entries = [e for e in (raw.get("projects") if isinstance(raw, dict) else None) or [] if isinstance(e, dict)]
+        mains = [_main_folder(e, ctx) for e in entries]
+        for entry, main in zip(entries, mains):
+            name = str(entry.get("project") or "기타").strip() or "기타"
+            done = [d for d in entry.get("done") or [] if isinstance(d, dict)]
+            target = next((o for o in out if o["project"] == name), None)
+            if target is None and main and mains.count(main) == 1:
+                same = [o for o in out if folder_of[id(o)] == main]
+                target = same[0] if len(same) == 1 else None
+            if target is None:
+                target = {"project": name, "done": []}
+                out.append(target)
+                folder_of[id(target)] = main
+            target["done"] += done
+    return out
 
 
 def _items(raw: Any, valid: set[str]) -> tuple[list[Item], int]:

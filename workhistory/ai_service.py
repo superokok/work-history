@@ -1,6 +1,7 @@
 """AI features wired to the database: settings, consent, run log, reports."""
 
 import sqlite3
+import threading
 import time
 from datetime import date, timedelta
 from pathlib import Path
@@ -135,72 +136,107 @@ def period(kind: str, day: date) -> tuple[date, date]:
     raise Invalid("kind는 'daily' 또는 'weekly'여야 합니다")
 
 
-def _plan(conn: sqlite3.Connection, kind: str, start: date, end: date,
-          repos_dir: Optional[Path]) -> tuple[ai_context.Context, list[ai_context.Context]]:
-    """(context of the whole period, contexts of its days when the week is sent day by day).
+# The report being written now (one at a time in this app): how far it is, and whether the user
+# asked to stop. A report in several requests stops before its next request.
+_progress = {"running": False, "step": 0, "total": 0, "cancel": False}
+_progress_lock = threading.Lock()
 
-    A week whose records fit the budget as they are goes in one request. A bigger one would lose
-    detail (fewer window titles, shorter diff excerpts, short records left out), so each day is
-    written from its own records first and the drafts are merged: nothing is left out."""
-    whole = ai_context.build(conn, start, end, repos_dir)
-    if kind != "weekly" or not whole.trimmed:
-        return whole, []
-    days, ref = [], 1
-    d = start
-    while d <= end:
-        c = ai_context.build(conn, d, d, repos_dir, first_ref=ref)
-        ref = c.next_ref
-        if not c.empty:
-            days.append(c)
-        d += timedelta(days=1)
-    return ai_context.merge(days, start, end), days
+
+def report_progress() -> dict:
+    with _progress_lock:
+        return {k: v for k, v in _progress.items() if k != "cancel"}
+
+
+def cancel_report() -> dict:
+    with _progress_lock:
+        if _progress["running"]:
+            _progress["cancel"] = True
+        return {"running": _progress["running"]}
+
+
+def _step(i: int, total: int) -> None:
+    with _progress_lock:
+        if _progress["cancel"]:
+            raise AIError("AI 초안 작성을 멈췄습니다.", "cancelled")
+        _progress.update(step=i, total=total)
 
 
 def preview(conn: sqlite3.Connection, kind: str, day: date, repos_dir: Optional[Path] = None) -> dict:
     """Exactly what would be sent to the AI (nothing is sent)."""
     start, end = period(kind, day)
-    ctx, days = _plan(conn, kind, start, end, repos_dir)
-    if not days:
+    parts = ai_context.plan(conn, start, end, repos_dir)
+    if len(parts) == 1:
         return {"start": start.isoformat(), "end": end.isoformat(),
-                "prompt": ai_report.prompt(kind, ctx), "system": ai_report.SYSTEM}
-    parts = [f"--- {c.start.isoformat()} (날짜별 초안 {i + 1}/{len(days)}) ---\n" + ai_report.prompt("daily", c)
-             for i, c in enumerate(days)]
-    parts.append("--- 합치기: 위 날짜별 초안(한 일과 근거 번호)을 보내 주간보고로 합칩니다 ---")
-    return {"start": start.isoformat(), "end": end.isoformat(), "prompt": "\n\n".join(parts),
-            "system": ai_report.SYSTEM + "\n\n[합치기 지시문]\n" + ai_report.MERGE_SYSTEM}
+                "prompt": ai_report.prompt(kind, parts[0]), "system": ai_report.SYSTEM}
+    text = [f"--- {i + 1}/{len(parts)}번째 요청 ---\n" + ai_report.prompt(kind, c) for i, c in enumerate(parts)]
+    text.append(f"--- 요약: 위 {len(parts)}번의 결과(업무 이름과 한 일 문장)를 보내 요약 한두 문장을 받습니다 ---")
+    return {"start": start.isoformat(), "end": end.isoformat(), "prompt": "\n\n".join(text),
+            "system": ai_report.SYSTEM + "\n\n[요약 지시문]\n" + ai_report.SUMMARY_SYSTEM}
 
 
 def generate_report(conn: sqlite3.Connection, kind: str, day: date, demo: bool,
                     factory: ModelFactory = default_factory, repos_dir: Optional[Path] = None) -> dict:
+    """A report draft. Records that fit go in one request; more go in several (work folders packed
+    together, nothing left out), joined by code, and a small last request writes the summary."""
     check_allowed(conn, demo)
     start, end = period(kind, day)
-    ctx, days = _plan(conn, kind, start, end, repos_dir)
+    with _progress_lock:
+        if _progress["running"]:
+            raise Invalid("다른 AI 초안을 작성하고 있습니다. 끝난 뒤 다시 시도하세요.")
+        _progress.update(running=True, step=0, total=0, cancel=False)
+    try:
+        return _generate(conn, kind, day, demo, factory, repos_dir, start, end)
+    finally:
+        with _progress_lock:
+            _progress.update(running=False, cancel=False)
+
+
+def _generate(conn, kind, day, demo, factory, repos_dir, start, end) -> dict:
+    parts = ai_context.plan(conn, start, end, repos_dir)
+    ctx = ai_context.merge(parts, start, end)
     if ctx.empty:
         raise Invalid("이 기간에는 보고서로 만들 업무 기록이 없습니다")
+    total = len(parts) + (1 if len(parts) > 1 else 0)
     model_name = _model_name(conn, demo)
     started, usage = time.time(), Usage()
+    summary_failed = False
     try:
         model = _model(conn, demo, factory)
-        if not days:
-            raw, usage = model.generate_json(ai_report.SYSTEM, ai_report.prompt(kind, ctx), ai_report.SCHEMA)
-        else:
-            drafts = []
-            for c in days:
-                raw, used = model.generate_json(ai_report.SYSTEM, ai_report.prompt("daily", c), ai_report.SCHEMA)
-                usage.add(used)
-                drafts.append(ai_report.validate("daily", c, raw))
-            raw, used = model.generate_json(ai_report.MERGE_SYSTEM,
-                                            ai_report.merge_prompt(start.isoformat(), end.isoformat(), drafts),
-                                            ai_report.SCHEMA)
+        raws = []
+        for i, c in enumerate(parts):
+            _step(i + 1, total)
+            raw, used = model.generate_json(ai_report.SYSTEM, ai_report.prompt(kind, c), ai_report.SCHEMA)
             usage.add(used)
+            raws.append(raw)
+        if len(parts) == 1:
+            raw = raws[0]
+        else:
+            projects = ai_report.join_parts(list(zip(parts, raws)))
+            _step(total, total)
+            try:
+                got, used = model.generate_json(
+                    ai_report.SUMMARY_SYSTEM,
+                    ai_report.summary_prompt(kind, start.isoformat(), end.isoformat(), projects),
+                    ai_report.SUMMARY_SCHEMA)
+                usage.add(used)
+                got = got if isinstance(got, dict) else {}
+                summary = got.get("summary") or ""
+                projects = ai_report.join_same_work(projects, got.get("same_work"))
+            except AIError as e:
+                if e.kind in ("cancelled", "auth", "not_allowed", "config"):
+                    raise
+                summary, summary_failed = "", True  # the work lines are written; the summary is the user's
+            raw = {"summary": summary, "projects": projects}
     except AIError as e:
         log_run(conn, f"report_{kind}", model_name, started, usage, 0, False, e.kind)
         raise
     report = ai_report.validate(kind, ctx, raw)
-    if days:
-        report.notes.append(f"기록이 많아 {len(days)}일을 하루씩 정리한 뒤 주간보고로 합쳤습니다.")
+    if len(parts) > 1:
+        report.notes.append(f"기록이 많아 작업 폴더별로 묶어 {len(parts)}번에 나눠 정리했습니다. 빠진 기록은 없습니다.")
+    if summary_failed:
+        report.notes.append("요약을 받지 못했습니다. 요약은 직접 작성하세요.")
     if ctx.trimmed:
-        report.notes.append("하루 기록도 많아 줄여서 보낸 날이 있습니다: " + ", ".join(ctx.trimmed))
+        report.notes.append("줄여서 보낸 부분: " + ", ".join(ctx.trimmed))
     log_run(conn, f"report_{kind}", model_name, started, usage, 0, True, None)
     out = ai_report.to_dict(report, ctx)
     out["usage"] = usage.__dict__

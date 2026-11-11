@@ -252,6 +252,14 @@ class App:
             return ai_service.generate_report(conn, body.get("kind", ""), _day(body.get("day")),
                                               self.demo, self.ai_factory, self.repos_dir)
 
+        @r("GET", "/api/ai/report/progress")
+        def ai_report_progress(conn, query, body):
+            return ai_service.report_progress()
+
+        @r("POST", "/api/ai/report/cancel")
+        def ai_report_cancel(conn, query, body):
+            return ai_service.cancel_report()
+
         @r("GET", "/api/reports")
         def get_report(conn, query, body):
             return {"saved": ai_service.get_report(conn, query.get("kind", ""), _day(query.get("date")))}

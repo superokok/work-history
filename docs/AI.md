@@ -176,15 +176,29 @@ one class plus a factory entry (`ai_local.LocalModel` is the second one).
   tried in order: fewer windows per record, wider merging of a folder's
   changes (up to one per folder per day), fewer files listed per change, and
   only then leaving out the shortest records.
-- A weekly report whose records do not fit as they are is not trimmed
-  (2026-11-11, `ai_service._plan`): each day with records is drafted on its own
-  (`SYSTEM`, the day's records, W numbers continuing from the day before so
-  none is shared), and the daily drafts (groups, lines and their references)
-  are merged into the week by one more request (`ai_report.MERGE_SYSTEM`). The
-  merged draft is checked against all the days' references like any draft;
-  the report shows a note that it was made this way (and what was cut if a
-  single day was still too big). A week that fits stays one request. Cost: one
-  request per day plus one; with a local model several minutes.
+- A report (daily or weekly) whose records do not fit as they are is not
+  trimmed but sent in several requests (2026-11-11, `ai_context.plan`). The
+  pieces are a work folder over the period (its record and its file changes)
+  and 웹 / 소통 / 기타 together; a folder too big on its own goes day by day,
+  and a day too big in runs of its file changes, so every piece fits as it is.
+  The pieces are packed largest first into as few requests as fit; W numbers
+  continue from one request to the next, so none is shared. Each request is
+  written with `SYSTEM` (the prompt says it is part i of n). Then:
+  - code joins the groups (`ai_report.join_parts`): same name, or, for a
+    folder sent in several requests, the one group each request wrote for it;
+  - one small last request (`SUMMARY_SYSTEM`) gets only the group names and
+    lines, writes the summary and names groups that are the same work
+    (`same_work`, e.g. a folder's group and a group written from browser
+    titles of the same issue), which code joins too (`join_same_work`).
+  The lines and their references are never rewritten, and the joined draft
+  is checked against all the requests' references like any draft. The UI
+  shows which request is being written ("2/3") and can stop before the next
+  one (`/api/ai/report/cancel`); the draft notes that it was written in parts.
+  If only the summary request fails, the draft is kept and the summary is
+  left to the user. A period that fits stays one request. Measured: the demo
+  week at a 4,000-character budget went in 2 requests + summary, 30 s with
+  Claude Code; a fictional busy week (71 changes) at 5,000 characters in 11,
+  all 71 changes sent; planning takes under half a second.
 - Diff excerpts use what room is left, at most 600 lines per request, 50 per
   change, 25 per file, 200 characters per line, shared fairly: each change gets
   an equal share of what is left, so early changes cannot use up the room.
