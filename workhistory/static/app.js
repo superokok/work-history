@@ -986,11 +986,12 @@ function renderKpis(r) {
 // Stacked bars, one per day of the week; clicking a day opens that day.
 function renderWeekChart(r) {
   // Drawn in the shape of its box when the box has a height of its own (the fitted layout).
+  // Exactly the box's shape, so nothing (the weekday labels at the bottom) is cut off.
   const box = $("dash-week-chart");
-  const room = box.clientHeight - 30;  // the legend below the chart
+  const room = box.clientHeight - 2;
   const W = 640, left = 34, bottom = 34, top = 8;
   const H = room > 0 && box.clientWidth > 0 && getComputedStyle(box).overflow === "hidden"
-    ? Math.round(Math.min(420, Math.max(120, (W * room) / box.clientWidth))) : 220;
+    ? Math.round(Math.min(420, Math.max(70, (W * room) / box.clientWidth))) : 220;
   const totals = r.week.map((d) => r.categories.reduce((s, c) => s + d.by_kind[c.key], 0));
   const maxH = Math.max(1, Math.ceil(Math.max(...totals) / 3600));
   // Hour lines at least 18 units apart, however short the chart is.
@@ -1027,7 +1028,8 @@ function renderWeekChart(r) {
     if (totals[i]) chart.append(svg("text", { x: x + barW / 2, y: y(acc) - 5, "text-anchor": "middle" }, `${hours(totals[i])}h`));
   });
   $("dash-week-title").textContent = `${weekName(r)} 분류별 시간`;
-  $("dash-week-chart").replaceChildren(chart, dashLegend(r.categories.filter((c) => r.week.some((d) => d.by_kind[c.key] > 0))));
+  $("dash-week-chart").replaceChildren(chart);
+  $("dash-week-legend").replaceChildren(dashLegend(r.categories.filter((c) => r.week.some((d) => d.by_kind[c.key] > 0))));
 }
 
 const dashLegend = (cats) => h("div", { class: "dash-legend" },

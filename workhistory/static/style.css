@@ -185,7 +185,8 @@ code.command { display: block; flex: 1; padding: 6px 8px; background: var(--bg);
   .kpi { padding: 8px 14px; }
   .kpi .value { font-size: 22px; }
   .kpi .value.name { font-size: 18px; padding: 2px 0; }
-  .dash-body { flex: 1; min-height: 0; grid-template-rows: minmax(0, 1.1fr) auto minmax(0, 1fr); }
+  /* The charts keep a readable height; when the window is short, the lists give way (they scroll). */
+  .dash-body { flex: 1; min-height: 0; grid-template-rows: minmax(160px, 1.1fr) auto minmax(96px, 1fr); }
   .dash-body > .card { display: flex; flex-direction: column; min-height: 0; overflow: hidden; padding: 10px 14px; }
   .dash-body .dash-row { padding: 5px 0; }
   .dash-body > .card > h2 { flex: none; }
@@ -195,12 +196,26 @@ code.command { display: block; flex: 1; padding: 6px 8px; background: var(--bg);
   .dash-a-donut .donut-wrap { height: 100%; }
   .dash-a-donut .donut-wrap svg { height: 100%; width: auto; max-width: 150px; min-width: 70px; }
 }
+/* A short window (a laptop at 125-150% scaling): tighter spacing so the lists keep a few rows. */
+@media (min-width: 1000px) and (min-height: 560px) and (max-height: 760px) {
+  #tab-dashboard .toolbar { margin-bottom: 8px; }
+  .dash-kpis, .dash-body { gap: 8px; }
+  .dash-kpis { margin-bottom: 8px; }
+  .kpi { padding: 6px 12px; }
+  .kpi .value { font-size: 19px; }
+  .dash-body > .card { padding: 8px 12px; }
+  .dash-body h2 { margin-bottom: 4px; font-size: 14px; }
+  .dash-a-strip > h2 { display: none; }
+  .strip { height: 24px; }
+}
 svg.chart { width: 100%; display: block; overflow: visible; }
 svg.chart text { fill: var(--muted); font-size: 12px; }
 svg.chart .bar-day { cursor: pointer; }
 svg.chart .bar-day:hover rect.seg-bar { opacity: .8; }
 svg.chart text.sel { fill: var(--text); font-weight: 600; }
 .dash-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); margin-top: 8px; }
+.dash-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.dash-head .dash-legend { margin: 0; font-weight: 400; }
 .dash-legend span { display: inline-flex; align-items: center; gap: 5px; }
 .swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; flex: none; }
 .donut-wrap { display: flex; gap: 16px; align-items: center; }
