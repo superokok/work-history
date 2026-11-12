@@ -1,0 +1,85 @@
+"""Text from documents, for diffs: HWP 5.0 (OLE compound file) built here byte by byte."""
+
+import struct
+import unittest
+import zlib
+
+from workhistory import extract
+
+END, FREE, FATSECT = 0xFFFFFFFE, 0xFFFFFFFF, 0xFFFFFFFD
+SECTOR = 512
+
+
+def _entry(name: str, kind: int, child=FREE, right=FREE, start=END, size=0) -> bytes:
+    raw = name.encode("utf-16le") + b"\x00\x00"
+    e = bytearray(128)
+    e[:len(raw)] = raw
+    struct.pack_into("<HBB", e, 64, len(raw), kind, 1)
+    struct.pack_into("<III", e, 68, FREE, right, child)
+    struct.pack_into("<IQ", e, 116, start, size)
+    return bytes(e)
+
+
+def ole(streams: list[tuple[str, bytes]]) -> bytes:
+    """A compound file with the streams FileHeader and BodyText/Section0..n (each 4096 bytes or more,
+    so no mini stream is needed): enough for `extract.hwp_text`."""
+    fat, data, start = [FATSECT, END], b"", 2
+    starts = []
+    for _, body in streams:
+        body = body + b"\x00" * (-len(body) % SECTOR)
+        n = len(body) // SECTOR
+        starts.append(start)
+        fat += [start + k + 1 for k in range(n - 1)] + [END]
+        data += body
+        start += n
+    header_name, *sections = [n for n, _ in streams]
+    dirs = [_entry("Root Entry", 5, child=1),
+            _entry(header_name, 2, right=2, start=starts[0], size=len(streams[0][1])),
+            _entry("BodyText", 1, child=3)]
+    for i, name in enumerate(sections):
+        dirs.append(_entry(name.split("/")[-1], 2, right=4 + i if i + 1 < len(sections) else FREE,
+                           start=starts[i + 1], size=len(streams[i + 1][1])))
+    dir_bytes = b"".join(dirs)
+    dir_bytes += b"\x00" * (-len(dir_bytes) % SECTOR)
+    assert len(dir_bytes) == SECTOR and len(fat) <= SECTOR // 4
+    header = bytearray(SECTOR)
+    header[:8] = bytes.fromhex("d0cf11e0a1b11ae1")
+    struct.pack_into("<HHHHH", header, 0x18, 0x3E, 3, 0xFFFE, 9, 6)
+    struct.pack_into("<IIIIIIII", header, 0x2C, 1, 1, 0, 4096, END, 0, END, 0)
+    struct.pack_into("<109I", header, 0x4C, 0, *([FREE] * 108))
+    fat_bytes = struct.pack("<%dI" % (SECTOR // 4), *(fat + [FREE] * (SECTOR // 4 - len(fat))))
+    return bytes(header) + fat_bytes + dir_bytes + data
+
+
+def para(text: str) -> bytes:
+    body = text.encode("utf-16le")
+    return struct.pack("<I", 67 | (len(body) << 20)) + body  # HWPTAG_PARA_TEXT
+
+
+def hwp(paragraphs: list[str], compressed: bool = True) -> bytes:
+    section = b"".join(para(p) for p in paragraphs)
+    # Another record (a long one: size 0xFFF, then the real size), so the stream is a regular one.
+    filler = struct.pack("<II", 66 | (0xFFF << 20), 4096) + b"\x00" * 4096
+    section += filler
+    if compressed:
+        c = zlib.compressobj(9, zlib.DEFLATED, -15)
+        section = c.compress(section) + c.flush()
+        section += b"\x00" * max(0, 4096 - len(section))
+    header = b"HWP Document File".ljust(32, b"\x00") + struct.pack("<II", 0x05000000, 1 if compressed else 0)
+    return ole([("FileHeader", header.ljust(4096, b"\x00")), ("BodyText/Section0", section)])
+
+
+class HwpTests(unittest.TestCase):
+    def test_paragraphs_of_a_compressed_hwp(self):
+        data = hwp(["민원 조회 개선 검토보고서", "1. 현황: 평균 응답 3.2초"])
+        self.assertEqual(extract.extract_text("검토보고서.hwp", data), "민원 조회 개선 검토보고서\n1. 현황: 평균 응답 3.2초")
+
+    def test_uncompressed_hwp(self):
+        self.assertEqual(extract.extract_text("a.HWP", hwp(["표 없는 문서"], compressed=False)), "표 없는 문서")
+
+    def test_not_an_hwp(self):
+        self.assertIsNone(extract.extract_text("x.hwp", b"not an ole file at all"))
+
+
+if __name__ == "__main__":
+    unittest.main()
