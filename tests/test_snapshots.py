@@ -116,7 +116,6 @@ class ScanTests(SnapshotTestCase):
         self.write("build/classes/Main.class", b"\xca\xfe")
         self.write(".git/config", "[core]")
         self.write("app.log", "log")
-        self.write("big.txt", b"a" * (snapshots.MAX_FILE_BYTES + 1))
         git_config = self.work / ".git" / "config"
         before = git_config.stat().st_mtime_ns
         self.scan()
@@ -394,6 +393,92 @@ class IntegrationTests(SnapshotTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipUnless(HAS_DULWICH, "dulwich not installed (run tests with .venv python)")
+class FormatTests(SnapshotTestCase):
+    """How changes of files that are not plain text show: big files, images, PDF, old Office."""
+
+    def diff(self, change_id, path):
+        with self.db.connect() as conn:
+            fid = conn.execute("SELECT id FROM change_files WHERE change_id = ? AND path = ?",
+                               (change_id, path)).fetchone()[0]
+            return fid, snapshots.file_diff(self.repos, conn, fid)
+
+    def test_a_file_over_the_limit_is_recorded_without_its_content(self):
+        with mock.patch.object(snapshots, "MAX_FILE_BYTES", 100):
+            self.write("deck.pptx", b"PK" + b"a" * 48)
+            self.scan()
+            self.write("deck.pptx", b"PK" + b"b" * 198, mtime_shift=2)   # grows past the limit
+            self.write("video-notes.txt", b"x" * 300)                    # new, over the limit
+            grown = self.scan().change_id
+            self.assertEqual(self.change_files(grown), [
+                {"path": "deck.pptx", "kind": "M", "is_text": 0, "lines_added": None, "lines_removed": None},
+                {"path": "video-notes.txt", "kind": "A", "is_text": 0, "lines_added": None, "lines_removed": None}])
+            _, d = self.diff(grown, "deck.pptx")
+            self.assertEqual((d["text"], d["reason"], d["old_size"], d["new_size"], d["large"]),
+                             (False, "large", 50, 200, True))
+            _, d = self.diff(grown, "video-notes.txt")
+            self.assertEqual((d["text"], d["reason"], d["new_size"]), (False, "large", 300))
+            repo = Repo(str(snapshots.repo_path(self.repos, self.folder)))
+            try:  # only the size and time are kept, never the content
+                with self.db.connect() as conn:
+                    blob = conn.execute("SELECT blob_id FROM file_state WHERE path = 'video-notes.txt'").fetchone()[0]
+                self.assertTrue(repo[blob.encode()].data.startswith(b"WORKHISTORY-LARGE-FILE"))
+            finally:
+                repo.close()
+            self.assertIsNone(self.scan().change_id)                     # unchanged: nothing new
+            (self.work / "video-notes.txt").unlink()
+            self.assertEqual(self.change_files(self.scan().change_id)[0]["kind"], "D")
+
+    def test_images_pdf_and_old_office_say_why_there_is_no_text(self):
+        png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 40
+        self.write("shot.png", png)
+        self.write("scan.pdf", b"%PDF-1.4\nBT (hello) Tj ET\n%%EOF")
+        self.write("old.doc", bytes.fromhex("d0cf11e0a1b11ae1") + b"\x00" * 64)
+        self.scan()
+        self.write("shot.png", png + b"\x01", mtime_shift=2)
+        self.write("scan.pdf", b"%PDF-1.4\nBT (hello again) Tj ET\n%%EOF", mtime_shift=2)
+        self.write("old.doc", bytes.fromhex("d0cf11e0a1b11ae1") + b"\x01" * 64, mtime_shift=2)
+        change = self.scan().change_id
+        fid, d = self.diff(change, "shot.png")
+        self.assertEqual((d["text"], d["reason"], d["image"]), (False, "image", True))
+        self.assertEqual([self.diff(change, p)[1]["reason"] for p in ("scan.pdf", "old.doc")], ["pdf", "old_office"])
+        with self.db.connect() as conn:
+            self.assertEqual(snapshots.file_blob(self.repos, conn, fid, "old"), (png, "image/png"))
+            self.assertEqual(snapshots.file_blob(self.repos, conn, fid, "new"), (png + b"\x01", "image/png"))
+            pdf_id = self.diff(change, "scan.pdf")[0]
+            with self.assertRaises(snapshots.NotFound):   # only images are served
+                snapshots.file_blob(self.repos, conn, pdf_id, "new")
+            with self.assertRaises(Invalid):
+                snapshots.file_blob(self.repos, conn, fid, "other")
+
+    def test_the_image_api(self):
+        import http.client
+        import threading
+        from workhistory.server import App, create_server
+        png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 40
+        self.write("shot.png", png)
+        self.scan()
+        self.write("shot.png", png + b"\x02", mtime_shift=2)
+        fid, _ = self.diff(self.scan().change_id, "shot.png")
+        server = create_server(App(self.db, None, repos_dir=self.repos), 0)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        port = server.server_address[1]
+        try:
+            c = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+            c.request("GET", f"/api/change-files/{fid}/image?side=new", headers={"Host": f"127.0.0.1:{port}"})
+            r = c.getresponse()
+            self.assertEqual((r.status, r.getheader("Content-Type"), r.read()), (200, "image/png", png + b"\x02"))
+            c.request("GET", f"/api/change-files/{fid}/image?side=new",
+                      headers={"Host": f"127.0.0.1:{port}", "Sec-Fetch-Site": "cross-site"})
+            r = c.getresponse()
+            r.read()
+            self.assertEqual(r.status, 403)  # no other web page can read the user's files
+            c.close()
+        finally:
+            server.shutdown()
+            server.server_close()
 
 
 class DecompressionBombTests(unittest.TestCase):

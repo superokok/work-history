@@ -44,8 +44,8 @@ title up in the registered work folders' file list (already recorded) to show it
   `*.jks`, `*.keystore`, `id_rsa*`, `id_ed25519*`, `*credential*`,
   `*secret*`, `*.kdbx`, `.netrc`, `.npmrc`, `.pypirc`, `.pgpass`,
   `.htpasswd`, `*.ppk`, `*.ovpn`, `kubeconfig*`, `*.tfstate*`, `*.gpg`.
-  Build outputs, archives and files over 5 MB are skipped, and symlinks or
-  junctions are not followed. The folder and its own `.git` are only ever read.
+  Build outputs and archives are skipped, files over 5 MB are kept as their
+  size and modified time only, and symlinks or junctions are not followed. The folder and its own `.git` are only ever read.
 - Removing a folder deletes its change records and its snapshot repository.
   "Delete all" removes every snapshot repository. Deleting a date range
   removes the change records; the commits stay in the snapshot repository

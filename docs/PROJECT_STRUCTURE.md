@@ -93,7 +93,7 @@ uv pip install --python .venv/Scripts/python.exe -e .[claude] pip   # pip: 빌�
 .venv/Scripts/python.exe -m workhistory --demo     # 데모 데이터 (별도 demo.db)
 seed-demo.cmd                                      # 시연: 실제 앱 DB를 데모 데이터로 (기존 DB는 %LOCALAPPDATA%\WorkHistory\backup\)
 
-# 테스트 (2026-11-12 기준 220개)
+# 테스트 (2026-11-12 기준 226개)
 .venv/Scripts/python.exe -m unittest discover -s tests -t .
 
 # AI 보고서 품질 평가 (기본: llm/의 가장 큰 로컬 모델. Claude Code 기준값은 --model claude-code:sonnet, 로그인 필요)
@@ -167,6 +167,8 @@ python tools/build_portable.py                 # 인터넷용(Claude Code 포함
 - 주간보고 자료는 폴더 × 주 하나로 보낸다 (2026-11-11): 작업 기록을 날마다 따로 보내지 않고 작업 폴더(와 웹·소통·기타)마다
   한 주 합계 하나로, 요일별 분을 붙여 보낸다. 데모 주 12,960자 → 8,616자, 바쁜 주(스냅샷 658개)도 줄이지 않고 한 번에 들어간다.
   한 폴더를 두 업무가 나눠 쓰면, 날마다 그 폴더의 파일 변경을 인용한 업무에 그날 시간을 준다(근거 없는 날은 똑같이 나눔).
+- 파일 형식별 변경 기록 (2026-11-12): 5MB 넘는 파일은 내용 없이 크기·수정 시각만 남겨 추가·수정·삭제를 기록한다. HWPX와 UTF-16 텍스트도 바뀐 줄을 보여 주고,
+  그림은 변경 창에서 전후를 나란히 보여 준다. PDF·예전 Office(doc·xls·ppt)·그 밖의 바이너리는 이유를 안내한다.
 - 1분 이상 본 창 제목은 모두 보낸다 (2026-11-12, 전에는 기록마다 오래 본 10개): 근거(파일 이름·이슈 번호)가 늘고,
   바쁜 하루도 1만 6천 자 정도로 예산 안이다. 기록 하나가 혼자 넘치면(창 수백 개) 제목을 나눠 "이어서"(continued, 시간 없음)
   항목으로 다음 요청에 보낸다. 시간대(8개), 변경당 파일 이름(20개), diff 발췌, 1분 미만 창은 그대로 줄여 보낸다.

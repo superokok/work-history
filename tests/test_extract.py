@@ -69,6 +69,36 @@ def hwp(paragraphs: list[str], compressed: bool = True) -> bytes:
     return ole([("FileHeader", header.ljust(4096, b"\x00")), ("BodyText/Section0", section)])
 
 
+def zipped(parts: dict[str, str]) -> bytes:
+    import io
+    import zipfile
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        for name, xml in parts.items():
+            z.writestr(name, xml)
+    return buf.getvalue()
+
+
+class TextTests(unittest.TestCase):
+    def test_hwpx_paragraphs_and_table_cells_once_each(self):
+        hp = 'xmlns:hp="http://www.hancom.co.kr/hwpml/2011/paragraph"'
+        section = (f'<hs:sec xmlns:hs="x" {hp}><hp:p><hp:run><hp:t>검토 보고서</hp:t></hp:run></hp:p>'
+                   '<hp:p><hp:run><hp:tbl><hp:tr><hp:tc><hp:subList><hp:p><hp:run><hp:t>항목</hp:t></hp:run></hp:p>'
+                   '</hp:subList></hp:tc></hp:tr></hp:tbl><hp:t>표 아래 설명</hp:t></hp:run></hp:p></hs:sec>')
+        data = zipped({"Contents/section0.xml": section, "Contents/section1.xml": section.replace("검토", "둘째")})
+        self.assertEqual(extract.extract_text("문서.hwpx", data).splitlines(),
+                         ["검토 보고서", "표 아래 설명", "항목", "둘째 보고서", "표 아래 설명", "항목"])
+
+    def test_utf16_text_with_a_byte_order_mark(self):
+        self.assertEqual(extract.extract_text("메모.txt", "\ufeff한글 메모\r\n".encode("utf-16-le")), "한글 메모\r\n")
+        self.assertEqual(extract.extract_text("a.txt", "\ufeffbig".encode("utf-16-be")), "big")
+
+    def test_never_text(self):
+        self.assertIsNone(extract.extract_text("scan.pdf", b"%PDF-1.4 BT (hello) Tj ET"))  # looks like text
+        self.assertIsNone(extract.extract_text("a.txt", extract.LARGE_FILE_MARKER + b"size=9\n"))
+        self.assertIsNone(extract.extract_text("old.xls", b"plain bytes"))
+
+
 class HwpTests(unittest.TestCase):
     def test_paragraphs_of_a_compressed_hwp(self):
         data = hwp(["민원 조회 개선 검토보고서", "1. 현황: 평균 응답 3.2초"])

@@ -51,6 +51,13 @@ AI_ERROR_STATUS = {"not_allowed": 403, "config": 409, "auth": 502, "quota": 429,
                    "network": 503, "server": 503, "blocked": 422, "invalid_output": 502}
 
 
+class Raw:
+    """A response that is not JSON (an image of a changed file)."""
+
+    def __init__(self, payload: bytes, content_type: str):
+        self.payload, self.content_type = payload, content_type
+
+
 class App:
     """Everything a request handler needs."""
 
@@ -312,6 +319,10 @@ class App:
         def change_file_diff(conn, query, body, fid):
             return snapshots.file_diff(self.repos_dir, conn, int(fid))
 
+        @r("GET", r"/api/change-files/(\d+)/image")
+        def change_file_image(conn, query, body, fid):
+            return Raw(*snapshots.file_blob(self.repos_dir, conn, int(fid), query.get("side", "")))
+
         @r("GET", "/api/exclusions")
         def exclusions(conn, query, body):
             return service.list_exclusions(conn)
@@ -426,7 +437,10 @@ def make_handler(app: App, port: int):
                 started = time.perf_counter()
                 result = app.dispatch(method, url.path, query, body)
                 log.debug("%s %s %.0fms", method, url.path, (time.perf_counter() - started) * 1000)
-                self._json(200, result)
+                if isinstance(result, Raw):
+                    self._send(200, result.payload, result.content_type)
+                else:
+                    self._json(200, result)
             except ApiError as e:
                 self._json(e.status, {"error": e.message, "kind": e.kind})
             except Exception:

@@ -270,8 +270,30 @@ function renderChanges(changes) {
     h("div", { class: "change-files" }, ...c.files.flatMap((f, i) => [i ? ", " : "", fileButton(f)])))));
 }
 
-function diffLines(d) {
-  if (!d.text) return [h("div", { class: "muted" }, "텍스트가 아닌 파일이라 내용을 비교할 수 없습니다.")];
+const mb = (bytes) => (bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))}KB` : `${(bytes / 1024 / 1024).toFixed(1)}MB`);
+const NOT_TEXT = {
+  large: (d) => `큰 파일이라 내용은 저장하지 않고 바뀐 것만 기록합니다 (${[d.old_size, d.new_size].filter((s) => s != null).map(mb).join(" → ")}).`,
+  pdf: () => "PDF는 내용을 비교하지 않습니다. 바뀐 것만 기록합니다.",
+  old_office: () => "예전 Office 형식(doc·xls·ppt)이라 내용을 비교할 수 없습니다. docx·xlsx·pptx로 저장하면 바뀐 문장을 보여 줍니다.",
+  image: () => "그림입니다.",
+  binary: () => "텍스트가 아닌 파일이라 내용을 비교할 수 없습니다.",
+};
+
+// An image of the change: before and after, side by side (served only from this PC).
+function imagePair(d, fileId) {
+  const side = (which, label) => h("figure", { class: "image-side" },
+    h("figcaption", { class: "meta" }, label),
+    (which === "old" ? d.kind !== "A" : d.kind !== "D")
+      ? h("img", { src: `/api/change-files/${fileId}/image?side=${which}`, alt: `${label} 그림` })
+      : h("div", { class: "muted" }, which === "old" ? "(새로 추가)" : "(삭제됨)"));
+  return h("div", { class: "image-pair" }, side("old", "바뀌기 전"), side("new", "바뀐 뒤"));
+}
+
+function diffLines(d, fileId) {
+  if (!d.text) {
+    const why = h("div", { class: "muted" }, (NOT_TEXT[d.reason] || NOT_TEXT.binary)(d));
+    return d.image && fileId ? [why, imagePair(d, fileId)] : [why];
+  }
   return d.diff.split("\n").map((line) => h("div", {
     class: line.startsWith("+") && !line.startsWith("+++") ? "add"
       : line.startsWith("-") && !line.startsWith("---") ? "del" : line.startsWith("@@") ? "hunk" : "",
@@ -282,7 +304,7 @@ async function showDiff(f) {
   const d = await guarded(() => api("GET", `/api/change-files/${f.id}/diff`));
   if (!d) return;
   $("diff-title").textContent = `${d.path} · ${kindLabel[d.kind]}`;
-  $("diff-body").replaceChildren(...diffLines(d));
+  $("diff-body").replaceChildren(...diffLines(d, f.id));
   $("diff-overlay").hidden = false;
 }
 
@@ -297,7 +319,8 @@ async function showChange(changeId) {
   const total = c.files_added + c.files_modified + c.files_deleted;
   $("diff-title").textContent = `${c.folder} · ${new Date(c.ts * 1000).toLocaleString("ko-KR")} · 파일 ${total}개`;
   $("diff-body").replaceChildren(
-    ...diffs.flatMap((d) => [h("div", { class: "diff-file" }, `${d.path} · ${kindLabel[d.kind]}`), ...diffLines(d)]),
+    ...diffs.flatMap((d, i) => [h("div", { class: "diff-file" }, `${d.path} · ${kindLabel[d.kind]}`),
+      ...diffLines(d, files[i].id)]),
     ...(total > files.length ? [h("div", { class: "muted" }, `외 ${total - files.length}개 파일은 타임라인에서 볼 수 있습니다.`)] : []));
   $("diff-overlay").hidden = false;
 }

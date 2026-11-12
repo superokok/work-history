@@ -156,6 +156,10 @@ pre.diff .del { background: rgba(201,60,60,.18); }
 pre.diff .hunk { color: var(--muted); }
 pre.diff .diff-file { font-weight: 600; margin-top: 12px; padding: 4px 0; border-bottom: 1px solid var(--line); }
 pre.diff .diff-file:first-child { margin-top: 0; }
+.image-pair { display: flex; gap: 12px; flex-wrap: wrap; margin: 6px 0 10px; white-space: normal; }
+.image-side { margin: 0; flex: 1 1 220px; min-width: 0; }
+.image-side img { display: block; max-width: 100%; max-height: 320px; border: 1px solid var(--line);
+  background: repeating-conic-gradient(#8882 0 25%, transparent 0 50%) 0 0 / 16px 16px; }
 .ref-chip.change { border-color: #d9822b; }
 .answer { white-space: pre-wrap; line-height: 1.7; margin: 8px 0; padding: 8px 12px; }
 .answer .ref-chip { margin: 0 2px; }

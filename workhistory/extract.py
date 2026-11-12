@@ -1,7 +1,9 @@
 """Plain text from files, for diffs and AI context (standard library only).
 
-Supports text/code files, HWP 5.0 (OLE compound file), and Office Open XML
-(.docx, .xlsx, .pptx). Returns None for anything that is not text.
+Supports text/code files (UTF-8, CP949, UTF-16 with a byte order mark), HWP 5.0
+(OLE compound file), HWPX and Office Open XML (.docx, .xlsx, .pptx). Returns None
+for anything that is not text: images, PDF, old binary Office files, and the
+stand-in kept for a file too big to store (`LARGE_FILE_MARKER`).
 """
 
 import io
@@ -16,11 +18,21 @@ MAX_TEXT_CHARS = 2_000_000
 # Unpacked size allowed per document: a small zip or HWP can expand to gigabytes (decompression bomb).
 MAX_UNPACKED_BYTES = 50 * 1024 * 1024
 _OLE_MAGIC = bytes.fromhex("d0cf11e0a1b11ae1")
+# What the snapshot keeps instead of a file over its size limit (snapshots.py): size and time only.
+LARGE_FILE_MARKER = b"WORKHISTORY-LARGE-FILE\n"
+# Never read as text: binary formats whose bytes can still look like text (a simple PDF does).
+NOT_TEXT = (".pdf", ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".ico", ".tif", ".tiff",
+            ".doc", ".xls", ".ppt", ".hwt", ".psd", ".ai", ".eps")
 _ENDOFCHAIN, _FREESECT = 0xFFFFFFFE, 0xFFFFFFFF
 
 
 def decode_text(data: bytes) -> Optional[str]:
-    """UTF-8 (with/without BOM) or CP949 text; None if it looks binary."""
+    """UTF-8 (with/without BOM), UTF-16 with a BOM, or CP949 text; None if it looks binary."""
+    if data[:2] in (b"\xff\xfe", b"\xfe\xff"):  # UTF-16 (Notepad's "유니코드"): full of zero bytes
+        try:
+            return data.decode("utf-16")
+        except UnicodeDecodeError:
+            return None
     if b"\x00" in data[:8000]:
         return None
     for encoding in ("utf-8-sig", "cp949"):
@@ -33,9 +45,13 @@ def decode_text(data: bytes) -> Optional[str]:
 
 def extract_text(name: str, data: bytes) -> Optional[str]:
     lower = name.lower()
+    if data.startswith(LARGE_FILE_MARKER) or lower.endswith(NOT_TEXT):
+        return None
     try:
         if lower.endswith(".hwp"):
             text = hwp_text(data)
+        elif lower.endswith(".hwpx"):
+            text = _ooxml_text(data, r"Contents/section\d+\.xml$", "p")
         elif lower.endswith(".docx"):
             text = _ooxml_text(data, r"word/document\.xml$", "p")
         elif lower.endswith(".pptx"):
@@ -77,14 +93,28 @@ def _ooxml_text(data: bytes, part_pattern: str, paragraph_tag: str) -> str:
         parts = sorted((n for n in z.namelist() if re.search(part_pattern, n)),
                        key=lambda n: [int(x) if x.isdigit() else x for x in re.split(r"(\d+)", n)])
         for part in parts:
-            root = ElementTree.fromstring(reader.read(part))
-            for para in root.iter():
-                if _local(para.tag) != paragraph_tag:
-                    continue
-                text = "".join(t.text or "" for t in para.iter() if _local(t.tag) == "t")
-                if text.strip():
-                    out.append(text)
+            out += _paragraphs(ElementTree.fromstring(reader.read(part)), paragraph_tag)
     return "\n".join(out)
+
+
+def _paragraphs(root: ElementTree.Element, paragraph_tag: str) -> list[str]:
+    """The text runs (`t`) of each paragraph, a paragraph inside another (a table cell, a text box)
+    counted as its own line, not again as part of the outer one."""
+    paragraphs: list[list[str]] = []
+
+    def walk(el: ElementTree.Element, current: Optional[list[str]]) -> None:
+        tag = _local(el.tag)
+        if tag == paragraph_tag:
+            current = []
+            paragraphs.append(current)
+        elif tag == "t" and current is not None:
+            current.append("".join(el.itertext()))
+            return
+        for child in el:
+            walk(child, current)
+
+    walk(root, None)
+    return [text for text in ("".join(p) for p in paragraphs) if text.strip()]
 
 
 def _xlsx_text(data: bytes) -> str:

@@ -31,7 +31,7 @@ from dulwich.repo import Repo
 
 from .config import SNAPSHOT_INTERVAL_S
 from .db import Database
-from .extract import extract_text
+from .extract import LARGE_FILE_MARKER, extract_text
 from .store import Invalid, NotFound
 
 log = logging.getLogger(__name__)
@@ -47,7 +47,11 @@ SECRET_PATTERNS = (".env", ".env.*", "*.pem", "*.key", "*.pfx", "*.p12", "*.jks"
 SKIP_PATTERNS = ("*.exe", "*.dll", "*.so", "*.dylib", "*.class", "*.jar", "*.war", "*.ear", "*.zip",
                  "*.7z", "*.rar", "*.tar", "*.gz", "*.pyc", "*.pyo", "*.o", "*.obj", "*.pdb", "*.iso",
                  "*.mp4", "*.mov", "*.avi", "*.log", "*.tmp", "~$*", "*.lock", "Thumbs.db", "desktop.ini", ".DS_Store")
+# Files over this are kept without their content: a small stand-in with the size and modified
+# time, so adding, changing and deleting them is still recorded (never mistaken for a deletion).
 MAX_FILE_BYTES = 5 * 1024 * 1024
+IMAGE_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif",
+               ".bmp": "image/bmp", ".webp": "image/webp"}
 PACK_BYTES = 64 * 1024 * 1024  # new objects per pack file at most (memory bound)
 PACK_MIN_OBJECTS = 20         # fewer new objects are written as loose objects
 EXACT_DIFF_MAX_LINES = 5000
@@ -193,6 +197,17 @@ def _build_tree(store: Any, files: dict[str, bytes], batch: Optional[_Batch] = N
     return write(root)
 
 
+def large_stand_in(size: int, mtime_ns: int) -> bytes:
+    return LARGE_FILE_MARKER + f"size={size}\nmtime_ns={mtime_ns}\n".encode()
+
+
+def _large_size(data: bytes) -> Optional[int]:
+    if not data.startswith(LARGE_FILE_MARKER):
+        return None
+    m = re.search(rb"size=(\d+)", data)
+    return int(m.group(1)) if m else 0
+
+
 def _text(repo: Repo, blob_id: Optional[bytes], path: str) -> Optional[str]:
     if not blob_id:
         return None
@@ -246,14 +261,15 @@ def scan(conn: sqlite3.Connection, repos_dir: Path, folder_id: int, now: Optiona
                 st = entry.stat()
             except OSError:
                 continue
-            if not stat.S_ISREG(st.st_mode) or st.st_size > MAX_FILE_BYTES:
+            if not stat.S_ISREG(st.st_mode):
                 continue
             cached = cache.get(rel)
             if cached and cached[0] == st.st_size and cached[1] == st.st_mtime_ns:
                 blob_id = cached[2].encode()
             else:
                 try:
-                    data = Path(entry.path).read_bytes()
+                    data = (large_stand_in(st.st_size, st.st_mtime_ns) if st.st_size > MAX_FILE_BYTES
+                            else Path(entry.path).read_bytes())
                 except OSError:
                     # Locked or vanished: keep the previous version instead of recording a deletion.
                     if cached:
@@ -343,7 +359,9 @@ def _record_change(conn: sqlite3.Connection, repo: Repo, folder_id: int, commit_
             is_text = False
         else:
             old_text, new_text = _text(repo, old_blob, path), _text(repo, new_blob, path)
-            is_text = old_text is not None or new_text is not None
+            # A file over the size limit on either side has no content to compare.
+            is_text = (old_text is not None or new_text is not None) and not any(
+                b and repo[b].data.startswith(LARGE_FILE_MARKER) for b in (old_blob, new_blob))
             if is_text:
                 added, removed = _line_counts(old_text or "", new_text or "")
                 totals["lines_added"] += added
@@ -372,16 +390,65 @@ def file_diff(repos_dir: Path, conn: sqlite3.Connection, file_id: int, context: 
     if row is None:
         raise NotFound("변경 파일을 찾을 수 없습니다")
     repo = Repo(str(repo_path(repos_dir, row["folder_id"])))
+    sizes: dict = {}
     try:
         old = _text(repo, row["old_blob"].encode() if row["old_blob"] else None, row["path"])
         new = _text(repo, row["new_blob"].encode() if row["new_blob"] else None, row["path"])
+        for side in ("old", "new"):
+            if row[f"{side}_blob"]:
+                data = repo[row[f"{side}_blob"].encode()].data
+                large = _large_size(data)
+                sizes[f"{side}_size"] = large if large is not None else len(data)
+                sizes["large"] = sizes.get("large", False) or large is not None
     finally:
         repo.close()
-    if old is None and new is None:
-        return {"path": row["path"], "kind": row["kind"], "text": False, "diff": ""}
+    if (old is None and new is None) or sizes.get("large"):
+        return {"path": row["path"], "kind": row["kind"], "text": False, "diff": "", **sizes,
+                "reason": _not_text_reason(row["path"], sizes),
+                "image": _image_type(row["path"]) is not None and not sizes.get("large")}
     diff = "\n".join(difflib.unified_diff((old or "").splitlines(), (new or "").splitlines(),
                                           f"a/{row['path']}", f"b/{row['path']}", n=context, lineterm=""))
     return {"path": row["path"], "kind": row["kind"], "text": True, "diff": diff}
+
+
+def _image_type(path: str) -> Optional[str]:
+    return IMAGE_TYPES.get(Path(path).suffix.lower())
+
+
+def _not_text_reason(path: str, sizes: dict) -> str:
+    """Why a changed file has no text to compare, for the change view."""
+    ext = Path(path).suffix.lower()
+    if sizes.get("large"):
+        return "large"
+    if _image_type(path):
+        return "image"
+    if ext == ".pdf":
+        return "pdf"
+    if ext in (".doc", ".xls", ".ppt"):
+        return "old_office"
+    return "binary"
+
+
+def file_blob(repos_dir: Path, conn: sqlite3.Connection, file_id: int, side: str) -> tuple[bytes, str]:
+    """An image as it was before ("old") or after ("new") the change, for the change view.
+    Only images (never other files, nor SVG, which can carry scripts); it never leaves this PC."""
+    if side not in ("old", "new"):
+        raise Invalid("side는 old 또는 new입니다")
+    row = conn.execute(
+        "SELECT cf.*, c.folder_id FROM change_files cf JOIN changes c ON c.id = cf.change_id WHERE cf.id = ?",
+        (file_id,)).fetchone()
+    content_type = _image_type(row["path"]) if row else None
+    blob = row[f"{side}_blob"] if row else None
+    if not content_type or not blob:
+        raise NotFound("그림을 찾을 수 없습니다")
+    repo = Repo(str(repo_path(repos_dir, row["folder_id"])))
+    try:
+        data = repo[blob.encode()].data
+    finally:
+        repo.close()
+    if data.startswith(LARGE_FILE_MARKER):
+        raise NotFound("큰 파일이라 내용을 저장하지 않았습니다")
+    return data, content_type
 
 
 # ---------------------------------------------------------------- folder management

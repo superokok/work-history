@@ -77,14 +77,25 @@ up in a report and is hard to notice, while an unassigned change stays visible.
   `.htpasswd`, `*.ppk`, `*.ovpn`, `kubeconfig*`, `*.tfstate*`, `*.gpg`.
 - Symlinks and Windows directory junctions are not followed, so a link
   inside a work folder cannot pull in files from elsewhere.
-- Skipped: files over 5 MB and binary build outputs (`*.exe`, `*.dll`,
-  `*.class`, `*.jar`, `*.war`, `*.zip`, `*.7z`, `*.pyc`, ...).
+- Skipped: binary build outputs, archives and logs (`*.exe`, `*.dll`,
+  `*.class`, `*.jar`, `*.war`, `*.zip`, `*.7z`, `*.pyc`, `*.log`, ...).
+- Files over 5 MB (2026-11-12): kept without their content, as a small
+  stand-in with the size and modified time (`snapshots.large_stand_in`). Adding,
+  changing and deleting them is recorded as for any file; a change is noticed
+  by size or modified time.
 - The first snapshot (baseline) is not work: its files are recorded without
   reading them back to tell text from binary.
-- Text files: line diffs. Documents (`.hwp`, `.docx`, `.xlsx`, `.pptx`):
-  extracted text is diffed; extraction results are cached by blob id.
-  A document that would unpack to more than 50 MB is treated as binary
+- Text files: line diffs, in UTF-8, CP949 or UTF-16 with a byte order mark.
+  Documents (`.hwp`, `.hwpx`, `.docx`, `.xlsx`, `.pptx`): extracted text is
+  diffed (paragraphs; a table cell or text box inside a paragraph is its own
+  line). A document that would unpack to more than 50 MB is treated as binary
   (decompression-bomb guard).
+- No text to compare, with the reason in the change view: images (`png`,
+  `jpg`, `gif`, `bmp`, `webp`) show before and after side by side, served by
+  `/api/change-files/<id>/image` to this PC's own page only (never SVG, which
+  can carry scripts; it is diffed as text); PDF is never read as text (its bytes
+  can look like text); old binary Office files (`doc`, `xls`, `ppt`) and other
+  binary files say so. The AI gets only the file name of these.
 
 ## Data protection
 
