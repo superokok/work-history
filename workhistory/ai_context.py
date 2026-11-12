@@ -34,9 +34,12 @@ MIN_WINDOW_S = 60
 # (32k tokens, 8k of them for the answer): about 18k tokens of data, counted in characters of `dumps`.
 PAYLOAD_CHARS = 40_000
 # Ways to make a period fit, tried in order until the payload without diffs takes at most
-# FIT_SHARE of the budget: (windows per record, shortest record sent in seconds,
-# snapshots of one folder closer than this many seconds go as one change, files listed per change).
+# FIT_SHARE of the budget: (windows per record (None = every window seen for MIN_WINDOW_S),
+# shortest record sent in seconds, snapshots of one folder closer than this many seconds go as
+# one change, files listed per change). Reports never go below the first: `plan` sends more
+# requests instead. The others are for `build` (one request, the MCP tool).
 FIT_LEVELS = [
+    (None, 60, 30 * 60, 20),
     (10, 60, 30 * 60, 20),
     (6, 60, 30 * 60, 20),
     (6, 60, 3 * 3600, 10),
@@ -172,13 +175,17 @@ def _spans(r: work.Record) -> str:
 _WEEKDAYS = "월화수목금토일"
 
 
-def _record_item(ref: str, r: work.Record, windows: int) -> dict:
-    when = ({"days": ", ".join(f"{_WEEKDAYS[d.weekday()]} {d.month}/{d.day} {round(sec / 60)}분"
-                               for d, sec in sorted(r.per_day.items()) if sec >= 60)}
-            if r.per_day else {"date": r.day.isoformat(), "times": _spans(r)})
+def _record_item(ref: str, r: work.Record, windows: Optional[int]) -> dict:
+    if r.continued:
+        when = {"date": r.day.isoformat(), "continued": "앞 기록의 창 제목 이어서 (시간은 앞 기록에 있음)"}
+    elif r.per_day:
+        when = {"days": ", ".join(f"{_WEEKDAYS[d.weekday()]} {d.month}/{d.day} {round(sec / 60)}분"
+                                  for d, sec in sorted(r.per_day.items()) if sec >= 60)}
+    else:
+        when = {"date": r.day.isoformat(), "times": _spans(r)}
     return {
         "ref": ref, **({"folder": r.name} if r.folder_id else {"kind": r.name}),
-        "minutes": round(r.seconds / 60), **when,
+        **({} if r.continued else {"minutes": round(r.seconds / 60)}), **when,
         "windows": [{"app": app, "title": redact(title), "minutes": round(sec / 60)}
                     for (app, title), sec in r.top_windows(windows) if sec >= MIN_WINDOW_S],
     }
@@ -315,7 +322,7 @@ def assemble(g: Gathered, records: list[work.Record], rows: list, repos_dir: Opt
 
     def payload(level) -> tuple[dict, list]:
         windows, min_s, gap, limit = level
-        chosen = [(ref, r) for ref, r in records if r.seconds >= max(min_s, 60)]
+        chosen = [(ref, r) for ref, r in records if r.continued or r.seconds >= max(min_s, 60)]
         changes = []
         for burst in _bursts(rows, gap):
             merged = _burst_files(burst, files)
@@ -365,11 +372,11 @@ def assemble(g: Gathered, records: list[work.Record], rows: list, repos_dir: Opt
             ctx.folder_seconds[r.name] = ctx.folder_seconds.get(r.name, 0.0) + r.seconds
         else:
             ctx.outside_s[r.name] = ctx.outside_s.get(r.name, 0.0) + r.seconds
-        if r.seconds < max(min_s, 60):
+        if r.seconds < max(min_s, 60) and not r.continued:
             continue
         ctx.refs.add(ref)
         ctx.sources[ref] = {"type": "work", "day": r.day.isoformat(), "label": r.name,
-                            "start": r.spans[0][0], "end": r.spans[-1][1]}
+                            "start": r.spans[0][0] if r.spans else None, "end": r.spans[-1][1] if r.spans else None}
         if r.folder_id:
             ctx.work_seconds[ref] = r.seconds
             ctx.work_days[ref] = {d.isoformat(): sec for d, sec in (r.per_day or {r.day: r.seconds}).items()}
@@ -411,10 +418,37 @@ def _by_time(rows: list) -> list:
     return sorted(rows, key=lambda c: (c["ts"], c["id"]))
 
 
+def _split_titles(g: Gathered, r: work.Record) -> list[work.Record]:
+    """A day's record too big for one request on its own (hundreds of window titles): its titles,
+    longest first, in pieces that each fit. The first piece carries the record's time; the others
+    are marked `continued` and carry none, so nothing is counted twice and no title is left out."""
+    items = [(w, sec) for w, sec in r.top_windows(None) if sec >= MIN_WINDOW_S]
+    pieces: list[work.Record] = []
+
+    def piece(chunk) -> work.Record:
+        first = not pieces
+        return work.Record(r.day, r.name, r.folder_id, r.seconds if first else 0.0, r.spans,
+                           defaultdict(float, chunk), dict(r.per_day) if first else {}, continued=not first)
+
+    i = 0
+    while i < len(items) or not pieces:
+        lo, hi = i + 1, len(items)
+        while lo < hi:
+            mid = (lo + hi + 1) // 2
+            if _fits(g, [piece(items[i:mid])], []):
+                lo = mid
+            else:
+                hi = mid - 1
+        pieces.append(piece(items[i:lo]))
+        i = lo
+    return pieces
+
+
 def _units(g: Gathered) -> list[Unit]:
     """The pieces a period can be sent in, each small enough for one request: a work folder over
     the period (its record and its file changes), 웹 / 소통 / 기타 together; a folder too big for
-    one request goes day by day, and a day too big in runs of its file changes."""
+    one request goes day by day, a day too big in runs of its file changes, and a day's record
+    too big on its own in pieces of its window titles."""
     by_folder = {r.folder_id: r for r in g.whole if r.folder_id}
     folders = sorted(by_folder.keys() | {c["folder_id"] for c in g.rows},
                      key=lambda f: -(by_folder[f].seconds if f in by_folder else 0.0))
@@ -425,7 +459,7 @@ def _units(g: Gathered) -> list[Unit]:
         wanted.append((set(work.OUTSIDE), outside, []))
     units: list[Unit] = []
     for keys, records, rows in wanted:
-        if _fits(g, records, rows) or (g.start == g.end and not rows):
+        if _fits(g, records, rows):
             units.append((records, rows))
             continue
         for d, day_records, _ in g.days if g.start != g.end else [(g.start, records, 0.0)]:
@@ -436,6 +470,9 @@ def _units(g: Gathered) -> list[Unit]:
             if _fits(g, recs, day_rows):
                 units.append((recs, day_rows))
                 continue
+            for r in [r for r in recs if not _fits(g, [r], [])]:
+                units += [([p], []) for p in _split_titles(g, r)]
+                recs = [x for x in recs if x is not r]
             # Runs of the day's file changes, as long as fit; the record goes with the first run.
             i = 0
             while i < len(day_rows) or (recs and i == 0):

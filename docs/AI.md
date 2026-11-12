@@ -158,8 +158,9 @@ one class plus a factory entry (`ai_local.LocalModel` is the second one).
   a bounded excerpt of changed lines; snapshots of one folder less than 30
   minutes apart go as one change, from the first old version to the last new
   one), and work records (W, `work.py`). A day: each work folder's time that
-  day, or the day's 웹 / 소통 / 기타 time, with spans of the day and the window
-  titles that took the most time. A week (2026-11-11): one record per work
+  day, or the day's 웹 / 소통 / 기타 time, with spans of the day (8, then
+  "외 N번") and every window title seen for at least a minute, longest first
+  (2026-11-12; it was the 10 longest before). A week (2026-11-11): one record per work
   folder (and 웹 / 소통 / 기타) over the whole week, with its minutes per day
   ("월 11/2 244분, 화 11/3 207분 …") and the window titles of the week, so a
   folder worked on every day is sent once. The demo week went from 12,960 to
@@ -172,15 +173,23 @@ one class plus a factory entry (`ai_local.LocalModel` is the second one).
 - The payload has a size budget (`ai_context.PAYLOAD_CHARS`, about 18k tokens,
   leaving room in the 32k context for the rules and the answer). It is sent as
   JSON with one record per line, each file as one short string
-  ("src/Auth.java (수정 +12 -3)"). When a period is too big, `FIT_LEVELS` are
-  tried in order: fewer windows per record, wider merging of a folder's
-  changes (up to one per folder per day), fewer files listed per change, and
-  only then leaving out the shortest records.
+  ("src/Auth.java (수정 +12 -3)"). Reports never trim (see the next point).
+  Only `build` (one request, used by the MCP tool) makes a period fit by
+  `FIT_LEVELS`: fewer windows per record, wider merging of a folder's changes
+  (up to one per folder per day), fewer files listed per change, and only then
+  leaving out the shortest records.
+- Kept short by design in every request: windows seen for less than a minute
+  (not sent), spans of a day (8, then "외 N번"), files per change (20, then
+  "more_files"), diff excerpts (600 lines a request, 50 a change, 25 a file,
+  200 characters a line) and 업무 외 (a total only).
 - A report (daily or weekly) whose records do not fit as they are is not
   trimmed but sent in several requests (2026-11-11, `ai_context.plan`). The
   pieces are a work folder over the period (its record and its file changes)
   and 웹 / 소통 / 기타 together; a folder too big on its own goes day by day,
-  and a day too big in runs of its file changes, so every piece fits as it is.
+  a day too big in runs of its file changes, and a day's record too big on its
+  own (hundreds of window titles) in pieces of its titles: the first piece has
+  the time, the others are marked `continued` with no time, so every piece fits
+  as it is and no title is left out.
   The pieces are packed largest first into as few requests as fit; W numbers
   continue from one request to the next, so none is shared. Each request is
   written with `SYSTEM` (the prompt says it is part i of n). Then:

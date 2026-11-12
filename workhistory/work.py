@@ -85,12 +85,14 @@ class Record:
     spans: list[list[float]] = field(default_factory=list)  # [start, end] times of day it was worked on
     windows: dict[tuple[str, str], float] = field(default_factory=lambda: defaultdict(float))  # (app, title)
     per_day: dict[date, float] = field(default_factory=dict)  # a record over several days: seconds per day
+    # More window titles of the record before this one, sent in a later request (ai_context): no time of its own.
+    continued: bool = False
 
     @property
     def key(self) -> str:
         return f"folder:{self.folder_id}" if self.folder_id else self.name
 
-    def top_windows(self, n: int) -> list[tuple[tuple[str, str], float]]:
+    def top_windows(self, n: Optional[int]) -> list[tuple[tuple[str, str], float]]:
         return sorted(self.windows.items(), key=lambda kv: -kv[1])[:n]
 
 

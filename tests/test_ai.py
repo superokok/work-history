@@ -593,6 +593,43 @@ class SplitWeekTests(unittest.TestCase):
         self.assertFalse(ai_service.report_progress()["running"])
 
 
+class ManyTitlesTests(unittest.TestCase):
+    """Every window title seen for a minute is sent, however many: a record too big for one request
+    goes in pieces, the time only on the first."""
+
+    def setUp(self):
+        self._tmp = TempDB()
+        self.db = self._tmp.__enter__()
+        with self.db.connect() as conn:
+            src = conn.execute("INSERT INTO sources (bucket_id, bucket_created, kind, hostname) "
+                               "VALUES ('w', 'c', 'window', 'h')").lastrowid
+            for i in range(300):  # 300 web pages of 2 minutes each, one after another
+                start = local_ts(DAY, 8) + i * 120
+                conn.execute("INSERT INTO window_events (source_id, aw_id, start_ts, end_ts, app, title) "
+                             "VALUES (?, ?, ?, ?, 'chrome.exe', ?)", (src, i, start, start + 120, f"문서 {i} 검토 - Chrome"))
+
+    def tearDown(self):
+        self._tmp.__exit__(None, None, None)
+
+    def test_all_titles_are_sent_in_pieces(self):
+        with self.db.connect() as conn:
+            whole = ai_context.build(conn, DAY, DAY)
+            self.assertEqual(len(whole.payload["work"][0]["windows"]), 300)  # no cap on titles
+            with mock.patch.object(ai_context, "PAYLOAD_CHARS", 6000):
+                parts = ai_context.plan(conn, DAY, DAY)
+        self.assertGreater(len(parts), 1)
+        self.assertTrue(all(c.level == 0 for c in parts))
+        items = [w for c in parts for w in c.payload["work"]]
+        titles = [t["title"] for w in items for t in w["windows"]]
+        self.assertEqual(sorted(titles), sorted(f"문서 {i} 검토" for i in range(300)))  # each once
+        [timed] = [w for w in items if "minutes" in w]
+        self.assertEqual(timed["minutes"], 600)
+        self.assertTrue(all("continued" in w for w in items if w is not timed))
+        merged = ai_context.merge(parts, DAY, DAY)
+        self.assertEqual(merged.outside_s, {"웹": 600 * 60})  # the time counted once
+        self.assertTrue(all(w["ref"] in merged.refs for w in items))
+
+
 class JoinPartsTests(unittest.TestCase):
     def ctx(self, folders: dict[str, str]):
         c = ai_context.Context(DAY, DAY, {"work": [], "changes": []})
