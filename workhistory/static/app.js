@@ -482,43 +482,6 @@ function setReportEditing(on) {
   setReportState();
 }
 
-// 지난 계획 이어 보기: the plan lines of the previous saved report of this kind, each with the records
-// of this period that name the same issue, MR, file or work folder (found by the app, not the AI).
-const PLAN_STATUS = {
-  related: (p, when) => badge("found", `${when} 관련 기록 ${p.count}건`),
-  folder: (p, when) => badge("plain", `${when} 같은 작업 폴더 변경 ${p.folder_changes}건`),
-  none: (p, when) => badge("plain", `${when} 관련 기록 못 찾음`),
-  no_clue: () => badge("plain", "찾을 단서 없음 (직접 확인)"),
-};
-
-async function loadPreviousPlans(kind, day) {
-  const r = await guarded(() => api("GET", `/api/reports/previous-plans?kind=${kind}&date=${day}`));
-  if (!r || kind !== reportKind() || day !== state.reportDay) return;
-  if (!r.from || !r.plans.length) return $("report-plans").replaceChildren();
-  const when = kind === "daily" ? "이날" : "이번 주";
-  const what = kind === "daily" ? "업무일지" : "주간보고";
-  const period = r.from.start === r.from.end ? r.from.start : `${r.from.start} ~ ${r.from.end}`;
-  const list = h("ul", { class: "plan-list" });
-  let group = null;
-  for (const p of r.plans) {
-    if (p.group !== group) {
-      group = p.group;
-      if (group) list.append(h("li", { class: "plan-group" }, group));
-    }
-    list.append(h("li", {},
-      h("div", {}, p.text),
-      h("div", { class: "plan-status" }, PLAN_STATUS[p.status](p, when),
-        p.suggested ? [" ", badge("plain", "확인 안 한 제안")] : null),
-      p.evidence.length ? h("div", { class: "facts" }, p.evidence.map((e) =>
-        factRow(e, e.type === "change" ? `C${e.id}` : ""))) : null));
-  }
-  $("report-plans").replaceChildren(h("div", { class: "card" },
-    h("h2", {}, "지난 계획"),
-    h("p", { class: "muted small-text" }, `${period} ${what}의 계획입니다. 같은 이슈 번호·파일 이름·작업 폴더가 `
-      + `나온 기록을 찾아 보여 줄 뿐, 했는지는 직접 확인하세요.`),
-    list));
-}
-
 async function loadReport() {
   const kind = reportKind(), day = state.reportDay;
   $("report-day").value = day;
@@ -536,7 +499,6 @@ async function loadReport() {
   if (reportEditing && reportLoaded === `${kind}|${day}`) return setReportState();
   reportLoaded = `${kind}|${day}`;
   setReportEditing(false);
-  loadPreviousPlans(kind, day);
 }
 
 function renderReportNotice(ai) {
@@ -616,7 +578,7 @@ $("report-stop").addEventListener("click", () => guarded(async () => {
 
 // ---- Citations. What the AI wrote and what is in the records must never look alike:
 // AI text sits in a tinted "AI" box; records show their own content (the note, the files, the work folder).
-const SOURCE_KINDS = { work: "작업 기록", change: "파일 변경", note: "메모", day: "타임라인", window: "창 기록" };
+const SOURCE_KINDS = { work: "작업 기록", change: "파일 변경", note: "메모", day: "타임라인" };
 
 const sourceWhen = (src) => (src.type === "change" ? `${src.day.slice(5)} ${hhmm(src.start)}`
   : src.day ? src.day.slice(5) : "");
