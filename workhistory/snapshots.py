@@ -255,6 +255,10 @@ def scan(conn: sqlite3.Connection, repos_dir: Path, folder_id: int, now: Optiona
         current: dict[str, bytes] = {}
         state: list[tuple] = []
         changed = False
+        # Big files that were already there but not kept by an app from before big files were
+        # recorded: added to the snapshot without showing up as work.
+        since = _large_files_since(conn, now)
+        quiet: set[str] = set()
         batch = _Batch(store)
         for rel, entry in _walk(root):
             try:
@@ -267,6 +271,8 @@ def scan(conn: sqlite3.Connection, repos_dir: Path, folder_id: int, now: Optiona
             if cached and cached[0] == st.st_size and cached[1] == st.st_mtime_ns:
                 blob_id = cached[2].encode()
             else:
+                if st.st_size > MAX_FILE_BYTES and cache and not cached and st.st_mtime_ns / 1e9 < since:
+                    quiet.add(rel)
                 try:
                     data = (large_stand_in(st.st_size, st.st_mtime_ns) if st.st_size > MAX_FILE_BYTES
                             else Path(entry.path).read_bytes())
@@ -291,7 +297,7 @@ def scan(conn: sqlite3.Connection, repos_dir: Path, folder_id: int, now: Optiona
 
         if changed:  # most scans find nothing new: then no tree is built and nothing is written
             batch.flush()
-            result.change_id, result.baseline = commit_snapshot(conn, repo, folder_id, current, now)
+            result.change_id, result.baseline = commit_snapshot(conn, repo, folder_id, current, now, quiet)
     finally:
         repo.close()
 
@@ -310,9 +316,19 @@ def add_blob(repo: Repo, data: bytes) -> bytes:
     return blob.id
 
 
+def _large_files_since(conn: sqlite3.Connection, now: float) -> float:
+    """When this app started keeping files over MAX_FILE_BYTES (the first scan that could)."""
+    row = conn.execute("SELECT value FROM meta WHERE key = 'large_files_since'").fetchone()
+    if row:
+        return float(row["value"])
+    conn.execute("INSERT INTO meta (key, value) VALUES ('large_files_since', ?)", (repr(now),))
+    return now
+
+
 def commit_snapshot(conn: sqlite3.Connection, repo: Repo, folder_id: int, files: dict[str, bytes],
-                    now: float) -> tuple[Optional[int], bool]:
-    """Commit {path: blob id} if it differs from the last snapshot.
+                    now: float, quiet: frozenset[str] | set[str] = frozenset()) -> tuple[Optional[int], bool]:
+    """Commit {path: blob id} if it differs from the last snapshot. Paths in `quiet` are added
+    without being listed as work (a change of nothing else counts as a baseline).
 
     Returns (change id or None, whether it was the folder's first snapshot).
     """
@@ -334,12 +350,13 @@ def commit_snapshot(conn: sqlite3.Connection, repo: Repo, folder_id: int, files:
     repo.object_store.add_object(commit)
     repo.refs[REF] = commit.id
     change_id = _record_change(conn, repo, folder_id, commit.id.decode(), now, parent_tree, tree_id,
-                               baseline=parent is None)
+                               baseline=parent is None, quiet=quiet)
     return change_id, parent is None
 
 
 def _record_change(conn: sqlite3.Connection, repo: Repo, folder_id: int, commit_id: str, now: float,
-                   old_tree: Optional[bytes], new_tree: bytes, baseline: bool) -> int:
+                   old_tree: Optional[bytes], new_tree: bytes, baseline: bool,
+                   quiet: frozenset[str] | set[str] = frozenset()) -> int:
     change_id = conn.execute("INSERT INTO changes (folder_id, commit_id, ts, baseline) VALUES (?, ?, ?, ?)",
                              (folder_id, commit_id, now, 1 if baseline else 0)).lastrowid
     totals = Counter()
@@ -352,6 +369,8 @@ def _record_change(conn: sqlite3.Connection, repo: Repo, folder_id: int, commit_
         new_blob = ch.new.sha if ch.new and ch.new.sha else None
         path = new_path or old_path
         kind = {"add": "A", "delete": "D"}.get(ch.type, "M")
+        if kind == "A" and path in quiet:
+            continue
         added = removed = None
         if baseline:
             # The first snapshot is not work and is never shown or sent: no need to read every
@@ -379,6 +398,8 @@ def _record_change(conn: sqlite3.Connection, repo: Repo, folder_id: int, commit_
         "lines_removed = ?, project_id = ? WHERE id = ?",
         (totals["files_added"], totals["files_modified"], totals["files_deleted"], totals["lines_added"],
          totals["lines_removed"], _dominant(projects, resolve("")[0]), change_id))
+    if quiet and not projects:  # nothing but files that were already there: not work
+        conn.execute("UPDATE changes SET baseline = 1 WHERE id = ?", (change_id,))
     return change_id
 
 

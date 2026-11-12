@@ -93,7 +93,7 @@ uv pip install --python .venv/Scripts/python.exe -e .[claude] pip   # pip: 빌�
 .venv/Scripts/python.exe -m workhistory --demo     # 데모 데이터 (별도 demo.db)
 seed-demo.cmd                                      # 시연: 실제 앱 DB를 데모 데이터로 (기존 DB는 %LOCALAPPDATA%\WorkHistory\backup\)
 
-# 테스트 (2026-11-12 기준 226개)
+# 테스트 (2026-11-12 기준 227개)
 .venv/Scripts/python.exe -m unittest discover -s tests -t .
 
 # AI 보고서 품질 평가 (기본: llm/의 가장 큰 로컬 모델. Claude Code 기준값은 --model claude-code:sonnet, 로그인 필요)

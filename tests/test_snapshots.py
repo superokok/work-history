@@ -431,6 +431,24 @@ class FormatTests(SnapshotTestCase):
             (self.work / "video-notes.txt").unlink()
             self.assertEqual(self.change_files(self.scan().change_id)[0]["kind"], "D")
 
+    def test_big_files_already_there_before_are_added_quietly(self):
+        """An app from before big files were kept skipped them: they are not new work now."""
+        since = time.time() - 3600
+        with mock.patch.object(snapshots, "MAX_FILE_BYTES", 100),                 mock.patch.object(snapshots, "_large_files_since", lambda conn, now: since):
+            self.scan()                                           # baseline
+            self.write("old-deck.pptx", b"x" * 300, mtime_shift=-7200)  # there long before
+            r = self.scan()
+            self.assertIsNotNone(r.change_id)
+            self.assertEqual(self.change_files(r.change_id), [])
+            with self.db.connect() as conn:
+                self.assertEqual(conn.execute("SELECT baseline FROM changes WHERE id = ?",
+                                              (r.change_id,)).fetchone()[0], 1)
+            self.write("new-deck.pptx", b"y" * 300)              # made since: work
+            self.write("src/Main.java", "class Main {}" + chr(10), mtime_shift=2)
+            r = self.scan()
+            self.assertEqual([f["path"] for f in self.change_files(r.change_id)], ["new-deck.pptx", "src/Main.java"])
+        self.assertIn("old-deck.pptx", self.tree_paths())
+
     def test_images_pdf_and_old_office_say_why_there_is_no_text(self):
         png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 40
         self.write("shot.png", png)

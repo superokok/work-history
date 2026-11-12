@@ -82,7 +82,9 @@ up in a report and is hard to notice, while an unassigned change stays visible.
 - Files over 5 MB (2026-11-12): kept without their content, as a small
   stand-in with the size and modified time (`snapshots.large_stand_in`). Adding,
   changing and deleting them is recorded as for any file; a change is noticed
-  by size or modified time.
+  by size or modified time. Big files already in a folder when this started (modified before
+  `meta.large_files_since`, the first scan that kept them) are added to the snapshot
+  without being listed as work.
 - The first snapshot (baseline) is not work: its files are recorded without
   reading them back to tell text from binary.
 - Text files: line diffs, in UTF-8, CP949 or UTF-16 with a byte order mark.
