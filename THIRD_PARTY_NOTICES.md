@@ -10,36 +10,36 @@ use and redistribution. Full license texts ship in the portable package under
 
 | Component | Version | License | Source |
 |---|---|---|---|
-| Python (CPython runtime) | 3.12.10 | PSF-2.0 (bundled OpenSSL, SQLite, libffi, zlib, bzip2, xz: see runtime/LICENSE.txt) | https://www.python.org |
+| Python (CPython runtime) | 3.12.5 | PSF-2.0 (bundled OpenSSL, SQLite, libffi, zlib, bzip2, xz: see runtime/LICENSE.txt) | https://www.python.org |
 | annotated-types | 0.8.0 | MIT | https://github.com/annotated-types/annotated-types |
-| anyio | 4.16.0 | MIT | https://github.com/agronholm/anyio |
+| anyio | 4.15.1 | MIT | https://github.com/agronholm/anyio |
 | attrs | 26.1.0 | MIT |  |
 | cffi | 2.1.1 | MIT-0 | https://github.com/python-cffi/cffi |
 | click | 8.5.0 | BSD-3-Clause | https://github.com/pallets/click/ |
 | cryptography | 50.0.2 | Apache-2.0 OR BSD-3-Clause | https://github.com/pyca/cryptography |
-| dulwich | 1.2.20 | Apache-2.0 OR GPL-2.0-or-later — used under Apache-2.0 | https://www.dulwich.io/ |
+| dulwich | 1.2.15 | Apache-2.0 OR GPL-2.0-or-later — used under Apache-2.0 | https://www.dulwich.io/ |
 | h11 | 0.16.0 | MIT License | https://github.com/python-hyper/h11 |
-| httpcore2 | 2.16.0 | BSD-3-Clause | https://github.com/pydantic/httpx2 |
-| httpx2 | 2.16.0 | BSD-3-Clause | https://github.com/pydantic/httpx2 |
+| httpcore2 | 2.13.1 | BSD-3-Clause | https://github.com/pydantic/httpx2 |
+| httpx2 | 2.13.1 | BSD-3-Clause | https://github.com/pydantic/httpx2 |
 | idna | 3.20 | BSD-3-Clause | https://github.com/kjd/idna |
 | jsonschema | 4.26.0 | MIT | https://github.com/python-jsonschema/jsonschema |
 | jsonschema-specifications | 2025.9.1 | MIT | https://github.com/python-jsonschema/jsonschema-specifications |
-| mcp | 2.3.0 | MIT License | https://modelcontextprotocol.io |
-| mcp-types | 2.3.0 | MIT License | https://modelcontextprotocol.io |
-| opentelemetry-api | 1.45.2 | Apache-2.0 | https://github.com/open-telemetry/opentelemetry-python/tree/main/opentelemetry-api |
-| pycparser | 3.12 | BSD-3-Clause | https://github.com/eliben/pycparser |
-| pydantic | 2.14.2 | MIT | https://github.com/pydantic/pydantic |
-| pydantic_core | 2.50.2 | MIT | https://github.com/pydantic |
+| mcp | 2.2.0 | MIT License | https://modelcontextprotocol.io |
+| mcp-types | 2.2.0 | MIT License | https://modelcontextprotocol.io |
+| opentelemetry-api | 1.45.0 | Apache-2.0 | https://github.com/open-telemetry/opentelemetry-python/tree/main/opentelemetry-api |
+| pycparser | 3.0 | BSD-3-Clause | https://github.com/eliben/pycparser |
+| pydantic | 2.13.5 | MIT | https://github.com/pydantic/pydantic |
+| pydantic_core | 2.46.5 | MIT | https://github.com/pydantic |
 | PyJWT | 2.15.1 | MIT | https://github.com/jpadilla/pyjwt |
-| python-multipart | 0.0.33 | Apache-2.0 | https://github.com/Kludex/python-multipart |
+| python-multipart | 0.0.32 | Apache-2.0 | https://github.com/Kludex/python-multipart |
 | pywin32 | 312 | Python Software Foundation License | https://github.com/mhammond/pywin32 |
 | referencing | 0.37.0 | MIT | https://github.com/python-jsonschema/referencing |
-| rpds-py | 2026.9.1 | MIT | https://github.com/crate-py/rpds |
-| sse-starlette | 3.6.0 | BSD-3-Clause | https://github.com/sysid/sse-starlette |
-| starlette | 1.10.0 | BSD-3-Clause | https://github.com/Kludex/starlette |
-| truststore | 0.10.5 | MIT | https://github.com/sethmlarson/truststore |
+| rpds-py | 2026.6.3 | MIT | https://github.com/crate-py/rpds |
+| sse-starlette | 3.5.0 | BSD-3-Clause | https://github.com/sysid/sse-starlette |
+| starlette | 1.7.0 | BSD-3-Clause | https://github.com/Kludex/starlette |
+| truststore | 0.10.4 | MIT | https://github.com/sethmlarson/truststore |
 | typing_extensions | 4.16.0 | PSF-2.0 | https://github.com/python/typing_extensions |
-| typing-inspection | 0.4.5 | MIT | https://github.com/pydantic/typing-inspection |
+| typing-inspection | 0.4.4 | MIT | https://github.com/pydantic/typing-inspection |
 | urllib3 | 2.8.0 | MIT |  |
 | uvicorn | 0.54.0 | BSD-3-Clause | https://uvicorn.dev/ |
 
