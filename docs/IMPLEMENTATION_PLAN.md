@@ -36,7 +36,7 @@ manual override → note → search.
    last window, recent sessions, notes.
 7. Search covers session titles/notes and saved reviews.
 
-## Phase 4 — Results, AI and validation ✅ (2026-10-01 ~ 10-27)
+## Phase 4 — Results, AI and validation ✅ (2026-10-01 – 10-27)
 
 - Work-folder snapshots as the primary record (RESULTS_TRACKING.md).
 - AI report drafts and "AI에게 묻기" with verified citations and the honesty
@@ -47,7 +47,7 @@ manual override → note → search.
   privacy exclusions, pause/deletion, AI reference checks and HTTP security
   (`python -m unittest discover -s tests -t .`).
 
-## Phase 5 — Ready for other PCs ✅ (2026-10-28 ~ 11-04)
+## Phase 5 — Ready for other PCs ✅ (2026-10-28 – 11-04)
 
 - Window activity recorded by the app itself (`collector.py`); Windows only.
 - Local AI on the PC (llama.cpp + Qwen3.5). The

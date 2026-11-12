@@ -13,7 +13,7 @@
 | Option | Pros | Cons |
 |---|---|---|
 | **Python stdlib backend + plain HTML/JS UI** (chosen) | Zero required runtime deps (`http.server`, `sqlite3`, `urllib`); trivial to test; no build step | Not a "native" window by default |
-| Electron + Node | Native-feeling window out of the box | ~100 MB+ runtime, `better-sqlite3` native rebuilds, packaging toolchain |
+| Electron + Node | Native-feeling window out of the box | 100 MB+ runtime, `better-sqlite3` native rebuilds, packaging toolchain |
 | Tauri | Small binary | Requires Rust toolchain (not installed) |
 
 **Chosen:** Python 3.12, standard library only, serving a vanilla HTML/JS UI on
