@@ -51,6 +51,7 @@ ai_report.py  – report schema, prompt, reference checks, rendering
 ai_service.py – settings, consent, run log, saved reports; a report in several requests (progress, stop), joined by code, summary last
    ▼
 service.py    – timeline, search, notes, projects
+followup.py   – 지난 계획 이어 보기: the previous saved report's plan lines and the records of this period that name the same issue, MR, file or work folder (no AI)
 dashboard.py  – day/week dashboard: time by kind of activity, the day strip, time per work
                 folder (work.py), file changes per work folder; the day before / last week to compare
 categories.py – kind of activity from the app name (rules, no AI)

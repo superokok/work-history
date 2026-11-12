@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterable, Optional
 from urllib.parse import parse_qs, urlparse
 
-from . import ai_agent, ai_service, dashboard, service, snapshots
+from . import ai_agent, ai_service, dashboard, followup, service, snapshots
 from .ai_client import AIError
 from .autostart import Launch
 from .autostart import default as default_launch
@@ -259,6 +259,12 @@ class App:
         @r("POST", "/api/ai/report/cancel")
         def ai_report_cancel(conn, query, body):
             return ai_service.cancel_report()
+
+        @r("GET", "/api/reports/previous-plans")
+        def previous_plans(conn, query, body):
+            kind = query.get("kind", "")
+            return followup.previous_plans(conn, kind, *ai_service.period(kind, _day(query.get("date"))),
+                                           now=time.time())
 
         @r("GET", "/api/reports")
         def get_report(conn, query, body):

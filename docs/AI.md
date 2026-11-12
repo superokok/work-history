@@ -232,6 +232,11 @@ one class plus a factory entry (`ai_local.LocalModel` is the second one).
   first. Each group's plan section also keeps an empty line (`- `) for the user.
   Plan references do not add time to a group, and the summary covers only what
   was done. Groups joined across requests keep their plans.
+- The next report shows these plans again under "지난 계획" (`followup.py`,
+  2026-11-12): the plan lines of the previous saved report, each with the
+  records of the new period that name the same issue / MR number, file or class
+  name or work folder. This is a text search by the app, not the AI, and it
+  never says a plan was done.
 - Missing work: a work folder whose records (W) and file changes (C) in the
   period are not cited anywhere in the draft is added as "<folder> (작업 폴더)"
   with its time and "이 작업 폴더의 기록이 AI 초안에 빠졌습니다".
