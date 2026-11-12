@@ -90,7 +90,9 @@ up in a report and is hard to notice, while an unassigned change stays visible.
 - Text files: line diffs, in UTF-8, CP949 or UTF-16 with a byte order mark.
   Documents (`.hwp`, `.hwpx`, `.docx`, `.xlsx`, `.pptx`): extracted text is
   diffed (paragraphs; a table cell or text box inside a paragraph is its own
-  line). A document that would unpack to more than 50 MB is treated as binary
+  line). Spreadsheets: each tab by name in tab order, then one line per row with
+  its row number and cells in column order, gaps kept ("3행: 서버 | 1200 |  | 메모");
+  dates as dates, TRUE/FALSE, and a formula next to its value ("1200 (=SUM(B3:B3))"). A document that would unpack to more than 50 MB is treated as binary
   (decompression-bomb guard).
 - No text to compare, with the reason in the change view: images (`png`,
   `jpg`, `gif`, `bmp`, `webp`) show before and after side by side, served by

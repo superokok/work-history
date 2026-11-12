@@ -11,6 +11,7 @@ import re
 import struct
 import zipfile
 import zlib
+from datetime import datetime, timedelta
 from typing import Optional
 from xml.etree import ElementTree
 
@@ -117,34 +118,120 @@ def _paragraphs(root: ElementTree.Element, paragraph_tag: str) -> list[str]:
     return [text for text in ("".join(p) for p in paragraphs) if text.strip()]
 
 
+# Built-in number formats that show a date or a time (ECMA-376 18.8.30).
+_DATE_FORMATS = set(range(14, 23)) | {45, 46, 47}
+_EXCEL_EPOCH = datetime(1899, 12, 30)
+
+
+def _is_date_format(code: str) -> bool:
+    """A custom number format that shows a date or time: y, m, d, h or s outside quoted text
+    and [...] parts ('yyyy"년" m"월" d"일"', '[$-412]yyyy-mm-dd')."""
+    bare = re.sub(r'"[^"]*"|\[[^\]]*\]|\\.', "", code)
+    return bool(re.search(r"[ymdhs]", bare, re.I)) and not re.fullmatch(r"(?i)\s*general\s*", bare)
+
+
+def _excel_date(value: str) -> str:
+    serial = float(value)
+    moment = _EXCEL_EPOCH + timedelta(days=serial)
+    if serial == int(serial):
+        return moment.strftime("%Y-%m-%d")
+    return moment.strftime("%Y-%m-%d %H:%M" if serial >= 1 else "%H:%M")
+
+
+def _column(ref: str) -> int:
+    """0-based column of a cell reference ("B3" -> 1, "AA10" -> 26)."""
+    n = 0
+    for ch in re.match(r"[A-Z]*", ref.upper()).group(0):
+        n = n * 26 + ord(ch) - 64
+    return n - 1
+
+
+def _xlsx_sheets(z: zipfile.ZipFile, reader: "_Parts") -> list[tuple[str, str]]:
+    """(sheet name, part) in the order of the workbook's tabs."""
+    names = z.namelist()
+    try:
+        book = ElementTree.fromstring(reader.read("xl/workbook.xml"))
+        rels = ElementTree.fromstring(reader.read("xl/_rels/workbook.xml.rels"))
+        target = {r.get("Id"): r.get("Target", "") for r in rels}
+        out = []
+        for sheet in (e for e in book.iter() if _local(e.tag) == "sheet"):
+            rid = next((v for k, v in sheet.attrib.items() if _local(k) == "id"), None)
+            path = target.get(rid, "").lstrip("/")
+            path = path if path.startswith("xl/") else "xl/" + path
+            if path in names:
+                out.append((sheet.get("name") or path.rsplit("/", 1)[-1][:-4], path))
+        if out:
+            return out
+    except (KeyError, ElementTree.ParseError):
+        pass
+    sheets = [n for n in names if re.match(r"xl/worksheets/sheet\d+\.xml$", n)]
+    sheets.sort(key=lambda n: int(re.search(r"(\d+)\.xml$", n).group(1)))
+    return [(n.rsplit("/", 1)[-1][:-4], n) for n in sheets]
+
+
+def _rich_text(el: ElementTree.Element) -> str:
+    """A shared or inline string: its text and runs, not the phonetic guide (rPh) some files carry."""
+    parts = []
+    for child in el:
+        tag = _local(child.tag)
+        if tag == "t":
+            parts.append(child.text or "")
+        elif tag == "r":
+            parts += [t.text or "" for t in child if _local(t.tag) == "t"]
+    return "".join(parts)
+
+
 def _xlsx_text(data: bytes) -> str:
+    """Each sheet by its tab name, then one line per row: its row number and its cells in column
+    order ("3행: 서버 | 1200 |  | 메모"); dates as dates, formulas next to their value."""
     with zipfile.ZipFile(io.BytesIO(data)) as z:
         reader = _Parts(z)
+        names = z.namelist()
         shared = []
-        if "xl/sharedStrings.xml" in z.namelist():
-            for si in ElementTree.fromstring(reader.read("xl/sharedStrings.xml")):
-                shared.append("".join(t.text or "" for t in si.iter() if _local(t.tag) == "t"))
+        if "xl/sharedStrings.xml" in names:
+            shared = [_rich_text(si) for si in ElementTree.fromstring(reader.read("xl/sharedStrings.xml"))]
+        date_styles: set[int] = set()
+        if "xl/styles.xml" in names:
+            styles = ElementTree.fromstring(reader.read("xl/styles.xml"))
+            custom = {int(f.get("numFmtId", -1)): f.get("formatCode", "")
+                      for f in styles.iter() if _local(f.tag) == "numFmt"}
+            xfs = next((e for e in styles.iter() if _local(e.tag) == "cellXfs"), None)
+            for i, xf in enumerate(xfs if xfs is not None else []):
+                fmt = int(xf.get("numFmtId", 0))
+                if fmt in _DATE_FORMATS or (fmt in custom and _is_date_format(custom[fmt])):
+                    date_styles.add(i)
         out = []
-        sheets = sorted(n for n in z.namelist() if re.match(r"xl/worksheets/sheet\d+\.xml$", n))
-        for sheet in sheets:
-            out.append(f"[{sheet.rsplit('/', 1)[-1][:-4]}]")
-            for row in ElementTree.fromstring(reader.read(sheet)).iter():
+        for name, part in _xlsx_sheets(z, reader):
+            out.append(f"[{name}]")
+            for row in ElementTree.fromstring(reader.read(part)).iter():
                 if _local(row.tag) != "row":
                     continue
-                cells = []
-                for c in row:
-                    if _local(c.tag) != "c":
-                        continue
+                cells: dict[int, str] = {}
+                for i, c in enumerate(e for e in row if _local(e.tag) == "c"):
+                    col = _column(c.get("r", "")) if c.get("r") else i
                     value = next((v.text for v in c if _local(v.tag) == "v"), None)
-                    inline = "".join(t.text or "" for t in c.iter() if _local(t.tag) == "t")
-                    if c.get("t") == "s" and value is not None and value.isdigit() and int(value) < len(shared):
-                        cells.append(shared[int(value)])
-                    elif inline:
-                        cells.append(inline)
-                    elif value is not None:
-                        cells.append(value)
+                    formula = next((f.text for f in c if _local(f.tag) == "f" and f.text), None)
+                    kind = c.get("t", "n")
+                    if kind == "s" and value is not None and value.isdigit() and int(value) < len(shared):
+                        text = shared[int(value)]
+                    elif kind == "inlineStr":
+                        text = "".join(_rich_text(e) for e in c if _local(e.tag) == "is")
+                    elif kind == "b" and value is not None:
+                        text = "TRUE" if value == "1" else "FALSE"
+                    elif kind == "n" and value is not None and int(c.get("s", 0)) in date_styles:
+                        try:
+                            text = _excel_date(value)
+                        except (ValueError, OverflowError):
+                            text = value
+                    else:
+                        text = value or ""
+                    if formula:
+                        text = f"{text} (={formula})" if text else f"(={formula})"
+                    if text:
+                        cells[max(col, 0)] = text
                 if cells:
-                    out.append("\t".join(cells))
+                    line = " | ".join(cells.get(k, "") for k in range(max(cells) + 1))
+                    out.append(f"{row.get('r') or len(out)}행: {line}")
     return "\n".join(out)
 
 

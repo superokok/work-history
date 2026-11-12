@@ -99,6 +99,62 @@ class TextTests(unittest.TestCase):
         self.assertIsNone(extract.extract_text("old.xls", b"plain bytes"))
 
 
+NS = ('xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+      'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"')
+
+
+def workbook(amount: str, day: str, sheets: int = 2) -> bytes:
+    """Two named tabs (plus empty ones), shared strings, a gap column, a formula, a date and a boolean."""
+    tabs = ["예산", "일정"] + [f"빈{i}" for i in range(3, sheets + 1)]
+    parts = {
+        "xl/workbook.xml": f"<workbook {NS}><sheets>" + "".join(
+            f'<sheet name="{n}" sheetId="{i + 1}" r:id="rId{i + 1}"/>' for i, n in enumerate(tabs)) + "</sheets></workbook>",
+        "xl/_rels/workbook.xml.rels": '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            + "".join(f'<Relationship Id="rId{i + 1}" Target="worksheets/sheet{i + 1}.xml"/>' for i in range(len(tabs)))
+            + "</Relationships>",
+        "xl/sharedStrings.xml": f"<sst {NS}><si><t>항목</t></si><si><t>금액</t></si>"
+            "<si><r><t>서</t></r><r><t>버</t></r><rPh><t>サーバ</t></rPh></si><si><t>비고</t></si></sst>",
+        "xl/styles.xml": f'<styleSheet {NS}><numFmts><numFmt numFmtId="176" formatCode="yyyy&quot;년&quot; m&quot;월&quot;"/>'
+            '</numFmts><cellXfs><xf numFmtId="0"/><xf numFmtId="14"/><xf numFmtId="176"/><xf numFmtId="4"/></cellXfs></styleSheet>',
+        "xl/worksheets/sheet1.xml": f"<worksheet {NS}><sheetData>"
+            '<row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c><c r="D1" t="s"><v>3</v></c></row>'
+            f'<row r="3"><c r="A3" t="s"><v>2</v></c><c r="B3" s="3"><v>{amount}</v></c>'
+            '<c r="D3" t="inlineStr"><is><t>메모</t></is></c></row>'
+            f'<row r="4"><c r="A4" t="str"><v>합계</v></c><c r="B4"><f>SUM(B3:B3)</f><v>{amount}</v></c></row>'
+            "</sheetData></worksheet>",
+        "xl/worksheets/sheet2.xml": f"<worksheet {NS}><sheetData><row r=\"1\">"
+            f'<c r="A1" s="1"><v>{day}</v></c><c r="B1" s="2"><v>45962</v></c><c r="C1" t="b"><v>1</v></c>'
+            '<c r="D1" s="1"><v>45972.5</v></c></row></sheetData></worksheet>',
+    }
+    for i in range(3, len(tabs) + 1):
+        parts[f"xl/worksheets/sheet{i}.xml"] = f"<worksheet {NS}><sheetData/></worksheet>"
+    return zipped(parts)
+
+
+class XlsxTests(unittest.TestCase):
+    def test_sheets_rows_columns_dates_and_formulas(self):
+        self.assertEqual(extract.extract_text("예산.xlsx", workbook("1200", "45972")).splitlines(), [
+            "[예산]",
+            "1행: 항목 | 금액 |  | 비고",
+            "3행: 서버 | 1200 |  | 메모",
+            "4행: 합계 | 1200 (=SUM(B3:B3))",
+            "[일정]",
+            "1행: 2025-11-11 | 2025-11-01 | TRUE | 2025-11-11 12:00",
+        ])
+
+    def test_a_changed_cell_is_one_changed_line(self):
+        import difflib
+        old = extract.extract_text("a.xlsx", workbook("1200", "45972")).splitlines()
+        new = extract.extract_text("a.xlsx", workbook("1500", "45972")).splitlines()
+        changed = [l for l in difflib.unified_diff(old, new, lineterm="", n=0) if l[:1] in "+-" and l[:3] not in ("+++", "---")]
+        self.assertEqual(changed, ["-3행: 서버 | 1200 |  | 메모", "-4행: 합계 | 1200 (=SUM(B3:B3))",
+                                   "+3행: 서버 | 1500 |  | 메모", "+4행: 합계 | 1500 (=SUM(B3:B3))"])
+
+    def test_tab_order_with_more_than_ten_sheets(self):
+        names = [l for l in extract.extract_text("a.xlsx", workbook("1", "1", sheets=12)).splitlines() if l.startswith("[")]
+        self.assertEqual(names, ["[예산]", "[일정]"] + [f"[빈{i}]" for i in range(3, 13)])
+
+
 class HwpTests(unittest.TestCase):
     def test_paragraphs_of_a_compressed_hwp(self):
         data = hwp(["민원 조회 개선 검토보고서", "1. 현황: 평균 응답 3.2초"])
