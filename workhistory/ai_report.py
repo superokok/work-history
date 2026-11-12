@@ -1,7 +1,9 @@
 """AI work report drafts (daily 업무일지 / weekly 주간보고) with verified citations.
 
-The model writes what was done, from the records; plans (차주 계획 / 다음 할 일) are
-the user's to write, so that section is left empty in the draft."""
+The model writes what was done, from the records, and suggests plans (차주 계획 /
+다음 할 일) only where they follow from those records: every suggestion must cite a
+record that was sent, or code drops it, and it stays marked "(제안)" until the user
+confirms it."""
 
 import json
 import re
@@ -19,7 +21,9 @@ SECTION_LABELS = {
 # Whether a piece of work is finished is the user's call (the records show work, not that it is
 # done): every line of what was done starts as 진행 중, and the user marks it 완료 in the report.
 IN_PROGRESS = "진행 중"
-STATUS_SUFFIX = re.compile(r"\s*\((진행 중|완료)\)\s*$")
+# A plan line the model suggested ends in "(제안)" until the user confirms it (a click, or editing).
+SUGGESTED = "제안"
+STATUS_SUFFIX = re.compile(r"\s*\((진행 중|완료|제안)\)\s*$")
 
 _ITEM = {
     "type": "object",
@@ -44,8 +48,10 @@ SCHEMA = {
                     "project": {"type": "string",
                                 "description": "업무 이름: 기록에 나온 이슈 번호·저장소·주제로 짧게, 묶기 어려우면 '기타'"},
                     "done": {"type": "array", "items": _ITEM, "description": "한 일 (실적)"},
+                    "next": {"type": "array", "items": _ITEM,
+                             "description": "다음 계획 제안: 이 기록에서 바로 이어지는 일 0~2개, 근거 ref 필수"},
                 },
-                "required": ["project", "done"],
+                "required": ["project", "done", "next"],
             },
         },
     },
@@ -73,9 +79,9 @@ SYSTEM = """당신은 업무 보고서 초안을 작성합니다.
 - 파일 변경(C)은 실제로 만들거나 고친 결과물이므로 실적의 가장 좋은 근거입니다. diff_excerpt와 파일 이름, 같은 날 그 폴더의 W 창 제목을 함께 보고 무엇을 바꿨는지 업무 언어로 요약합니다. 코드나 경로를 길게 옮기지 말고 필요하면 클래스나 파일 이름만 괄호로 붙입니다.
 - 한 일(done)을 먼저 씁니다. 기간 안의 파일 변경(C)은 하나도 빠짐없이 어느 업무의 한 일(done) 항목 refs에 넣습니다.
 - 창 제목은 무엇을 보고 작업했는지를 보여줄 뿐, 끝냈다는 증거가 아닙니다. 파일 변경(C)이 있으면 '추가', '수정', '작성'처럼 쓰고, 창 제목에 보이는 사실(예: 'MR !312 등록')은 그대로 쓸 수 있습니다. '완료', '해결', '종료' 같은 단정은 쓰지 않고 '~ 작업', '~ 검토', '~ 분석'처럼 한 일로 씁니다. 끝났는지는 사용자가 보고서에서 직접 표시합니다.
-- 한 일만 씁니다. 다음 계획은 사용자가 직접 쓰므로 제안하지 않습니다.
+- 다음 계획(next): 업무마다 이 기록에서 바로 이어지는 일을 0~2개 제안합니다 (예: 올린 MR의 리뷰 반영, 작성한 마이그레이션의 적용과 확인, 분석한 문제의 수정). 각 제안의 refs에는 그 제안이 이어지는 기록의 ref를 넣습니다 (refs가 없으면 버려집니다). 기록에 없는 새 업무, 날짜, 기한, 담당자, 목표 수치는 쓰지 않습니다. 이어질 일이 분명하지 않으면 빈 배열로 둡니다. 제안은 사용자가 확인하기 전까지 '(제안)'으로 표시됩니다 (앱이 붙이므로 직접 쓰지 않습니다).
 - 같은 일을 여러 날 했으면 한 항목으로 합치고 ref를 모두 넣습니다. 여러 날 자료에서는 파일 변경(C)의 date로 어느 날 무엇을 했는지 알 수 있습니다.
-- 요약(summary)에도 같은 규칙을 적용합니다. '완료', '해결' 대신 '진행', '작업'으로 씁니다. 항목 끝에 '(진행 중)' 같은 상태를 붙이지 않습니다 (앱이 붙입니다).
+- 요약(summary)에도 같은 규칙을 적용합니다. 요약은 한 일만 다루고 다음 계획은 넣지 않습니다. '완료', '해결' 대신 '진행', '작업'으로 씁니다. 항목 끝에 '(진행 중)' 같은 상태를 붙이지 않습니다 (앱이 붙입니다).
 - 한국어 업무 보고 문체로, 한 항목은 한 줄로 간결하게 씁니다 (명사형 종결)."""
 
 @dataclass
@@ -91,6 +97,7 @@ class ProjectBlock:
     project: str
     seconds: float
     done: list[Item] = field(default_factory=list)
+    next: list[Item] = field(default_factory=list)  # suggested plans, each citing a record that was sent
     missing_from_ai: bool = False
 
 
@@ -105,6 +112,7 @@ class Report:
     dropped_refs: int = 0
     outside_s: dict[str, float] = field(default_factory=dict)  # time outside the work folders: 웹 / 소통 / 기타
     notes: list[str] = field(default_factory=list)  # how the draft was made, when not in one request
+    dropped_plans: int = 0  # suggested plans without a verified reference (not shown)
 
 
 def prompt(kind: str, ctx: Context) -> str:
@@ -157,6 +165,7 @@ def join_same_work(projects: list[dict], same: Any) -> list[dict]:
         group = [p for p in out if p["project"] in wanted]
         for other in group[1:]:
             group[0]["done"] = group[0]["done"] + other["done"]
+            group[0]["next"] = (group[0].get("next") or []) + (other.get("next") or [])
             out.remove(other)
     return out
 
@@ -189,6 +198,7 @@ def join_parts(parts: list[tuple[Context, Any]]) -> list[dict]:
                 out.append(target)
                 folder_of[id(target)] = main
             target["done"] += done
+            target.setdefault("next", []).extend(d for d in entry.get("next") or [] if isinstance(d, dict))
     return out
 
 
@@ -212,7 +222,7 @@ def validate(kind: str, ctx: Context, raw: Any) -> Report:
     if not isinstance(raw, dict):
         raw = {}
     blocks: dict[str, ProjectBlock] = {}
-    dropped = 0
+    dropped = dropped_plans = 0
     for entry in raw.get("projects") or []:
         if not isinstance(entry, dict):
             continue
@@ -221,6 +231,11 @@ def validate(kind: str, ctx: Context, raw: Any) -> Report:
         items, d = _items(entry.get("done"), ctx.refs)  # anything else the model sends is ignored
         block.done.extend(items)
         dropped += d
+        # A plan is a suggestion that must follow from the records: one citing none that was sent is dropped.
+        plans, d = _items(entry.get("next"), ctx.refs)
+        block.next.extend(p for p in plans if p.refs)
+        dropped += d
+        dropped_plans += sum(1 for p in plans if not p.refs)
     # Time of a group = the work folder records it cites, never counted twice. A record cited by
     # several groups (one folder, two pieces of work) is shared day by day: a day goes to the groups
     # that cite a file change of that folder on that day, a day without such evidence evenly.
@@ -253,8 +268,10 @@ def validate(kind: str, ctx: Context, raw: Any) -> Report:
             blocks.setdefault(name, ProjectBlock(name, ctx.folder_seconds.get(folder, 0.0), missing_from_ai=True))
     ordered = sorted(blocks.values(), key=lambda b: (b.missing_from_ai, b.project == "기타", -b.seconds))
     summary = str(raw.get("summary") or "").strip()
-    return Report(kind, ctx.start.isoformat(), ctx.end.isoformat(), summary, ordered, ctx.offwork_s, dropped,
-                  dict(ctx.outside_s))
+    report = Report(kind, ctx.start.isoformat(), ctx.end.isoformat(), summary, ordered, ctx.offwork_s, dropped,
+                    dict(ctx.outside_s))
+    report.dropped_plans = dropped_plans
+    return report
 
 
 FLAG_TEXT = {"no_evidence": " (근거 없음 — 확인 필요)"}
@@ -278,7 +295,10 @@ def render_text(report: Report) -> str:
         for it in b.done:
             # What was done starts as 진행 중; the user marks it 완료 (a click on the saved report).
             lines.append(f"- {STATUS_SUFFIX.sub('', it.text)}{FLAG_TEXT.get(it.flag or '', '')} ({IN_PROGRESS})")
-        lines += [f"[{next_label}]", "- ", ""]  # the user's plans
+        lines.append(f"[{next_label}]")
+        for it in b.next:
+            lines.append(f"- {STATUS_SUFFIX.sub('', it.text)} ({SUGGESTED})")
+        lines += ["- ", ""]  # room for the user's own plans
     outside = [f"{name} {duration(sec)}" for name, sec in report.outside_s.items() if sec >= 60]
     if outside:
         lines += [f"(작업 폴더 밖: {' · '.join(outside)})"]
@@ -290,7 +310,7 @@ def render_text(report: Report) -> str:
 
 
 def _cited(report: Report) -> list[str]:
-    return list(dict.fromkeys(r for b in report.projects for it in b.done for r in it.refs))
+    return list(dict.fromkeys(r for b in report.projects for it in b.done + b.next for r in it.refs))
 
 
 def to_dict(report: Report, ctx: Context) -> dict:
@@ -300,7 +320,9 @@ def to_dict(report: Report, ctx: Context) -> dict:
     return {
         "kind": report.kind, "start": report.start, "end": report.end, "summary": report.summary,
         "projects": [{"project": b.project, "seconds": b.seconds, "missing_from_ai": b.missing_from_ai,
-                      "done": [item(i) for i in b.done]} for b in report.projects],
+                      "done": [item(i) for i in b.done], "next": [item(i) for i in b.next]}
+                     for b in report.projects],
+        "dropped_plans": report.dropped_plans,
         "offwork_s": report.offwork_s,
         "outside_s": report.outside_s,
         "dropped_refs": report.dropped_refs,

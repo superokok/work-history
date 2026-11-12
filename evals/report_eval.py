@@ -8,7 +8,7 @@ facts we know from the scenario:
 - required facts must appear (anywhere in the items; the model names the groups),
 - over-claims and wrong issue numbers must not appear anywhere, group names included
   (e.g. "GOV-1423 완료" while it is not, GOV-1418 on this week's work),
-- a daily report must not contain other days' work,
+- a daily report must not contain other days' work, in its lines or its suggested plans,
 - references must all verify; flags and restored work folders are reported.
 
 Usage:
@@ -45,16 +45,19 @@ CASES = [
         "require": [r"count|카운트|MR !318|!318", r"DBA"],
         # Cursor paging (GOV-1430) is only being explored; GOV-1418 was closed last week.
         "forbid": [r"GOV-1430[^\n]{0,30}(완료|적용|해결)", r"커서[^\n]{0,20}(완료|적용 완료)", r"GOV-1418"],
+        "forbid_plans": [r"GOV-1418"],
     },
     {
         "name": "fix day (daily)", "kind": "daily", "offset": -6,
         "require": [r"TokenRefreshFilter|무효화|토큰"],
         "forbid": [r"GOV-1423", r"[Hh]elm", r"인덱스"],  # none of this happened that day
+        "forbid_plans": [r"GOV-1423", r"[Hh]elm", r"인덱스"],
     },
     {
         "name": "K8s day (daily)", "kind": "daily", "offset": -5,
         "require": [r"[Hh]elm|배포|values|Deployment|deployment"],
         "forbid": [r"GOV-1423", r"인덱스"],
+        "forbid_plans": [r"GOV-1423", r"인덱스"],
     },
 ]
 
@@ -73,6 +76,12 @@ def evaluate(case: dict, report: ai_report.Report) -> list[str]:
         for line in lines:
             if re.search(p, line):
                 failures.append(f"forbidden /{p}/ -> '{re.search(p, line).group(0)}'")
+    # Plans are suggestions, so "적용" is fine there; another day's or a closed piece of work is not.
+    plans = [i.text for b in report.projects for i in b.next]
+    for p in case.get("forbid_plans", []):
+        for line in plans:
+            if re.search(p, line):
+                failures.append(f"forbidden plan /{p}/ -> '{line}'")
     return failures
 
 

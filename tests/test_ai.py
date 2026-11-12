@@ -109,7 +109,8 @@ class ValidationTests(AIDataTestCase):
             "project": "Gov24 백엔드",
             "done": [{"text": "리프레시 토큰 처리 분석", "refs": [self.folder, "W999", self.folder, self.web]},
                      {"text": "근거 없는 성과", "refs": ["S424242"]}],
-            "next": [{"text": "AI가 지어낸 계획", "refs": [self.folder]}, {"text": "", "refs": []}],
+            "next": [{"text": "리뷰 반영", "refs": [self.folder]}, {"text": "근거 없는 계획", "refs": []},
+                     {"text": "없는 기록의 계획", "refs": ["W999"]}, {"text": "", "refs": []}],
             "issues": [{"text": "예전 형식의 이슈 칸", "refs": [self.folder]}],  # no longer asked for: ignored
         }]}
 
@@ -119,10 +120,12 @@ class ValidationTests(AIDataTestCase):
         self.assertEqual([(i.text, i.refs, i.flag) for i in block.done],
                          [("리프레시 토큰 처리 분석", ["W1", "W2"], None), ("근거 없는 성과", [], "no_evidence")])
         self.assertNotIn("예전 형식의 이슈 칸", ai_report.render_text(report))
-        self.assertNotIn("AI가 지어낸 계획", ai_report.render_text(report))  # plans are the user's to write
+        # A suggested plan must cite a record that was sent; the others are dropped, not shown.
+        self.assertEqual([(i.text, i.refs) for i in block.next], [("리뷰 반영", ["W1"])])
+        self.assertEqual(report.dropped_plans, 2)
+        self.assertNotIn("근거 없는 계획", ai_report.render_text(report))
         self.assertNotIn("issues", json.dumps(ai_report.SCHEMA))
-        self.assertNotIn("next", json.dumps(ai_report.SCHEMA))
-        self.assertEqual(report.dropped_refs, 2)
+        self.assertEqual(report.dropped_refs, 3)
         self.assertEqual(block.seconds, 40 * 60)  # the work folder's time; 웹 adds none
 
     def test_what_was_done_starts_in_progress(self):
@@ -136,8 +139,8 @@ class ValidationTests(AIDataTestCase):
         self.assertEqual([i.flag for i in report.projects[0].done], [None, None])  # no word checks
         text = ai_report.render_text(report)
         self.assertIn("[금주 실적]\n- 토큰 갱신 로직 수정 (진행 중)\n- AuthService 정리 (진행 중)", text)
-        self.assertIn("[차주 계획]\n- \n", text)  # left empty for the user
-        self.assertNotIn("리뷰 반영", text)
+        # Plans are the model's suggestions until the user confirms them; a line is left for their own.
+        self.assertIn("[차주 계획]\n- 리뷰 반영 (제안)\n- \n", text)
 
     def test_issue_numbers_are_not_checked(self):
         """A wrong issue number is for the user to notice: no mark on the line, the name or the summary."""
@@ -187,7 +190,7 @@ class ValidationTests(AIDataTestCase):
         self.assertIn("## Gov24 백엔드 (40분)", text)
         self.assertIn("[금주 실적]\n- 리프레시 토큰 처리 분석 (진행 중)\n- 근거 없는 성과 (근거 없음 — 확인 필요) (진행 중)",
                       text)
-        self.assertIn("[차주 계획]\n- \n", text)
+        self.assertIn("[차주 계획]\n- 리뷰 반영 (제안)\n- \n", text)
         self.assertIn("(작업 폴더 밖: 웹 20분)", text)  # 40 seconds of 소통 is left out
         self.assertIn("(보고서에서 제외한 업무 외 시간: 30분)", text)
         self.assertNotIn("W1", text)  # references stay out of the pasted text
@@ -482,7 +485,8 @@ class EchoModel:
             groups.setdefault(w.get("folder") or "기타", []).append(w["ref"])
         for c in body["changes"]:
             groups.setdefault(c["folder"], []).append(c["ref"])
-        return {"summary": "부분", "projects": [{"project": f"{name} 작업", "done": [{"text": "실적", "refs": refs}]}
+        return {"summary": "부분", "projects": [{"project": f"{name} 작업", "done": [{"text": "실적", "refs": refs}],
+                                                 "next": [{"text": f"{name} 이어서", "refs": refs[:1]}]}
                                                 for name, refs in groups.items()]}, usage
 
 
@@ -559,6 +563,7 @@ class SplitWeekTests(unittest.TestCase):
         # A folder sent in several parts is one group in the report; every reference stays.
         names = [p["project"] for p in out["projects"]]
         self.assertEqual(len(names), len(set(names)))
+        self.assertTrue(all(p["next"] for p in out["projects"] if not p["missing_from_ai"]))  # plans kept
         self.assertFalse(any(p["missing_from_ai"] for p in out["projects"]))
         self.assertEqual(out["dropped_refs"], 0)
         sent = {w["ref"] for _, p in drafts for w in _sent(p)["work"]} | {

@@ -400,9 +400,13 @@ function reportInline(text) {
 }
 
 // "(진행 중)" / "(완료)" at the end of a line of what was done: the user's own call, one click away.
-const REPORT_STATUS = /\s*\((진행 중|완료)\)\s*$/;
+// "(제안)" at the end of a plan line: the AI's suggestion until the user confirms it (one click).
+const REPORT_STATUS = /\s*\((진행 중|완료|제안)\)\s*$/;
+const SUGGESTED_LINE = /^\s*[-*•] .*\(제안\)\s*$/;
+const STATUS_TITLES = { "제안": "AI 제안: 눌러서 계획으로 확정 (필요 없으면 수정에서 지우세요)" };
 const statusChip = (status, index) => h("button", {
-  class: `status-chip${status === "완료" ? " done" : ""}`, title: "눌러서 완료 / 진행 중으로 바꾸기",
+  class: `status-chip${status === "완료" ? " done" : status === "제안" ? " suggested" : ""}`,
+  title: STATUS_TITLES[status] || "눌러서 완료 / 진행 중으로 바꾸기",
   onclick: () => guarded(() => toggleReportStatus(index)) }, status);
 
 async function toggleReportStatus(index) {
@@ -410,13 +414,13 @@ async function toggleReportStatus(index) {
   const lines = reportSaved.body.split("\n");
   const m = lines[index].match(REPORT_STATUS);
   if (!m) return;
-  const next = m[1] === "완료" ? "진행 중" : "완료";
-  lines[index] = lines[index].slice(0, m.index) + ` (${next})`;
+  const next = m[1] === "제안" ? null : m[1] === "완료" ? "진행 중" : "완료";
+  lines[index] = lines[index].slice(0, m.index) + (next ? ` (${next})` : "");
   const r = await api("POST", "/api/reports", { kind: reportKind(), day: state.reportDay, body: lines.join("\n") });
   reportSaved = r.saved;
   renderReportView();
   setReportState();
-  toast(next === "완료" ? "완료로 표시했습니다." : "진행 중으로 되돌렸습니다.");
+  toast(!next ? "계획으로 확정했습니다." : next === "완료" ? "완료로 표시했습니다." : "진행 중으로 되돌렸습니다.");
 }
 
 // The saved text laid out: "# 제목", "## 업무", "[칸]", "- 항목", "(참고)" and plain lines.
@@ -619,7 +623,8 @@ function renderReportSide(r) {
   const flagBadge = { no_evidence: badge("plain", "근거 없음") };
   const aiText = (text, flag) => h("div", { class: `ai-text${flag ? " flagged" : ""}` },
     badge("ai", "AI"), " ", text, flag ? [" ", flagBadge[flag].cloneNode(true)] : null);
-  const doneLabel = r.kind === "daily" ? "오늘 한 일" : "금주 실적";
+  const [doneLabel, nextLabel] = r.kind === "daily" ? ["오늘 한 일", "다음 할 일"] : ["금주 실적", "차주 계획"];
+  const suggestion = badge("plain", "제안");
   $("report-side").replaceChildren(
     h("div", { class: "card" },
       h("h2", {}, "AI 초안과 근거"),
@@ -632,10 +637,15 @@ function renderReportSide(r) {
         p.done.length ? h("div", {}, h("div", { class: "meta" }, doneLabel),
           h("ul", { class: "report-items" }, p.done.map((it) => h("li", {},
             aiText(it.text, it.flag),
-            it.refs.length ? factList(it.refs, r.sources) : null)))) : null))),
+            it.refs.length ? factList(it.refs, r.sources) : null)))) : null,
+        p.next && p.next.length ? h("div", {}, h("div", { class: "meta" }, `${nextLabel} (AI 제안, 이어지는 기록)`),
+          h("ul", { class: "report-items" }, p.next.map((it) => h("li", {},
+            h("div", { class: "ai-text" }, badge("ai", "AI"), " ", it.text, " ", suggestion.cloneNode(true)),
+            factList(it.refs, r.sources))))) : null))),
     h("p", { class: "muted small-text" },
       `AI 사용: 입력 ${r.usage.input_tokens.toLocaleString()} · 출력 ${(r.usage.output_tokens + r.usage.thinking_tokens).toLocaleString()} 토큰`,
-      r.dropped_refs ? ` · 확인되지 않은 근거 ${r.dropped_refs}개는 제외했습니다` : ""),
+      r.dropped_refs ? ` · 확인되지 않은 근거 ${r.dropped_refs}개는 제외했습니다` : "",
+      r.dropped_plans ? ` · 근거 없는 계획 제안 ${r.dropped_plans}개는 넣지 않았습니다` : ""),
   );
 }
 
@@ -649,6 +659,10 @@ $("report-save").addEventListener("click", () => guarded(async () => {
 
 $("report-copy").addEventListener("click", () => guarded(async () => {
   if (!reportSaved) return;
+  // AI-suggested plans the user has not looked at should not slip into the company report.
+  const suggested = reportSaved.body.split("\n").filter((l) => SUGGESTED_LINE.test(l)).length;
+  if (suggested && !confirm(`확인하지 않은 AI 제안이 ${suggested}개 있습니다 ("(제안)" 표시).\n`
+    + "그대로 복사할까요? 확인하려면 취소한 뒤 제안을 눌러 확정하거나 수정에서 지우세요.")) return;
   await navigator.clipboard.writeText(reportSaved.body);
   toast("클립보드에 복사했습니다.");
 }));

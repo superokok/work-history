@@ -7,10 +7,10 @@ supports.
 ## Features
 
 1. **Work report drafts** (daily 업무일지 / weekly 주간보고): per group of work,
-   금주 실적 (오늘 한 일), every bullet citing the records it came from, and an
-   empty 차주 계획 (다음 할 일) section for the user to write (2026-11-11: plans
-   are the user's, the model no longer suggests them). (An 이슈 section was
-   dropped on 2026-11-10: it had nothing to come from.)
+   금주 실적 (오늘 한 일), every bullet citing the records it came from, and
+   차주 계획 (다음 할 일) suggestions that follow from those records (2026-11-12,
+   see "Suggested plans" below), plus an empty line for the user's own plans.
+   (An 이슈 section was dropped on 2026-11-10: it had nothing to come from.)
    There are no projects (2026-11-05): the model groups the records itself by
    issue key, MR, work folder or topic and names each group from the records
    ("기타" for the rest); a group's time is the work folder records it cites
@@ -221,8 +221,17 @@ one class plus a factory entry (`ai_local.LocalModel` is the second one).
   "(진행 중)". On the saved report the user clicks it to switch to "(완료)"
   (and back), or edits the text. There is no word check in code any more.
 - Clicking a "파일 변경" (C) citation opens that change's diffs directly.
-- 차주 계획 / 다음 할 일 is not in the records, so the model does not write it:
-  each group gets an empty section (`- `) for the user.
+- Suggested plans (2026-11-12; the weekly report needs a 차주 계획): the model
+  may suggest 0-2 next steps per group (`next`), only what follows directly from
+  this period's records (an MR's review comments, applying a written migration),
+  no new work, dates, owners or target numbers. Each must cite a record that was
+  sent, or code drops it (counted as `dropped_plans`, shown under the draft).
+  A suggestion is rendered with "(제안)" at the end of the line; on the saved
+  report a click removes the mark (the plan is confirmed), and unwanted lines are
+  deleted in the editor. Copying a report that still has "(제안)" lines asks
+  first. Each group's plan section also keeps an empty line (`- `) for the user.
+  Plan references do not add time to a group, and the summary covers only what
+  was done. Groups joined across requests keep their plans.
 - Missing work: a work folder whose records (W) and file changes (C) in the
   period are not cited anywhere in the draft is added as "<folder> (작업 폴더)"
   with its time and "이 작업 폴더의 기록이 AI 초안에 빠졌습니다".

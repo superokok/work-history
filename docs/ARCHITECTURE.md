@@ -221,8 +221,8 @@ local timezone.
   its file path (a work-folder file named in the title) to copy. The timeline shows no project totals,
   project pickers or notes (the API still returns them).
 - **Next action:** each project may keep a user-written "다음 할 일" (API only
-  since 2026-11-05). The app never claims to know the next task: AI reports leave
-  차주 계획 / 다음 할 일 empty for the user.
+  since 2026-11-05). AI reports suggest 차주 계획 / 다음 할 일 only from the period's
+  records, each citing one, marked "(제안)" until the user confirms it (2026-11-12).
 - **Tabs:** 대시보드 (2026-11-10), 타임라인, 보고서, 검색, 설정. The template daily review
   and the 이어서 하기 tab were removed (2026-11-05: the AI 업무일지 and "AI에게 묻기" cover
   them); work folders are in 설정.
