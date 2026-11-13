@@ -11,6 +11,9 @@
   }
 }
 * { box-sizing: border-box; }
+/* Room for the scroll bar always, so a short page and a long one (the settings groups) have the same
+   width and nothing shifts sideways when switching between them. */
+html { overflow-y: scroll; scrollbar-gutter: stable; }
 body { margin: 0; font: 14px/1.5 "Segoe UI", "Malgun Gothic", system-ui, sans-serif; background: var(--bg); color: var(--text); }
 header { display: flex; align-items: center; gap: 20px; padding: 10px 20px; background: var(--card); border-bottom: 1px solid var(--line); flex-wrap: wrap; position: sticky; top: 0; z-index: 2; }
 h1 { font-size: 18px; margin: 0; }

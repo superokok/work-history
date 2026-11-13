@@ -345,7 +345,10 @@ function keepGroupInView() {
   const nav = $("settings-nav"), on = nav.querySelector("button.on");
   if (on && getComputedStyle(nav).flexDirection === "row") nav.scrollLeft = Math.max(0, on.offsetLeft - nav.offsetLeft - 16);
 }
-document.querySelectorAll("#settings-nav button").forEach((b) => b.addEventListener("click", () => showSettingsGroup(b.dataset.group)));
+document.querySelectorAll("#settings-nav button").forEach((b) => b.addEventListener("click", () => {
+  showSettingsGroup(b.dataset.group);
+  window.scrollTo(0, 0);  // each group starts at its top; the menu stays where it is
+}));
 // What each group is set to, next to its name in the menu.
 const setHint = (group, text) => {
   const el = $(`hint-${group}`);
