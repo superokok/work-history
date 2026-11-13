@@ -75,7 +75,7 @@ def build(db: Database, repos_dir: Optional[Path], demo_mode: bool = False,
     @server.tool(annotations=READ_ONLY)
     def search_history(query: str, date_from: Optional[str] = None, date_to: Optional[str] = None) -> dict:
         """업무 기록을 키워드로 검색합니다 (바뀐 파일 경로, 메모, 창 제목).
-        이슈 번호(GOV-1418), 클래스·파일 이름, 한국어 낱말이 잘 맞습니다. 낱말은 공백으로 구분합니다.
+        번호, 파일·문서 이름, 낱말이 잘 맞습니다. 낱말은 공백으로 구분합니다.
         date_from/date_to: YYYY-MM-DD (선택)."""
         return run(lambda t, c: t.search_history(query, date_from, date_to), "search_history", {"query": query, "date_from": date_from, "date_to": date_to})
 
