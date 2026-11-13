@@ -990,7 +990,7 @@ async function loadNames() {
     : [h("li", { class: "muted" }, "정한 이름이 없습니다. 아래 목록에서 고칠 앱을 고르세요.")]));
 
   const form = (app, preset) => {
-    const label = h("input", { placeholder: "보일 이름 (예: Eclipse)", value: preset.label || "" });
+    const label = h("input", { placeholder: "보일 이름", value: preset.label || "" });
     const kind = h("select", {}, h("option", { value: "" }, "분류 그대로"),
       ...r.kinds.map((k) => h("option", { value: k.key }, k.label)));
     kind.value = preset.category || "";

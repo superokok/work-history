@@ -137,7 +137,7 @@
       <div class="card">
         <h2>AI에게 묻기</h2>
         <form id="ask-form" class="row">
-          <input id="ask-q" placeholder="예: 지난주 GOV-1418 어디까지 했지? / 커서 페이징 언제 봤지?" size="60" maxlength="500">
+          <input id="ask-q" placeholder="기록에 대해 궁금한 것을 물어보세요 (기간·작업·파일 등)" size="60" maxlength="500">
           <button type="submit" class="primary" id="ask-btn">묻기</button>
         </form>
         <div id="ask-result"></div>
@@ -171,10 +171,10 @@
               <h2>작업 폴더 <span class="badge inferred">결과물 기록</span></h2>
               <button id="folder-scan" class="small">지금 기록</button>
             </div>
-            <p class="muted small-text">등록한 폴더의 파일 변경을 5분마다 별도의 숨은 Git 저장소에 기록합니다. 폴더 안의 파일과 원래 Git 저장소는 읽기만 하고 바꾸지 않습니다. 비밀 파일(.env, *.pem, *.key 등)과 빌드 결과물은 기록하지 않고, 5MB 넘는 파일은 내용 없이 바뀐 것만 기록합니다.</p>
+            <p class="muted small-text">등록한 폴더의 파일 변경을 5분마다 별도의 숨은 Git 저장소에 기록합니다. 폴더 안의 파일과 원래 Git 저장소는 읽기만 하고 바꾸지 않습니다. 비밀번호·인증서 같은 비밀 파일과 빌드 결과물은 기록하지 않고, 5MB 넘는 파일은 내용 없이 바뀐 것만 기록합니다.</p>
             <ul id="folder-list" class="plain"></ul>
             <form id="folder-form" class="row">
-              <input id="folder-path" placeholder="폴더 전체 경로 (예: C:\work\gov24-minwon-api)" size="44">
+              <input id="folder-path" placeholder="폴더 전체 경로" size="44">
               <input id="folder-label" placeholder="이름 (선택)" size="14">
               <button type="submit">폴더 추가</button>
             </form>
@@ -188,10 +188,10 @@
               <label><input type="radio" name="track-mode" value="all"> 모든 앱 기록</label>
               <label><input type="radio" name="track-mode" value="selected"> 업무 앱만 기록</label>
             </div>
-            <p class="muted small-text">'업무 앱만 기록'이면 아래 규칙에 맞는 창만 앱 이름·창 제목과 함께 가져오고, 나머지는 이름·제목 없이 <b>업무 외</b> 시간으로만 남깁니다. 브라우저는 창 제목 키워드(예: jira, github)를 함께 지정하세요.</p>
+            <p class="muted small-text">'업무 앱만 기록'이면 아래 규칙에 맞는 창만 앱 이름·창 제목과 함께 가져오고, 나머지는 이름·제목 없이 <b>업무 외</b> 시간으로만 남깁니다. 브라우저처럼 업무와 업무 외에 함께 쓰는 앱은 창 제목 키워드를 함께 지정하세요.</p>
             <ul id="track-rules" class="plain"></ul>
             <form id="track-form" class="row">
-              <input id="track-app" placeholder="앱 이름 (예: idea64, chrome)">
+              <input id="track-app" placeholder="앱 이름 (실행 파일 이름)">
               <input id="track-title" placeholder="창 제목 키워드 (선택)">
               <button type="submit">규칙 추가</button>
             </form>
@@ -210,7 +210,7 @@
             <p class="muted">키워드가 포함된 앱/창 제목은 가져오지 않으며, 추가하는 즉시 기존 기록에서도 삭제됩니다.</p>
             <form id="exclusion-form" class="row">
               <select id="exclusion-field"><option value="title">창 제목</option><option value="app">앱 이름</option></select>
-              <input id="exclusion-pattern" placeholder="예: KeePass, 인터넷뱅킹">
+              <input id="exclusion-pattern" placeholder="앱 이름이나 창 제목에 들어가는 글자">
               <button type="submit">추가</button>
             </form>
             <ul id="exclusions" class="plain"></ul>
@@ -226,8 +226,8 @@
           <p class="settings-intro">앱이 대시보드·타임라인·보고서에 어떤 이름과 분류로 보일지 정합니다.</p>
           <div class="card">
             <h2>앱 이름과 분류</h2>
-            <p class="muted small-text">Windows는 실행 파일 이름으로 앱을 알려 줍니다. 이클립스가 <b>javaw</b>로 나오는 것처럼 실제 프로그램과
-              다르게 보이면 여기서 보일 이름과 분류를 정하세요. 한 실행 파일이 여러 프로그램이면 "창 제목에 이 글자가 있을 때만"으로 나눕니다.
+            <p class="muted small-text">Windows는 실행 파일 이름으로 앱을 알려 줍니다. 그 이름이 실제 프로그램과 다르게 보이면 여기서 보일 이름과
+              분류를 정하세요. 한 실행 파일로 여러 프로그램이 실행되면 창 제목 조건으로 나눕니다.
               대시보드·타임라인·AI 보고서 자료에 모두 쓰이고 지난 기록에도 적용됩니다. 원래 기록(실행 파일 이름)은 바뀌지 않습니다.</p>
             <ul id="name-rules" class="plain"></ul>
             <details id="name-apps-box" open>
