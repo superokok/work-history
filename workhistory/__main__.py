@@ -124,7 +124,7 @@ def main(argv: list[str] | None = None) -> int:
     url = f"http://127.0.0.1:{server.server_address[1]}/"
     log.info("listening on %s (DB: %s)", url, db_path)
     print(f"작업 기록: {url}  (DB: {db_path})")
-    print("종료: 앱의 설정 탭 → 실행 → '앱 종료' (또는 Ctrl+C)")
+    print("종료: 앱의 설정 → 실행·데이터 → '앱 종료' (또는 Ctrl+C)")
 
     if collector:
         collector.start()

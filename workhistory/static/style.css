@@ -84,7 +84,22 @@ button.primary { background: var(--accent); color: #fff; border-color: var(--acc
 .path-box { flex-wrap: nowrap; }
 .path-box .path-text { flex: 1; min-width: 0; font: 12px Consolas, "D2Coding", monospace; }
 .report-columns { grid-template-columns: 1fr 380px; }
-.settings-heading { margin: 20px 0 8px; }
+/* Settings: a menu of five groups on the left, the chosen group's cards on the right. */
+.settings-layout { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 16px; align-items: start; }
+.settings-nav { position: sticky; top: 12px; display: flex; flex-direction: column; gap: 2px; }
+.settings-nav button { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; text-align: left;
+  border: none; background: none; padding: 8px 10px; border-radius: 6px; }
+.settings-nav button:hover { background: var(--card); }
+.settings-nav button.on { background: var(--card); color: var(--accent); font-weight: 600; box-shadow: inset 3px 0 0 var(--accent); }
+.nav-hint { font-size: 12px; color: var(--muted); font-weight: 400; white-space: nowrap; }
+.settings-page[hidden] { display: none; }
+.settings-intro { margin: 2px 0 10px; color: var(--muted); }
+@media (max-width: 760px) {
+  .settings-layout { grid-template-columns: 1fr; }
+  .settings-nav { position: static; flex-direction: row; overflow-x: auto; }
+  .settings-nav button { white-space: nowrap; }
+  .settings-nav button.on { box-shadow: inset 0 -3px 0 var(--accent); }
+}
 ul.compact li { font-size: 13px; padding: 3px 0; }
 @media (max-width: 1000px) { .report-columns { grid-template-columns: 1fr; } }
 h3 { font-size: 14px; margin: 8px 0 6px; }

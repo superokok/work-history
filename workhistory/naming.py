@@ -1,4 +1,4 @@
-"""The user's names and kinds for apps (설정 → 앱 이름과 분류).
+"""The user's names and kinds for apps (설정 → 앱 이름·분류).
 
 Windows names a window by its executable, and some executables are not the program the
 user sees: Eclipse runs as javaw, many tools as python or node, store apps under

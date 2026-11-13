@@ -23,7 +23,7 @@ supports.
 
 ## Which model
 
-The model is chosen in 설정 → AI 설정 (AI is off until the user picks one):
+The model is chosen in 설정 → AI (AI is off until the user picks one):
 
 | Provider | For | In the released zip |
 |---|---|---|
@@ -39,7 +39,7 @@ stays in the source as a development and comparison tool.
 `workhistory/ai_local.py`. For PCs where records must not leave the machine
 or that have no internet (폐쇄망). The app ships llama.cpp's `llama-server`
 (MIT) in its `llm/bin` folder; every `llm/models/*.gguf` file appears in
-설정 → AI 설정 as "내 PC · <file name>" (model name `local:<stem>`).
+설정 → AI as "내 PC · <file name>" (model name `local:<stem>`).
 
 - The app starts `llama-server` on demand: bound to 127.0.0.1 on a free port,
   a random API key per start (other programs and web pages cannot use it),
@@ -100,7 +100,7 @@ installed and signed in on the PC; the closed-network zip has neither.
 `workhistory/ai_claude.py` runs the Claude Code installed and signed in on
 the PC headless (`claude -p --output-format json`); usage counts against the
 user's Claude account. AI is **off** until the user picks a model in
-설정 → AI 설정 (`claude-code`, `claude-code:sonnet|opus|haiku`); that
+설정 → AI (`claude-code`, `claude-code:sonnet|opus|haiku`); that
 choice is the consent to send records through Claude Code (the UI asks
 first), and "사용 안 함" withdraws it. The demo database may always be used.
 

@@ -81,13 +81,13 @@ from events, note text, and search queries are not logged. Started without a con
 
 ## Start at logon
 
-Off by default. 설정 → 실행 creates or removes only one file with the app's
+Off by default. 설정 → 실행·데이터 creates or removes only one file with the app's
 own name: `Startup\작업 기록.lnk`. Not available in demo mode. (A desktop
 shortcut button was removed on 2026-11-10.)
 
 ## Optional AI
 
-Off until the user picks a model in 설정 → AI 설정 (the app asks for
+Off until the user picks a model in 설정 → AI (the app asks for
 consent then) and runs a report or a question. With a "내 PC" model the
 records go only to the local model program the app started on this PC
 (127.0.0.1, random key); nothing leaves the PC. "사용 안 함" turns it off again. "보낼 내용 보기" shows the exact

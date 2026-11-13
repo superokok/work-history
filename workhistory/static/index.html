@@ -155,102 +155,127 @@
 
     <!-- Settings: work folders, privacy, AI, launch -->
     <section id="tab-settings" class="tab-panel" hidden>
-      <div class="card">
-        <div class="summary-head">
-          <h2>작업 폴더 <span class="badge inferred">결과물 기록</span></h2>
-          <button id="folder-scan" class="small">지금 기록</button>
+      <div class="settings-layout">
+        <nav class="settings-nav" id="settings-nav" aria-label="설정 메뉴">
+          <button type="button" data-group="folders">작업 폴더 <span class="nav-hint" id="hint-folders"></span></button>
+          <button type="button" data-group="recording">기록 범위 <span class="nav-hint" id="hint-recording"></span></button>
+          <button type="button" data-group="names">앱 이름·분류 <span class="nav-hint" id="hint-names"></span></button>
+          <button type="button" data-group="ai">AI <span class="nav-hint" id="hint-ai"></span></button>
+          <button type="button" data-group="app">실행·데이터 <span class="nav-hint" id="hint-app"></span></button>
+        </nav>
+        <div class="settings-pages">
+        <div class="settings-page" data-group="folders" hidden>
+          <p class="settings-intro">결과물을 만드는 폴더를 등록하면 바뀐 파일을 기록합니다. 이름을 바꾸면 대시보드와 보고서에 그 이름으로 나옵니다.</p>
+          <div class="card">
+            <div class="summary-head">
+              <h2>작업 폴더 <span class="badge inferred">결과물 기록</span></h2>
+              <button id="folder-scan" class="small">지금 기록</button>
+            </div>
+            <p class="muted small-text">등록한 폴더의 파일 변경을 5분마다 별도의 숨은 Git 저장소에 기록합니다. 폴더 안의 파일과 원래 Git 저장소는 읽기만 하고 바꾸지 않습니다. 비밀 파일(.env, *.pem, *.key 등)과 빌드 결과물은 기록하지 않고, 5MB 넘는 파일은 내용 없이 바뀐 것만 기록합니다.</p>
+            <ul id="folder-list" class="plain"></ul>
+            <form id="folder-form" class="row">
+              <input id="folder-path" placeholder="폴더 전체 경로 (예: C:\work\gov24-minwon-api)" size="44">
+              <input id="folder-label" placeholder="이름 (선택)" size="14">
+              <button type="submit">폴더 추가</button>
+            </form>
+          </div>
         </div>
-        <p class="muted small-text">등록한 폴더의 파일 변경을 5분마다 별도의 숨은 Git 저장소에 기록합니다. 폴더 안의 파일과 원래 Git 저장소는 읽기만 하고 바꾸지 않습니다. 비밀 파일(.env, *.pem, *.key 등)과 빌드 결과물·5MB 넘는 파일은 기록하지 않습니다.</p>
-        <ul id="folder-list" class="plain"></ul>
-        <form id="folder-form" class="row">
-          <input id="folder-path" placeholder="폴더 전체 경로 (예: C:\work\gov24-minwon-api)" size="44">
-          <input id="folder-label" placeholder="이름 (선택)" size="14">
-          <button type="submit">폴더 추가</button>
-        </form>
-      </div>
-      <h2 class="settings-heading">개인정보 · 실행</h2>
-      <div class="card">
-        <h2>실행</h2>
-        <label class="row"><input type="checkbox" id="launch-autostart"> 컴퓨터를 켤 때 자동 실행 (브라우저는 열지 않고 기록만 시작)</label>
-        <p id="launch-status" class="muted small-text" hidden></p>
-        <p id="launch-url" class="muted small-text" hidden></p>
-        <div class="row" id="quit-row" hidden>
-          <button type="button" id="app-quit" class="small">앱 종료</button>
-          <span class="muted small-text">앱은 창 없이 뒤에서 기록합니다. 브라우저를 닫아도 기록은 계속되고, 끌 때만 이 버튼을 누르세요.</span>
+        <div class="settings-page" data-group="recording" hidden>
+          <p class="settings-intro">무엇을 기록할지 정합니다. 여기서 정한 것만 남고, 모든 기록은 이 PC 안에만 저장됩니다.</p>
+          <div class="card">
+            <h2>기록 대상</h2>
+            <div class="row">
+              <label><input type="radio" name="track-mode" value="all"> 모든 앱 기록</label>
+              <label><input type="radio" name="track-mode" value="selected"> 업무 앱만 기록</label>
+            </div>
+            <p class="muted small-text">'업무 앱만 기록'이면 아래 규칙에 맞는 창만 앱 이름·창 제목과 함께 가져오고, 나머지는 이름·제목 없이 <b>업무 외</b> 시간으로만 남깁니다. 브라우저는 창 제목 키워드(예: jira, github)를 함께 지정하세요.</p>
+            <ul id="track-rules" class="plain"></ul>
+            <form id="track-form" class="row">
+              <input id="track-app" placeholder="앱 이름 (예: idea64, chrome)">
+              <input id="track-title" placeholder="창 제목 키워드 (선택)">
+              <button type="submit">규칙 추가</button>
+            </form>
+            <details id="track-apps-box">
+              <summary>최근 7일 동안 쓴 앱에서 고르기</summary>
+              <p class="muted small-text">원본 창 기록에서 바로 읽어 보여 주며, 이 목록은 따로 저장하지 않습니다.</p>
+              <ul id="track-apps" class="plain"></ul>
+            </details>
+            <div class="row">
+              <button id="track-reapply" class="small">최근 30일 기록에 다시 적용</button>
+              <span class="muted small-text">규칙은 앞으로 가져오는 기록에 적용됩니다. 지난 기록도 바꾸려면 다시 적용하세요 (원본 창 기록에서 다시 가져옵니다).</span>
+            </div>
+          </div>
+          <div class="card">
+            <h2>제외 목록</h2>
+            <p class="muted">키워드가 포함된 앱/창 제목은 가져오지 않으며, 추가하는 즉시 기존 기록에서도 삭제됩니다.</p>
+            <form id="exclusion-form" class="row">
+              <select id="exclusion-field"><option value="title">창 제목</option><option value="app">앱 이름</option></select>
+              <input id="exclusion-pattern" placeholder="예: KeePass, 인터넷뱅킹">
+              <button type="submit">추가</button>
+            </form>
+            <ul id="exclusions" class="plain"></ul>
+          </div>
+          <div class="card">
+            <h2>수집 정보</h2>
+            <p><b>앱 이름, 창 제목, 시간, 유휴 상태</b>만 기록합니다. 키 입력, 클립보드, 화면, 문서 내용은 수집하지 않습니다. 모든 데이터는 이 컴퓨터에만 저장됩니다.</p>
+            <p class="muted">DB 위치: <code id="db-path"></code></p>
+            <p class="muted">앱이 켜져 있는 동안 직접 기록합니다. 일시정지 중이거나 제외 규칙에 맞는 창은 아예 기록하지 않고, 규칙을 다시 적용할 때 쓰는 원본 창 기록은 35일 뒤 지워집니다. 기록 삭제는 원본에도 적용됩니다.</p>
+          </div>
         </div>
-      </div>
-      <div class="card">
-        <h2>AI 설정</h2>
-        <div id="ai-status" class="row small-text"></div>
-        <div class="row">
-          <label>AI 모델 <select id="ai-model"></select></label>
-          <button type="button" id="ai-check" class="small">연결 확인</button>
+        <div class="settings-page" data-group="names" hidden>
+          <p class="settings-intro">앱이 대시보드·타임라인·보고서에 어떤 이름과 분류로 보일지 정합니다.</p>
+          <div class="card">
+            <h2>앱 이름과 분류</h2>
+            <p class="muted small-text">Windows는 실행 파일 이름으로 앱을 알려 줍니다. 이클립스가 <b>javaw</b>로 나오는 것처럼 실제 프로그램과
+              다르게 보이면 여기서 보일 이름과 분류를 정하세요. 한 실행 파일이 여러 프로그램이면 "창 제목에 이 글자가 있을 때만"으로 나눕니다.
+              대시보드·타임라인·AI 보고서 자료에 모두 쓰이고 지난 기록에도 적용됩니다. 원래 기록(실행 파일 이름)은 바뀌지 않습니다.</p>
+            <ul id="name-rules" class="plain"></ul>
+            <details id="name-apps-box" open>
+              <summary>최근 7일 동안 쓴 앱</summary>
+              <ul id="name-apps" class="plain name-apps"></ul>
+            </details>
+          </div>
         </div>
-        <p class="muted small-text"><b>내 PC</b> 모델은 앱 폴더의 llm 폴더에 있는 AI를 이 PC에서 직접 돌립니다. 기록이 PC 밖으로 나가지 않고 인터넷이 없어도 되지만, 그래픽카드가 없으면 느립니다.</p>
-        <p id="ai-claude-note" class="muted small-text" hidden><b>Claude Code</b> 모델은 이 PC에 설치·로그인된 Claude Code로 보고서와 'AI에게 묻기'를 처리합니다. API 키가 필요 없고, 사용량은 Claude 계정에 포함됩니다. 켜기 전에는 실제 업무 기록을 AI에 보내지 않습니다 (데모 데이터는 가능). 켜면 업무 기록이 비밀값을 가린 뒤 Claude Code를 거쳐 Anthropic으로 전송되고, 이때 Claude Code는 파일·명령·웹 도구 없이 이 앱의 읽기 전용 기록 도구만 쓸 수 있습니다. '연결 확인'은 업무 기록을 보내지 않고 설치·로그인 상태만 확인합니다.</p>
-        <p id="ai-usage" class="muted small-text"></p>
-        <h3>등록된 모델</h3>
-        <ul id="ai-model-list" class="plain"></ul>
-      </div>
-      <div class="card">
-        <h2>기록 대상</h2>
-        <div class="row">
-          <label><input type="radio" name="track-mode" value="all"> 모든 앱 기록</label>
-          <label><input type="radio" name="track-mode" value="selected"> 업무 앱만 기록</label>
+        <div class="settings-page" data-group="ai" hidden>
+          <p class="settings-intro">보고서 초안과 'AI에게 묻기'에 쓸 AI를 고릅니다. 고르기 전에는 꺼져 있고, 기록을 AI에 보내지 않습니다.</p>
+          <div class="card">
+            <h2>AI 설정</h2>
+            <div id="ai-status" class="row small-text"></div>
+            <div class="row">
+              <label>AI 모델 <select id="ai-model"></select></label>
+              <button type="button" id="ai-check" class="small">연결 확인</button>
+            </div>
+            <p class="muted small-text"><b>내 PC</b> 모델은 앱 폴더의 llm 폴더에 있는 AI를 이 PC에서 직접 돌립니다. 기록이 PC 밖으로 나가지 않고 인터넷이 없어도 되지만, 그래픽카드가 없으면 느립니다.</p>
+            <p id="ai-claude-note" class="muted small-text" hidden><b>Claude Code</b> 모델은 이 PC에 설치·로그인된 Claude Code로 보고서와 'AI에게 묻기'를 처리합니다. API 키가 필요 없고, 사용량은 Claude 계정에 포함됩니다. 켜기 전에는 실제 업무 기록을 AI에 보내지 않습니다 (데모 데이터는 가능). 켜면 업무 기록이 비밀값을 가린 뒤 Claude Code를 거쳐 Anthropic으로 전송되고, 이때 Claude Code는 파일·명령·웹 도구 없이 이 앱의 읽기 전용 기록 도구만 쓸 수 있습니다. '연결 확인'은 업무 기록을 보내지 않고 설치·로그인 상태만 확인합니다.</p>
+            <p id="ai-usage" class="muted small-text"></p>
+            <h3>등록된 모델</h3>
+            <ul id="ai-model-list" class="plain"></ul>
+          </div>
         </div>
-        <p class="muted small-text">'업무 앱만 기록'이면 아래 규칙에 맞는 창만 앱 이름·창 제목과 함께 가져오고, 나머지는 이름·제목 없이 <b>업무 외</b> 시간으로만 남깁니다. 브라우저는 창 제목 키워드(예: jira, github)를 함께 지정하세요.</p>
-        <ul id="track-rules" class="plain"></ul>
-        <form id="track-form" class="row">
-          <input id="track-app" placeholder="앱 이름 (예: idea64, chrome)">
-          <input id="track-title" placeholder="창 제목 키워드 (선택)">
-          <button type="submit">규칙 추가</button>
-        </form>
-        <details id="track-apps-box">
-          <summary>최근 7일 동안 쓴 앱에서 고르기</summary>
-          <p class="muted small-text">원본 창 기록에서 바로 읽어 보여 주며, 이 목록은 따로 저장하지 않습니다.</p>
-          <ul id="track-apps" class="plain"></ul>
-        </details>
-        <div class="row">
-          <button id="track-reapply" class="small">최근 30일 기록에 다시 적용</button>
-          <span class="muted small-text">규칙은 앞으로 가져오는 기록에 적용됩니다. 지난 기록도 바꾸려면 다시 적용하세요 (원본 창 기록에서 다시 가져옵니다).</span>
+        <div class="settings-page" data-group="app" hidden>
+          <p class="settings-intro">자동 실행과 앱 종료, 기록 삭제입니다.</p>
+          <div class="card">
+            <h2>실행</h2>
+            <label class="row"><input type="checkbox" id="launch-autostart"> 컴퓨터를 켤 때 자동 실행 (브라우저는 열지 않고 기록만 시작)</label>
+            <p id="launch-status" class="muted small-text" hidden></p>
+            <p id="launch-url" class="muted small-text" hidden></p>
+            <div class="row" id="quit-row" hidden>
+              <button type="button" id="app-quit" class="small">앱 종료</button>
+              <span class="muted small-text">앱은 창 없이 뒤에서 기록합니다. 브라우저를 닫아도 기록은 계속되고, 끌 때만 이 버튼을 누르세요.</span>
+            </div>
+          </div>
+          <div class="card danger-zone">
+            <h2>데이터 삭제</h2>
+            <form id="delete-form" class="row">
+              <label>시작 <input type="date" id="delete-from"></label>
+              <label>끝 <input type="date" id="delete-to"></label>
+              <button type="submit" class="danger">기간 삭제</button>
+              <button type="button" id="delete-all" class="danger">전체 활동·메모 삭제</button>
+            </form>
+            <p class="muted">삭제한 기간은 다시 가져오지 않습니다. 프로젝트·규칙·제외 목록은 유지됩니다.</p>
+          </div>
         </div>
-      </div>
-      <div class="card">
-        <h2>앱 이름과 분류</h2>
-        <p class="muted small-text">Windows는 실행 파일 이름으로 앱을 알려 줍니다. 이클립스가 <b>javaw</b>로 나오는 것처럼 실제 프로그램과
-          다르게 보이면 여기서 보일 이름과 분류를 정하세요. 한 실행 파일이 여러 프로그램이면 "창 제목에 이 글자가 있을 때만"으로 나눕니다.
-          대시보드·타임라인·AI 보고서 자료에 모두 쓰이고 지난 기록에도 적용됩니다. 원래 기록(실행 파일 이름)은 바뀌지 않습니다.</p>
-        <ul id="name-rules" class="plain"></ul>
-        <details id="name-apps-box" open>
-          <summary>최근 7일 동안 쓴 앱</summary>
-          <ul id="name-apps" class="plain name-apps"></ul>
-        </details>
-      </div>
-      <div class="card">
-        <h2>수집 정보</h2>
-        <p><b>앱 이름, 창 제목, 시간, 유휴 상태</b>만 기록합니다. 키 입력, 클립보드, 화면, 문서 내용은 수집하지 않습니다. 모든 데이터는 이 컴퓨터에만 저장됩니다.</p>
-        <p class="muted">DB 위치: <code id="db-path"></code></p>
-        <p class="muted">앱이 켜져 있는 동안 직접 기록합니다. 일시정지 중이거나 제외 규칙에 맞는 창은 아예 기록하지 않고, 규칙을 다시 적용할 때 쓰는 원본 창 기록은 35일 뒤 지워집니다. 기록 삭제는 원본에도 적용됩니다.</p>
-      </div>
-      <div class="card">
-        <h2>제외 목록</h2>
-        <p class="muted">키워드가 포함된 앱/창 제목은 가져오지 않으며, 추가하는 즉시 기존 기록에서도 삭제됩니다.</p>
-        <form id="exclusion-form" class="row">
-          <select id="exclusion-field"><option value="title">창 제목</option><option value="app">앱 이름</option></select>
-          <input id="exclusion-pattern" placeholder="예: KeePass, 인터넷뱅킹">
-          <button type="submit">추가</button>
-        </form>
-        <ul id="exclusions" class="plain"></ul>
-      </div>
-      <div class="card danger-zone">
-        <h2>데이터 삭제</h2>
-        <form id="delete-form" class="row">
-          <label>시작 <input type="date" id="delete-from"></label>
-          <label>끝 <input type="date" id="delete-to"></label>
-          <button type="submit" class="danger">기간 삭제</button>
-          <button type="button" id="delete-all" class="danger">전체 활동·메모 삭제</button>
-        </form>
-        <p class="muted">삭제한 기간은 다시 가져오지 않습니다. 프로젝트·규칙·제외 목록은 유지됩니다.</p>
+        </div>
       </div>
     </section>
   </main>

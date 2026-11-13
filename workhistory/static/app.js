@@ -106,7 +106,7 @@ function showTab(name) {
   if (name === "dashboard") loadDashboard();
   if (name === "timeline") loadTimeline();
   if (name === "report") loadReport();
-  if (name === "settings") { loadFolders(); loadLaunch(); loadAISettings(); loadTracking(); loadNames(); loadExclusions(); }
+  if (name === "settings") { showSettingsGroup(); loadFolders(); loadLaunch(); loadAISettings(); loadTracking(); loadNames(); loadExclusions(); }
 }
 
 // ------------------------------------------------------------------ status
@@ -327,6 +327,32 @@ async function showChange(changeId) {
 $("diff-close").addEventListener("click", () => ($("diff-overlay").hidden = true));
 $("diff-overlay").addEventListener("click", (e) => { if (e.target.id === "diff-overlay") $("diff-overlay").hidden = true; });
 
+// ---- Settings: five groups; the last one opened comes back (remembered in this browser only).
+const SETTINGS_GROUPS = ["folders", "recording", "names", "ai", "app"];
+function showSettingsGroup(group) {
+  if (!group) {
+    try { group = localStorage.getItem("settings-group"); } catch { group = null; }
+  }
+  if (!SETTINGS_GROUPS.includes(group)) group = "folders";
+  try { localStorage.setItem("settings-group", group); } catch { /* private window: not remembered */ }
+  document.querySelectorAll("#settings-nav button").forEach((b) => b.classList.toggle("on", b.dataset.group === group));
+  document.querySelectorAll(".settings-page").forEach((p) => (p.hidden = p.dataset.group !== group));
+  keepGroupInView();
+}
+// A narrow window shows the menu as one scrolling row: keep the chosen group in view (again when
+// the hints arrive and make the buttons wider).
+function keepGroupInView() {
+  const nav = $("settings-nav"), on = nav.querySelector("button.on");
+  if (on && getComputedStyle(nav).flexDirection === "row") nav.scrollLeft = Math.max(0, on.offsetLeft - nav.offsetLeft - 16);
+}
+document.querySelectorAll("#settings-nav button").forEach((b) => b.addEventListener("click", () => showSettingsGroup(b.dataset.group)));
+// What each group is set to, next to its name in the menu.
+const setHint = (group, text) => {
+  const el = $(`hint-${group}`);
+  if (el) el.textContent = text || "";
+  keepGroupInView();
+};
+
 // A work folder's name: what the dashboard, the timeline and the reports call it (its path stays).
 function renameFolder(f, li) {
   const label = li.querySelector(".folder-label");
@@ -349,6 +375,7 @@ function renameFolder(f, li) {
 async function loadFolders() {
   const folders = await guarded(() => api("GET", "/api/folders"));
   if (!folders) return;
+  setHint("folders", folders.length ? `${folders.filter((f) => f.enabled).length}개` : "없음");
   $("folder-list").replaceChildren(...(folders.length ? folders.map((f) =>
     h("li", { class: "folder-item" },
       h("div", {},
@@ -550,7 +577,7 @@ function renderReportNotice(ai) {
   if (ai && !local && !ai.claude_installed && !(ai.local_models || []).length) notes.push(ai.claude_bundled
     ? "Claude Code가 설치되어 있지 않습니다. Claude Code를 설치하고 로그인하거나, 내 PC의 AI 모델을 llm 폴더에 넣으면 AI 초안을 만들 수 있습니다."
     : "내 PC의 AI 모델이 없습니다. 앱 폴더의 llm\\models 에 .gguf 모델 파일을 넣으면 AI 초안을 만들 수 있습니다.");
-  else if (ai && !ai.demo && !ai.enabled) notes.push("AI가 꺼져 있습니다. 설정 탭의 AI 설정에서 모델을 고르면 실제 기록으로 초안을 만들 수 있습니다.");
+  else if (ai && !ai.demo && !ai.enabled) notes.push("AI가 꺼져 있습니다. 설정 → AI에서 모델을 고르면 실제 기록으로 초안을 만들 수 있습니다.");
   else if (local) notes.push("내 PC의 AI로 만듭니다. 기록은 이 PC 밖으로 나가지 않습니다. 그래픽카드가 없는 PC에서는 몇 분 걸릴 수 있습니다.");
   $("report-notice").replaceChildren(...notes.map((n) => h("div", { class: "warning" }, n)));
 }
@@ -735,6 +762,7 @@ async function loadAISettings() {
   $("ai-model").replaceChildren(...["", ...s.models].map((m) => h("option", { value: m },
     modelLabel(m) + (m === s.default_model ? " · 추천" : ""))));
   $("ai-model").value = aiModel = s.model;
+  setHint("ai", s.enabled ? (isLocal(s.model) ? "내 PC" : "Claude") : s.demo ? "데모" : "꺼짐");
   $("ai-claude-note").hidden = !s.claude_bundled;
   const ok = (cond, yes, no) => h("span", { class: `chip ${cond ? "ok" : "err"}` }, cond ? yes : no);
   $("ai-status").replaceChildren(
@@ -751,6 +779,7 @@ async function loadAISettings() {
 // ------------------------------------------------------------------ launch (autostart)
 function renderLaunch(l) {
   $("launch-autostart").checked = l.autostart.enabled;
+  setHint("app", l.autostart.enabled ? "자동 실행" : "");
   $("launch-autostart").disabled = l.demo || !l.autostart.supported;
   $("launch-status").hidden = !l.demo;
   $("launch-status").textContent = l.demo ? "데모 모드에서는 바꿀 수 없습니다." : "";
@@ -911,6 +940,7 @@ async function loadTracking() {
   const t = await guarded(() => api("GET", "/api/tracking"));
   if (!t) return;
   document.querySelectorAll('input[name="track-mode"]').forEach((el) => (el.checked = el.value === t.mode));
+  setHint("recording", t.mode === "selected" ? "업무 앱만" : "모든 앱");
   const describe = (r) => [r.app_pattern ? `앱: ${r.app_pattern}` : "모든 앱", r.title_pattern ? ` · 제목에 "${r.title_pattern}"` : ""].join("");
   $("track-rules").replaceChildren(...(t.rules.length ? t.rules.map((r) => h("li", {},
     h("span", {}, describe(r)),
@@ -945,6 +975,7 @@ async function loadNames() {
   const r = await guarded(() => api("GET", "/api/app-names"));
   if (!r) return;
   const kindLabel = Object.fromEntries(r.kinds.map((k) => [k.key, k.label]));
+  setHint("names", r.rules.length ? `규칙 ${r.rules.length}개` : "");
   const describe = (rule) => [
     h("b", {}, rule.app),
     rule.contains ? ` · 제목에 "${rule.contains}"` : " · 모든 창",
