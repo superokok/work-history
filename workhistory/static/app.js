@@ -338,8 +338,18 @@ function showSettingsGroup(group) {
   document.querySelectorAll("#settings-nav button").forEach((b) => b.classList.toggle("on", b.dataset.group === group));
   document.querySelectorAll(".settings-page").forEach((p) => (p.hidden = p.dataset.group !== group));
   measureHeader();
+  fitSettings();
   keepGroupInView();
 }
+// A wide window: the settings fill the height left below the header, and only their right side
+// scrolls (style.css), so the menu stays still.
+function fitSettings() {
+  const layout = document.querySelector(".settings-layout");
+  if (!layout || $("tab-settings").hidden || !window.matchMedia("(min-width: 761px)").matches) return;
+  window.scrollTo(0, 0);
+  layout.style.setProperty("--settings-h", `${Math.max(320, Math.floor(window.innerHeight - layout.getBoundingClientRect().top - 16))}px`);
+}
+window.addEventListener("resize", fitSettings);
 // A narrow window shows the menu as one scrolling row: keep the chosen group in view (again when
 // the hints arrive and make the buttons wider).
 function keepGroupInView() {
@@ -348,7 +358,8 @@ function keepGroupInView() {
 }
 document.querySelectorAll("#settings-nav button").forEach((b) => b.addEventListener("click", () => {
   showSettingsGroup(b.dataset.group);
-  window.scrollTo(0, 0);  // each group starts at its top; the menu stays where it is
+  document.querySelector(".settings-pages").scrollTop = 0;  // each group starts at its top
+  window.scrollTo(0, 0);
 }));
 // The header stays at the top of the window; the settings menu stays just below it (style.css).
 function measureHeader() {

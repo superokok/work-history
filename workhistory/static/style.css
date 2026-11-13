@@ -89,7 +89,14 @@ button.primary { background: var(--accent); color: #fff; border-color: var(--acc
 .report-columns { grid-template-columns: 1fr 380px; }
 /* Settings: a menu of five groups on the left, the chosen group's cards on the right. */
 .settings-layout { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 16px; align-items: start; }
-.settings-nav { position: sticky; top: calc(var(--header-h, 56px) + 12px); display: flex; flex-direction: column; gap: 2px; }  /* below the pinned header */
+.settings-nav { display: flex; flex-direction: column; gap: 2px; }
+/* A wide window: the settings take the height left below the header and only the right side scrolls,
+   so the menu never moves (a menu that follows the page jitters by a pixel on scaled displays). */
+@media (min-width: 761px) {
+  .settings-layout { height: var(--settings-h, auto); align-items: stretch; }
+  .settings-nav { align-self: start; }
+  .settings-pages { min-height: 0; overflow-y: auto; scrollbar-gutter: stable; padding-right: 4px; }
+}
 .settings-nav button { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; text-align: left;
   border: none; background: none; padding: 8px 10px; border-radius: 6px; }
 .settings-nav button:hover { background: var(--card); }
@@ -99,7 +106,7 @@ button.primary { background: var(--accent); color: #fff; border-color: var(--acc
 .settings-intro { margin: 2px 0 10px; color: var(--muted); }
 @media (max-width: 760px) {
   .settings-layout { grid-template-columns: 1fr; }
-  .settings-nav { top: var(--header-h, 56px); z-index: 1; flex-direction: row; overflow-x: auto;
+  .settings-nav { position: sticky; top: var(--header-h, 56px); z-index: 1; flex-direction: row; overflow-x: auto;
     background: var(--bg); padding: 4px 0; }
   .settings-nav button { white-space: nowrap; }
   .settings-nav button.on { box-shadow: inset 0 -3px 0 var(--accent); }
