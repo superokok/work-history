@@ -337,6 +337,7 @@ function showSettingsGroup(group) {
   try { localStorage.setItem("settings-group", group); } catch { /* private window: not remembered */ }
   document.querySelectorAll("#settings-nav button").forEach((b) => b.classList.toggle("on", b.dataset.group === group));
   document.querySelectorAll(".settings-page").forEach((p) => (p.hidden = p.dataset.group !== group));
+  measureHeader();
   keepGroupInView();
 }
 // A narrow window shows the menu as one scrolling row: keep the chosen group in view (again when
@@ -349,6 +350,14 @@ document.querySelectorAll("#settings-nav button").forEach((b) => b.addEventListe
   showSettingsGroup(b.dataset.group);
   window.scrollTo(0, 0);  // each group starts at its top; the menu stays where it is
 }));
+// The header stays at the top of the window; the settings menu stays just below it (style.css).
+function measureHeader() {
+  document.documentElement.style.setProperty("--header-h", `${document.querySelector("header").offsetHeight}px`);
+}
+// Its height changes when the window narrows (the tabs wrap): follow it, not only window resizes.
+new ResizeObserver(measureHeader).observe(document.querySelector("header"));
+window.addEventListener("resize", measureHeader);
+measureHeader();
 // What each group is set to, next to its name in the menu.
 const setHint = (group, text) => {
   const el = $(`hint-${group}`);
