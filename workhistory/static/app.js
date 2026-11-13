@@ -327,19 +327,39 @@ async function showChange(changeId) {
 $("diff-close").addEventListener("click", () => ($("diff-overlay").hidden = true));
 $("diff-overlay").addEventListener("click", (e) => { if (e.target.id === "diff-overlay") $("diff-overlay").hidden = true; });
 
+// A work folder's name: what the dashboard, the timeline and the reports call it (its path stays).
+function renameFolder(f, li) {
+  const label = li.querySelector(".folder-label");
+  if (!label || li.querySelector(".folder-rename")) return;
+  const input = h("input", { value: f.label, maxlength: 100 });
+  const save = () => guarded(async () => {
+    if (!input.value.trim() || input.value.trim() === f.label) return loadFolders();
+    await api("PATCH", `/api/folders/${f.id}`, { label: input.value.trim() });
+    toast("작업 폴더 이름을 바꿨습니다. 지난 기록과 보고서 자료에도 새 이름으로 나옵니다.");
+    loadFolders();
+  });
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") save(); if (e.key === "Escape") loadFolders(); });
+  label.replaceWith(h("span", { class: "folder-rename" }, input,
+    h("button", { class: "small primary", onclick: save }, "저장"),
+    h("button", { class: "small", onclick: () => loadFolders() }, "취소")));
+  input.focus();
+  input.select();
+}
+
 async function loadFolders() {
   const folders = await guarded(() => api("GET", "/api/folders"));
   if (!folders) return;
   $("folder-list").replaceChildren(...(folders.length ? folders.map((f) =>
     h("li", { class: "folder-item" },
       h("div", {},
-        h("b", {}, f.label), f.enabled ? null : badge("plain", "꺼짐"),
+        h("b", { class: "folder-label" }, f.label), f.enabled ? null : badge("plain", "꺼짐"),
         h("div", { class: "meta" }, f.path),
         h("div", { class: "meta" }, `파일 ${f.files}개 · `,
           f.last_scan_at ? `마지막 확인 ${ago(f.last_scan_at)}` : "아직 기록 전",
           f.last_change_at ? ` · 마지막 변경 ${ago(f.last_change_at)}` : ""),
         f.last_error ? h("div", { class: "warning" }, f.last_error) : null),
       h("div", { class: "row" },
+        h("button", { class: "small", onclick: (e) => renameFolder(f, e.target.closest("li")) }, "이름 바꾸기"),
         h("button", { class: "small", onclick: () => guarded(async () => {
           await api("PATCH", `/api/folders/${f.id}`, { enabled: !f.enabled });
           loadFolders();
@@ -920,7 +940,7 @@ async function loadTrackApps() {
 $("track-apps-box").addEventListener("toggle", () => $("track-apps-box").open && loadTrackApps());
 
 // ---- 앱 이름과 분류: the user's name and kind for an app, for every window of it or only windows
-// whose title contains some text. The app only suggests names (title endings); nothing is guessed.
+// whose title contains some text. Nothing is guessed: each app shows a few window titles to go by.
 async function loadNames() {
   const r = await guarded(() => api("GET", "/api/app-names"));
   if (!r) return;
@@ -967,10 +987,7 @@ async function loadNames() {
         app.rules.length ? [" ", badge("user", `이름 규칙 ${app.rules.length}개`)] : null),
       h("div", { class: "titles" }, app.titles.slice(0, 3).map((t) => h("div", { title: t.title }, `${t.title} · ${dur(t.seconds)}`))),
       h("div", { class: "row" },
-        ...app.suggestions.map((s) => h("button", { class: "small", title: "창 제목 끝에 자주 나오는 이름입니다. 누르면 저장 전에 고칠 수 있습니다.",
-          onclick: () => open({ label: s.text, contains: s.text, category: app.category === "other" ? "" : app.category }) },
-          `"${s.text}"(으)로 · 창의 ${Math.round(s.share * 100)}%`)),
-        h("button", { class: "small", onclick: () => open({ label: app.label === app.key ? "" : app.label }) }, "직접 정하기")));
+        h("button", { class: "small", onclick: () => open({ label: app.label === app.key ? "" : app.label }) }, "이름·분류 정하기")));
     return li;
   }) : [h("li", { class: "muted" }, "최근 7일 동안 기록된 앱이 없습니다.")]));
 }
@@ -1103,7 +1120,8 @@ function renderDashboard(r) {
 
 function renderKpis(r) {
   const t = r.totals, p = r.previous, diff = t.active_s - p.active_s;
-  const kpi = (label, value, sub, cls = "") => h("div", { class: "kpi" },
+  const kpi = (label, value, sub, cls = "", onclick = null) => h("div", { class: `kpi${onclick ? " clickable" : ""}`, onclick,
+    title: onclick ? "눌러서 자세히 보기" : null },
     h("div", { class: "label" }, label), h("div", { class: `value ${cls}`, title: value }, value),
     h("div", { class: "sub" }, ...[].concat(sub)));
   const compare = r.span === "day" ? " 전날보다" : " 지난주 같은 기간보다";
@@ -1111,7 +1129,8 @@ function renderKpis(r) {
     kpi("활동 시간", dur(t.active_s),
       p.active_s ? [h("span", { class: diff >= 0 ? "up" : "down" }, `${diff >= 0 ? "+" : "−"}${dur(Math.abs(diff))}`), compare] : "비교할 기록 없음"),
     kpi("업무 비율", `${pct(t.work_s, t.active_s)}%`, `업무 ${dur(t.work_s)} · 업무 외 ${dur(t.offwork_s)}`),
-    kpi("고친 파일", `${r.files.toLocaleString()}개`, `+${r.lines_added.toLocaleString()} / −${r.lines_removed.toLocaleString()}줄`),
+    kpi("고친 파일", `${r.files.toLocaleString()}개`, `+${r.lines_added.toLocaleString()} / −${r.lines_removed.toLocaleString()}줄`,
+      "", r.files ? () => showDetailFiles(r) : null),
     kpi("가장 많이 쓴 앱", r.top_app ? r.top_app.label : "없음", r.top_app ? dur(r.top_app.seconds) : "기록된 활동이 없습니다", "name"));
 }
 
@@ -1181,14 +1200,17 @@ function renderDonut(r) {
     const len = (r.by_kind[c.key] / total) * C;
     ring.append(svg("circle", { cx: 50, cy: 50, r: R, fill: "none", stroke: c.color, "stroke-width": 14,
       "stroke-dasharray": `${Math.max(0, len - 0.6)} ${C}`, "stroke-dashoffset": -offset, transform: "rotate(-90 50 50)" },
-      svg("title", {}, `${c.label} ${dur(r.by_kind[c.key])} (${pct(r.by_kind[c.key], total)}%)`)));
+      svg("title", {}, `${c.label} ${dur(r.by_kind[c.key])} (${pct(r.by_kind[c.key], total)}%) · 눌러서 모아 보기`)));
+    ring.lastChild.style.cursor = "pointer";
+    ring.lastChild.addEventListener("click", () => showDetailKind(r, c));
     offset += len;
   }
   ring.append(svg("text", { x: 50, y: 49, "text-anchor": "middle", "font-size": 13, "font-weight": 600, fill: "var(--text)" },
       `${hours(total)}시간`),
     svg("text", { x: 50, y: 62, "text-anchor": "middle", "font-size": 8, fill: "var(--muted)" }, `업무 ${pct(r.totals.work_s, total)}%`));
   $("dash-donut").replaceChildren(h("div", { class: "donut-wrap" }, ring,
-    h("div", { class: "donut-list" }, used.map((c) => h("div", {},
+    h("div", { class: "donut-list" }, used.map((c) => h("div", { class: "clickable", title: `${c.label}만 모아 보기`,
+      onclick: () => showDetailKind(r, c) },
       h("i", { class: "swatch", style: { background: c.color } }), c.label,
       h("span", { class: "t" }, `${dur(r.by_kind[c.key])} · ${pct(r.by_kind[c.key], total)}%`))))));
 }
@@ -1215,7 +1237,7 @@ function renderStrip(r) {
 
 // One line: name (and what is known about it), a meter, the number.
 function dashRow({ name, sub, stat, share, onclick }) {
-  return h("div", { class: "dash-row", title: [name, sub].filter(Boolean).join(" · ") + "\n타임라인에서 보기", onclick },
+  return h("div", { class: "dash-row", title: [name, sub].filter(Boolean).join(" · ") + "\n눌러서 자세히 보기", onclick },
     h("div", { class: "dash-name" }, name, sub ? h("span", { class: "dash-sub" }, sub) : null),
     h("div", { class: "dash-meter" }, h("div", { style: { width: `${share * 100}%` } })),
     h("div", { class: "dash-stat" }, stat));
@@ -1230,7 +1252,7 @@ function renderDashWork(r) {
     name: w.title, share: w.seconds / max, stat: dur(w.seconds),
     sub: [w.outside ? "작업 폴더 밖" : "", r.span === "week" ? (w.days > 1 ? `${w.days}일 · 가장 오래 한 날 ${when(w.day)}` : when(w.day)) : ""]
       .filter(Boolean).join(" · "),
-    onclick: () => gotoDay(w.day),
+    onclick: () => showDetailWork(r, w),
   })));
 }
 
@@ -1243,8 +1265,78 @@ function renderDashFolders(r) {
   $("dash-folders").replaceChildren(...r.folders.map((f) => dashRow({
     name: f.label, share: f.files / max, stat: `파일 ${f.files.toLocaleString()}개`,
     sub: `+${f.lines_added.toLocaleString()} −${f.lines_removed.toLocaleString()}줄 · 기록 ${f.changes}번`,
-    onclick: () => gotoDay(f.day),
+    onclick: () => showDetailFiles(r, f),
   })));
+}
+
+// ---- Details: a dashboard number or row, opened in a window over the dashboard.
+const periodName = (r) => (r.span === "day" ? `${r.day.slice(5)} (${weekdayOf(r.day)})` : `${r.start.slice(5)}–${r.end.slice(5)}`);
+const dayName = (day) => `${day.slice(5)} (${weekdayOf(day)})`;
+
+function openDetail(title, ...body) {
+  $("detail-title").textContent = title;
+  $("detail-body").replaceChildren(...body);
+  $("detail-overlay").hidden = false;
+}
+$("detail-close").addEventListener("click", () => ($("detail-overlay").hidden = true));
+$("detail-overlay").addEventListener("click", (e) => { if (e.target.id === "detail-overlay") $("detail-overlay").hidden = true; });
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  if (!$("diff-overlay").hidden) $("diff-overlay").hidden = true;
+  else if (!$("detail-overlay").hidden) $("detail-overlay").hidden = true;
+});
+
+const detailUrl = (r, what, params = {}) =>
+  `/api/dashboard/detail?${new URLSearchParams({ date: r.day, span: r.span, what, ...params })}`;
+
+// The files of the view, per work folder; a file opens its latest change.
+function filesList(d) {
+  return d.folders.flatMap((f) => [
+    h("h3", {}, `${f.label} · 파일 ${f.files.length}개`),
+    h("ul", { class: "detail-list" }, f.files.map((x) => h("li", {},
+      h("button", { class: `link file-${x.kind}`, title: `${x.path}\n눌러서 바뀐 내용 보기`, onclick: () => showDiff(x) }, x.path),
+      h("span", { class: "num" }, [kindLabel[x.kind], x.times > 1 ? `${x.times}번` : "",
+        x.added || x.removed ? `+${x.added} −${x.removed}` : "", `${x.last ? hhmm(x.last) : ""}`,
+      ].filter(Boolean).join(" · "))))),
+  ]);
+}
+
+async function showDetailFiles(r, folder = null) {
+  const d = await guarded(() => api("GET", detailUrl(r, "files", folder ? { folder: folder.folder_id } : {})));
+  if (!d) return;
+  openDetail(`${folder ? folder.label : "고친 파일"} · ${periodName(r)}`,
+    h("p", { class: "detail-sum" }, `파일 ${d.files}개 · 변경 기록 ${d.changes}번. 파일을 누르면 마지막으로 바뀐 내용을 봅니다.`),
+    ...(d.folders.length ? filesList(d) : [h("p", { class: "muted" }, "이 기간에 바뀐 파일이 없습니다.")]));
+}
+
+const windowList = (windows) => h("ul", { class: "detail-list" }, windows.map((w) => h("li", {},
+  h("span", { class: "name", title: w.title }, w.title || "(제목 없음)"), h("span", { class: "num" }, dur(w.seconds)))));
+
+async function showDetailKind(r, c) {
+  const d = await guarded(() => api("GET", detailUrl(r, "kind", { kind: c.key })));
+  if (!d) return;
+  const days = r.span === "week" ? [h("p", { class: "detail-sum" },
+    d.days.filter((x) => x.seconds).map((x) => `${dayName(x.day)} ${dur(x.seconds)}`).join(" · ") || "기록 없음")] : [];
+  openDetail(`${d.label} · ${periodName(r)} · ${dur(d.seconds)}`, ...days,
+    ...(d.apps.length ? d.apps.flatMap((a) => [
+      h("h3", {}, `${a.label} · ${dur(a.seconds)}`),
+      a.windows.length ? windowList(a.windows) : h("p", { class: "muted small-text" }, "업무 외 시간은 앱 이름과 창 제목 없이 기록합니다."),
+    ]) : [h("p", { class: "muted" }, "이 기간에 이 분류의 활동이 없습니다.")]));
+}
+
+async function showDetailWork(r, w) {
+  const d = await guarded(() => api("GET", detailUrl(r, "work", { name: w.title, outside: w.outside ? "1" : "0" })));
+  if (!d) return;
+  const spans = (x) => x.spans.map(([s, e]) => `${hhmm(s)}–${hhmm(e)}`).join(", ");
+  openDetail(`${d.name} · ${periodName(r)} · ${dur(d.seconds)}`,
+    h("h3", {}, "날짜별 시간"),
+    h("ul", { class: "detail-list" }, d.days.map((x) => h("li", {},
+      h("button", { class: "link", title: "그날 타임라인 열기", onclick: () => { $("detail-overlay").hidden = true; gotoDay(x.day); } },
+        `${dayName(x.day)} · ${spans(x)}`),
+      h("span", { class: "num" }, dur(x.seconds))))),
+    h("h3", {}, "본 창 (오래 본 순서)"),
+    d.windows.length ? windowList(d.windows) : h("p", { class: "muted" }, "창 기록이 없습니다."),
+    ...(d.files && d.files.folders.length ? [h("h3", {}, `바뀐 파일 ${d.files.files}개`), ...filesList(d.files).slice(1)] : []));
 }
 
 $("dash-day").addEventListener("click", () => { dash.span = "day"; loadDashboard(); });

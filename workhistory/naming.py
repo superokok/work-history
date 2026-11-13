@@ -4,8 +4,8 @@ Windows names a window by its executable, and some executables are not the progr
 user sees: Eclipse runs as javaw, many tools as python or node, store apps under
 ApplicationFrameHost. The user gives an app a name and a kind (개발, 문서, ...), for every
 window of it or only for windows whose title contains some text ("javaw" + "Eclipse IDE"
--> Eclipse IDE, 개발). Nothing is guessed: the app only suggests names, from the endings
-its window titles share, and the user chooses.
+-> Eclipse IDE, 개발). Nothing is guessed: the settings list each app with a few of its
+window titles, and the user decides.
 
 The names apply when activity is read (`apply`, from store.day_activities), so the
 dashboard, the timeline, search results built from activity and the AI's data all use
@@ -13,7 +13,6 @@ them, for past days too; the recorded window events keep the executable's name, 
 removing a name brings the original back.
 """
 
-import re
 import sqlite3
 import time
 from collections import defaultdict
@@ -21,7 +20,7 @@ from dataclasses import dataclass, replace
 from typing import Optional
 
 from . import categories
-from .apps import TITLE_SEPARATOR, app_key, app_label
+from .apps import app_key, app_label
 from .classify import OFFWORK_APP
 from .store import Invalid, NotFound
 
@@ -30,8 +29,6 @@ LAUNCHER_APPS = {"javaw", "java", "javaws", "python", "pythonw", "py", "node", "
                  "applicationframehost", "rundll32", "dllhost", "mshta", "wscript", "cscript", "wwahost"}
 KINDS = [key for key in categories.KEYS if key != "offwork"]
 TITLES_SHOWN = 5
-SUGGESTIONS = 3
-MIN_SHARE = 0.15  # an ending in at least this share of an app's time is offered as a name
 MAX_LABEL = 60
 MAX_CONTAINS = 100
 
@@ -91,33 +88,9 @@ def _rule_dict(r: NameRule) -> dict:
     return {"id": r.id, "app": r.app, "contains": r.contains, "label": r.label, "category": r.category}
 
 
-def _ending(title: str) -> Optional[str]:
-    parts = TITLE_SEPARATOR.split(title.strip())
-    end = parts[-1].strip() if len(parts) > 1 else ""
-    end = re.sub(r"\s*\(?\d+(\.\d+)+\)?$", "", end).strip()  # "Eclipse IDE 4.30" -> "Eclipse IDE"
-    return end if 2 <= len(end) <= 40 else None
-
-
-def suggestions(titles: dict[str, float], whole_titles: bool = False) -> list[dict]:
-    """Names an app's windows suggest: the title endings ("… - Eclipse IDE") that take at least
-    MIN_SHARE of its time, most first. `whole_titles`: a title with no ending counts as a name
-    itself (a store app's window is titled with its name: "계산기")."""
-    total = sum(titles.values()) or 1.0
-    endings: dict[str, float] = defaultdict(float)
-    for title, sec in titles.items():
-        end = _ending(title)
-        if not end and whole_titles and 2 <= len(title.strip()) <= 30 and not TITLE_SEPARATOR.search(title):
-            end = title.strip()
-        if end:
-            endings[end] += sec
-    ranked = sorted(endings.items(), key=lambda kv: -kv[1])
-    return [{"text": text, "share": round(sec / total, 2)} for text, sec in ranked
-            if sec / total >= MIN_SHARE][:SUGGESTIONS]
-
-
 def list_names(conn: sqlite3.Connection, days: int = 7, now: Optional[float] = None) -> dict:
     """The rules, and the apps of the last `days` days (from the recorded windows) with their usual
-    name and kind, a few window titles, and names their titles suggest."""
+    name and kind and a few window titles."""
     now = time.time() if now is None else now
     rules = _rules(conn)
     per_app: dict[str, dict] = {}
@@ -136,18 +109,11 @@ def list_names(conn: sqlite3.Connection, days: int = 7, now: Optional[float] = N
         titles = e.pop("titles")
         own = [_rule_dict(r) for r in rules if r.app == e["key"]]
         launcher = e["key"] in LAUNCHER_APPS
-        label = app_label(e["app"])
-        # Names are suggested only where the usual one says little: a launcher, or an app the
-        # app has no name for (its executable); never one a rule already uses.
-        unclear = launcher or label.casefold() == e["key"]
-        offered = [s for s in suggestions(titles, whole_titles=launcher) if unclear
-                   and all(s["text"].casefold() != (r["contains"] or r["label"]).casefold() for r in own)]
-        apps.append({**e, "seconds": round(e["seconds"]), "label": label,
+        apps.append({**e, "seconds": round(e["seconds"]), "label": app_label(e["app"]),
                      "category": categories.default_category(e["app"]),
                      "launcher": launcher, "rules": own,
                      "titles": [{"title": t, "seconds": round(s)} for t, s in
-                                sorted(titles.items(), key=lambda kv: -kv[1])[:TITLES_SHOWN]],
-                     "suggestions": offered})
+                                sorted(titles.items(), key=lambda kv: -kv[1])[:TITLES_SHOWN]]})
     labels = dict(categories.CATEGORIES_LABELS)
     return {"rules": [_rule_dict(r) for r in rules], "apps": apps,
             "kinds": [{"key": k, "label": labels[k]} for k in KINDS]}

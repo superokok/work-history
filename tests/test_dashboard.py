@@ -1,7 +1,7 @@
 import unittest
 from datetime import date, timedelta
 
-from workhistory import categories, dashboard
+from workhistory import categories, dashboard, store
 from workhistory.classify import OFFWORK_APP
 
 from tests.helpers import TempDB, local_ts
@@ -96,6 +96,64 @@ class DashboardTests(unittest.TestCase):
     def test_unknown_span(self):
         with self.db.connect() as conn, self.assertRaises(ValueError):
             dashboard.dashboard(conn, DAY, "month", now=NOW)
+
+
+
+
+class DetailTests(unittest.TestCase):
+    """A dashboard number or row, opened: on the fictional demo week."""
+
+    @classmethod
+    def setUpClass(cls):
+        import tempfile
+        from datetime import datetime, time as dtime
+        from pathlib import Path
+        from workhistory import demo
+        cls._tmp = TempDB()
+        cls.db = cls._tmp.__enter__()
+        monday = date.today() - timedelta(days=date.today().weekday())
+        cls.now = datetime.combine(monday + timedelta(days=4), dtime(19)).timestamp()
+        demo.seed(cls.db, Path(tempfile.mkdtemp()) / "snap", now=cls.now)
+        cls.week = monday - timedelta(days=7)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._tmp.__exit__(None, None, None)
+
+    def test_files_once_each_per_folder(self):
+        with self.db.connect() as conn:
+            board = dashboard.dashboard(conn, self.week, "week", now=self.now)
+            d = dashboard.detail_files(conn, self.week, "week", now=self.now)
+            api = next(f for f in board["folders"] if f["label"] == "gov24-minwon-api")
+            only = dashboard.detail_files(conn, self.week, "week", api["folder_id"], now=self.now)
+        self.assertEqual(d["changes"], board["files"])                  # every change counted
+        paths = [x["path"] for f in d["folders"] for x in f["files"]]
+        self.assertEqual(len(paths), len(set(paths)))                    # each file once
+        self.assertEqual(d["files"], len(paths))
+        self.assertEqual([f["label"] for f in only["folders"]], ["gov24-minwon-api"])
+        twice = next(x for f in d["folders"] for x in f["files"] if x["times"] > 1)
+        self.assertGreater(twice["added"], 0)
+
+    def test_one_kind_adds_up_to_the_dashboard(self):
+        with self.db.connect() as conn:
+            board = dashboard.dashboard(conn, self.week, "week", now=self.now)
+            d = dashboard.detail_kind(conn, self.week, "week", "dev", now=self.now)
+            with self.assertRaises(store.Invalid):
+                dashboard.detail_kind(conn, self.week, "week", "nope", now=self.now)
+        self.assertAlmostEqual(d["seconds"], board["by_kind"]["dev"], delta=len(d["days"]))
+        self.assertAlmostEqual(sum(a["seconds"] for a in d["apps"]), d["seconds"], delta=len(d["apps"]))
+        self.assertTrue(all(a["windows"] for a in d["apps"]))
+
+    def test_one_line_of_work(self):
+        with self.db.connect() as conn:
+            board = dashboard.dashboard(conn, self.week, "week", now=self.now)
+            first = board["work"][0]
+            d = dashboard.detail_work(conn, self.week, "week", first["title"], first["outside"], now=self.now)
+            web = dashboard.detail_work(conn, self.week, "week", "웹", True, now=self.now)
+        self.assertAlmostEqual(d["seconds"], first["seconds"], delta=len(d["days"]))
+        self.assertEqual(len(d["days"]), first["days"])
+        self.assertTrue(d["windows"] and d["files"]["files"])
+        self.assertIsNone(web["files"])                                  # 웹 has no files of its own
 
 
 if __name__ == "__main__":

@@ -123,6 +123,20 @@ class App:
                 raise ApiError(400, "span 값이 올바르지 않습니다")
             return dashboard.dashboard(conn, _day(query.get("date")), span)
 
+        @r("GET", "/api/dashboard/detail")
+        def dashboard_detail(conn, query, body):
+            span, what, day = query.get("span", "day"), query.get("what", ""), _day(query.get("date"))
+            if span not in ("day", "week"):
+                raise ApiError(400, "span 값이 올바르지 않습니다")
+            if what == "files":
+                folder = query.get("folder")
+                return dashboard.detail_files(conn, day, span, int(folder) if folder and folder.isdigit() else None)
+            if what == "kind":
+                return dashboard.detail_kind(conn, day, span, query.get("kind", ""))
+            if what == "work":
+                return dashboard.detail_work(conn, day, span, query.get("name", ""), query.get("outside") == "1")
+            raise ApiError(400, "what 값이 올바르지 않습니다")
+
         @r("POST", "/api/assign")
         def assign(conn, query, body):
             return {"changed": service.assign_project(conn, body.get("event_ids"), body.get("project_id"))}

@@ -25,6 +25,15 @@
     </div>
   </header>
   <div id="toast" class="toast" hidden></div>
+  <!-- A dashboard number or row, opened: the files, the records of a kind or of one piece of work.
+       Before the diff overlay, so a diff opened from here shows on top. -->
+  <div id="detail-overlay" class="overlay" hidden>
+    <div class="overlay-box card">
+      <div class="summary-head"><h2 id="detail-title"></h2><button id="detail-close" class="small">닫기</button></div>
+      <div id="detail-body" class="detail-body"></div>
+    </div>
+  </div>
+
   <div id="diff-overlay" class="overlay" hidden>
     <div class="overlay-box card">
       <div class="summary-head"><h2 id="diff-title"></h2><button id="diff-close" class="small">닫기</button></div>

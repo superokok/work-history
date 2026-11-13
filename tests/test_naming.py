@@ -77,27 +77,18 @@ class NamingTests(unittest.TestCase):
             with self.assertRaises(store.NotFound):
                 naming.delete_name(conn, 999)
 
-    def test_the_app_list_suggests_names_from_title_endings(self):
+    def test_the_app_list(self):
         with self.db.connect() as conn:
+            naming.save_name(conn, {"app": "javaw", "contains": "Eclipse IDE", "label": "Eclipse", "category": "dev"})
             out = naming.list_names(conn, now=local_ts(DAY, 23))
         javaw = next(a for a in out["apps"] if a["key"] == "javaw")
         self.assertEqual((javaw["launcher"], javaw["label"], javaw["category"], javaw["seconds"]),
                          (True, "javaw", "other", 110 * 60))
-        self.assertEqual(javaw["suggestions"], [{"text": "Eclipse IDE", "share": 0.82},
-                                                {"text": "DBeaver", "share": 0.18}])  # the version is dropped
         self.assertEqual(javaw["titles"][0]["title"], "ws - project-a/src/App.java - Eclipse IDE")
+        self.assertEqual([r["label"] for r in javaw["rules"]], ["Eclipse"])
+        self.assertNotIn("suggestions", javaw)
         notepad = next(a for a in out["apps"] if a["key"] == "notepad")
         self.assertFalse(notepad["launcher"])
-        self.assertEqual(notepad["suggestions"], [{"text": "메모장", "share": 1.0}])  # no name for it yet
-        with self.db.connect() as conn:  # an app with a name gets no suggestion; a used one is not offered again
-            self.window(conn, 13, 30, "Code.exe", "App.ts - project-b - Visual Studio Code")
-            self.window(conn, 14, 15, "ApplicationFrameHost.exe", "계산기")
-            naming.save_name(conn, {"app": "javaw", "contains": "Eclipse IDE", "label": "Eclipse", "category": "dev"})
-            out = naming.list_names(conn, now=local_ts(DAY, 23))
-        apps = {a["key"]: a for a in out["apps"]}
-        self.assertEqual(apps["code"]["suggestions"], [])
-        self.assertEqual(apps["applicationframehost"]["suggestions"], [{"text": "계산기", "share": 1.0}])
-        self.assertEqual([s["text"] for s in apps["javaw"]["suggestions"]], ["DBeaver"])
         self.assertEqual([k["key"] for k in out["kinds"]], ["dev", "doc", "comm", "web", "other"])
 
 

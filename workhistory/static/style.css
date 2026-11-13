@@ -162,6 +162,20 @@ ul.plain.name-apps > li { display: block; padding: 8px 0; }
 .name-apps .row { margin-top: 6px; flex-wrap: wrap; }
 .name-form { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 6px; }
 .name-form input { width: 180px; }
+.detail-body { overflow: auto; min-height: 0; }
+.detail-body h3 { margin: 14px 0 4px; font-size: 14px; }
+.detail-body h3:first-child { margin-top: 0; }
+.detail-body .detail-sum { color: var(--muted); font-size: 13px; margin: 0 0 8px; }
+.detail-list { list-style: none; padding: 0; margin: 0; }
+.detail-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: baseline;
+  padding: 4px 0; border-top: 1px solid var(--line); font-size: 13px; }
+.detail-list li:first-child { border-top: none; }
+.detail-list .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.detail-list .num { color: var(--muted); white-space: nowrap; font-size: 12px; }
+.detail-list button.link { text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kpi.clickable, .donut-list .clickable { cursor: pointer; }
+.kpi.clickable:hover .label, .donut-list .clickable:hover { color: var(--accent); }
+.folder-rename { display: flex; gap: 6px; align-items: center; }
 .image-pair { display: flex; gap: 12px; flex-wrap: wrap; margin: 6px 0 10px; white-space: normal; }
 .image-side { margin: 0; flex: 1 1 220px; min-width: 0; }
 .image-side img { display: block; max-width: 100%; max-height: 320px; border: 1px solid var(--line);

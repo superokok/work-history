@@ -54,7 +54,7 @@ service.py    – timeline, search, notes, projects
 dashboard.py  – day/week dashboard: time by kind of activity, the day strip, time per work
                 folder (work.py), file changes per work folder; the day before / last week to compare
 categories.py – kind of activity from the app name (rules, no AI), or the user's kind for an app they named
-naming.py     – 앱 이름과 분류: the user's names and kinds for apps, applied when activity is read; names suggested from title endings
+naming.py     – 앱 이름과 분류: the user's names and kinds for apps, applied when activity is read
    ▼
 server.py     – JSON API + static UI, bound to 127.0.0.1 only
    ▼
