@@ -200,7 +200,9 @@ code.command { display: block; flex: 1; padding: 6px 8px; background: var(--bg);
   .dash-body .dash-row { padding: 5px 0; }
   .dash-body > .card > h2 { flex: none; }
   .dash-body > .card > div { flex: 1; min-height: 0; overflow: auto; }
-  .dash-a-strip > div { overflow: visible; }
+  /* The day strip never scrolls: it is as tall as its bar and hour labels (an id, so the rule above
+     for the cards' lists, more specific than a class, does not win). */
+  #dash-strip { overflow: visible; }
   #dash-week-chart, #dash-donut { overflow: hidden; }
   .dash-a-donut .donut-wrap { height: 100%; }
   .dash-a-donut .donut-wrap svg { height: 100%; width: auto; max-width: 150px; min-width: 70px; }
@@ -234,7 +236,7 @@ svg.chart text.sel { fill: var(--text); font-weight: 600; }
 .donut-list .t { margin-left: auto; color: var(--muted); white-space: nowrap; }
 .strip { position: relative; height: 34px; background: var(--bg); border-radius: 6px; overflow: hidden; }
 .strip div { position: absolute; top: 0; bottom: 0; }
-.strip-axis { position: relative; height: 16px; font-size: 11px; color: var(--muted); }
+.strip-axis { position: relative; height: 16px; font-size: 11px; line-height: 16px; color: var(--muted); }
 .strip-axis span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
 .strip-axis span:last-child { transform: translateX(-100%); }
 .strip-axis span:first-child { transform: none; }
