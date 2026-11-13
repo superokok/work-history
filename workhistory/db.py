@@ -299,6 +299,18 @@ MIGRATIONS: list[str] = [
     ALTER TABLE collector_events DROP COLUMN path;
     ALTER TABLE window_events DROP COLUMN path;
     """,
+    # v15: the user's names and kinds for apps (javaw -> Eclipse IDE, 개발), applied when activity is read.
+    """
+    CREATE TABLE app_names (
+        id         INTEGER PRIMARY KEY,
+        app        TEXT NOT NULL,              -- the executable, case-folded, without .exe
+        contains   TEXT NOT NULL DEFAULT '',   -- only windows whose title contains this ('' = all)
+        label      TEXT NOT NULL DEFAULT '',   -- the name shown ('' = the usual name)
+        category   TEXT,                       -- dev / doc / comm / web / other, NULL = the usual kind
+        created_at REAL NOT NULL,
+        UNIQUE (app, contains)
+    );
+    """,
 ]
 
 SCHEMA_VERSION = len(MIGRATIONS)

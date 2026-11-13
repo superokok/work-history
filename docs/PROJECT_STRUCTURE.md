@@ -58,7 +58,7 @@ work-history/
 | | `sync.py` | 원본을 1분마다 가져오기, 중복 제거, 개인정보 규칙 적용 |
 | | `snapshots.py` | 작업 폴더 스냅샷 (dulwich), 변경 기록, 하위 폴더별 프로젝트 (앱은 추천만, 사람이 확인) |
 | | `extract.py` | 코드/텍스트, HWP, DOCX/XLSX/PPTX 텍스트 추출 |
-| 저장 | `db.py` | SQLite 스키마 + 마이그레이션 (`PRAGMA user_version`, 현재 v14) |
+| 저장 | `db.py` | SQLite 스키마 + 마이그레이션 (`PRAGMA user_version`, 현재 v15) |
 | | `store.py` | 공용 로더, 하루 경계 |
 | 처리 (순수 함수) | `normalize.py` | 창 − AFK − 차단 구간 − 제외, 하루 단위 자르기 |
 | | `classify.py` | 수동 지정 > 키워드 규칙 > 없음 |
@@ -78,6 +78,7 @@ work-history/
 | 서비스 | `service.py` | 타임라인(앱별 합산), 검색, 메모, 프로젝트 쿼리 |
 | | `dashboard.py` | 대시보드: 일·주 단위 분류별 시간, 시간대 띠, 작업 폴더별 시간(웹·소통·기타 포함), 작업 폴더별 파일 변경, 전날·지난주 비교 |
 | | `categories.py` | 활동 분류 규칙 (개발·문서·소통·회의·웹·기타·업무 외, 앱 이름으로, AI 없음) |
+| | `naming.py` | 앱 이름과 분류: 사용자가 정한 앱 이름·분류(창 제목 조건 가능), 기록을 읽을 때 적용, 창 제목 끝말로 이름 제안 |
 | | `server.py` | JSON API + 정적 UI, 127.0.0.1 전용 |
 | | `demo.py`, `demo_files.py` | `--demo`용 가상 2주 시나리오 (별도 demo.db). `morning=True`: 오늘은 07:00–09:00까지 (시연용 실제 DB) |
 
@@ -93,7 +94,7 @@ uv pip install --python .venv/Scripts/python.exe -e .[claude] pip   # pip: 빌�
 .venv/Scripts/python.exe -m workhistory --demo     # 데모 데이터 (별도 demo.db)
 seed-demo.cmd                                      # 시연: 실제 앱 DB를 데모 데이터로 (기존 DB는 %LOCALAPPDATA%\WorkHistory\backup\)
 
-# 테스트 (2026-11-12 기준 230개)
+# 테스트 (2026-11-13 기준 235개)
 .venv/Scripts/python.exe -m unittest discover -s tests -t .
 
 # AI 보고서 품질 평가 (기본: llm/의 가장 큰 로컬 모델. Claude Code 기준값은 --model claude-code:sonnet, 로그인 필요)
@@ -167,6 +168,10 @@ python tools/build_portable.py                 # 인터넷용(Claude Code 포함
 - 주간보고 자료는 폴더 × 주 하나로 보낸다 (2026-11-11): 작업 기록을 날마다 따로 보내지 않고 작업 폴더(와 웹·소통·기타)마다
   한 주 합계 하나로, 요일별 분을 붙여 보낸다. 데모 주 12,960자 → 8,616자, 바쁜 주(스냅샷 658개)도 줄이지 않고 한 번에 들어간다.
   한 폴더를 두 업무가 나눠 쓰면, 날마다 그 폴더의 파일 변경을 인용한 업무에 그날 시간을 준다(근거 없는 날은 똑같이 나눔).
+- 앱 이름과 분류는 사용자가 정한다 (2026-11-13, 스키마 v15 `app_names`): javaw(이클립스)처럼 실행 파일 이름이 실제 프로그램과
+  다르면 설정에서 보일 이름과 분류를 정하고, 한 실행 파일이 여러 프로그램이면 창 제목 조건으로 나눈다. 앱별 규칙을 미리 만들어
+  두지 않고, 이름을 알기 어려운 앱(javaw·python·node·ApplicationFrameHost 등, 이름 모르는 앱)에만 창 제목 끝말로 이름을 제안한다.
+  기록을 읽을 때 적용해 대시보드·타임라인·AI 자료와 지난 기록에 모두 쓰이고, 원래 창 기록은 그대로다.
 - 파일 형식별 변경 기록 (2026-11-12): 5MB 넘는 파일은 내용 없이 크기·수정 시각만 남겨 추가·수정·삭제를 기록한다. HWPX와 UTF-16 텍스트도 바뀐 줄을 보여 주고,
   그림은 변경 창에서 전후를 나란히 보여 준다. xlsx는 시트 이름·행 번호·열 자리·날짜·수식까지 줄로 보여 준다. PDF·예전 Office(doc·xls·ppt)·그 밖의 바이너리는 이유를 안내한다.
 - 1분 이상 본 창 제목은 모두 보낸다 (2026-11-12, 전에는 기록마다 오래 본 10개): 근거(파일 이름·이슈 번호)가 늘고,

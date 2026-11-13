@@ -106,7 +106,7 @@ function showTab(name) {
   if (name === "dashboard") loadDashboard();
   if (name === "timeline") loadTimeline();
   if (name === "report") loadReport();
-  if (name === "settings") { loadFolders(); loadLaunch(); loadAISettings(); loadTracking(); loadExclusions(); }
+  if (name === "settings") { loadFolders(); loadLaunch(); loadAISettings(); loadTracking(); loadNames(); loadExclusions(); }
 }
 
 // ------------------------------------------------------------------ status
@@ -918,6 +918,62 @@ async function loadTrackApps() {
 }
 
 $("track-apps-box").addEventListener("toggle", () => $("track-apps-box").open && loadTrackApps());
+
+// ---- 앱 이름과 분류: the user's name and kind for an app, for every window of it or only windows
+// whose title contains some text. The app only suggests names (title endings); nothing is guessed.
+async function loadNames() {
+  const r = await guarded(() => api("GET", "/api/app-names"));
+  if (!r) return;
+  const kindLabel = Object.fromEntries(r.kinds.map((k) => [k.key, k.label]));
+  const describe = (rule) => [
+    h("b", {}, rule.app),
+    rule.contains ? ` · 제목에 "${rule.contains}"` : " · 모든 창",
+    " → ", rule.label || "(이름 그대로)", rule.category ? ` (${kindLabel[rule.category]})` : ""];
+  $("name-rules").replaceChildren(...(r.rules.length ? r.rules.map((rule) => h("li", {},
+    h("span", {}, ...describe(rule)),
+    h("button", { class: "small", onclick: () => guarded(async () => {
+      await api("DELETE", `/api/app-names/${rule.id}`);
+      toast("이름 규칙을 지웠습니다. 원래 이름으로 보입니다.");
+      loadNames();
+    }) }, "삭제")))
+    : [h("li", { class: "muted" }, "정한 이름이 없습니다. 아래 목록에서 고칠 앱을 고르세요.")]));
+
+  const form = (app, preset) => {
+    const label = h("input", { placeholder: "보일 이름 (예: Eclipse)", value: preset.label || "" });
+    const kind = h("select", {}, h("option", { value: "" }, "분류 그대로"),
+      ...r.kinds.map((k) => h("option", { value: k.key }, k.label)));
+    kind.value = preset.category || "";
+    const contains = h("input", { placeholder: "창 제목 조건 (선택)", value: preset.contains || "" });
+    const box = h("div", { class: "name-form" }, label, kind, contains,
+      h("button", { class: "small primary", onclick: () => guarded(async () => {
+        await api("POST", "/api/app-names", { app: app.app, label: label.value, category: kind.value, contains: contains.value });
+        toast(`${label.value || app.label}: 저장했습니다. 대시보드·타임라인에 바로 적용됩니다.`);
+        loadNames();
+      }) }, "저장"),
+      h("button", { class: "small", onclick: () => box.remove() }, "취소"));
+    return box;
+  };
+
+  $("name-apps").replaceChildren(...(r.apps.length ? r.apps.map((app) => {
+    const li = h("li", {});
+    const open = (preset) => {
+      li.querySelector(".name-form")?.remove();
+      li.append(form(app, preset));
+      li.querySelector(".name-form input").focus();
+    };
+    li.append(
+      h("div", {}, h("b", {}, app.label), h("span", { class: "meta" }, ` · ${app.app} · ${dur(app.seconds)} · ${kindLabel[app.category] || "기타"}`),
+        app.launcher && !app.rules.length ? [" ", badge("plain", "확인 필요")] : null,
+        app.rules.length ? [" ", badge("user", `이름 규칙 ${app.rules.length}개`)] : null),
+      h("div", { class: "titles" }, app.titles.slice(0, 3).map((t) => h("div", { title: t.title }, `${t.title} · ${dur(t.seconds)}`))),
+      h("div", { class: "row" },
+        ...app.suggestions.map((s) => h("button", { class: "small", title: "창 제목 끝에 자주 나오는 이름입니다. 누르면 저장 전에 고칠 수 있습니다.",
+          onclick: () => open({ label: s.text, contains: s.text, category: app.category === "other" ? "" : app.category }) },
+          `"${s.text}"(으)로 · 창의 ${Math.round(s.share * 100)}%`)),
+        h("button", { class: "small", onclick: () => open({ label: app.label === app.key ? "" : app.label }) }, "직접 정하기")));
+    return li;
+  }) : [h("li", { class: "muted" }, "최근 7일 동안 기록된 앱이 없습니다.")]));
+}
 
 document.querySelectorAll('input[name="track-mode"]').forEach((el) => el.addEventListener("change", () => guarded(async () => {
   try {

@@ -79,5 +79,7 @@ def day_activities(conn: sqlite3.Connection, day: date,
     now = time.time() if now is None else now
     start, end = day_bounds(day)
     window, afk = load_events(conn, start, end)
-    return build_activities(window, afk, load_blocked(conn, now), start, end,
-                            load_exclusions(conn), load_rules(conn))
+    activities, warnings = build_activities(window, afk, load_blocked(conn, now), start, end,
+                                            load_exclusions(conn), load_rules(conn))
+    from .naming import apply  # naming uses this module's errors
+    return apply(conn, activities), warnings

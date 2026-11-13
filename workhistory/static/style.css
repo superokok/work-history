@@ -156,6 +156,12 @@ pre.diff .del { background: rgba(201,60,60,.18); }
 pre.diff .hunk { color: var(--muted); }
 pre.diff .diff-file { font-weight: 600; margin-top: 12px; padding: 4px 0; border-bottom: 1px solid var(--line); }
 pre.diff .diff-file:first-child { margin-top: 0; }
+ul.plain.name-apps > li { display: block; padding: 8px 0; }
+.name-apps .titles { margin: 4px 0 0 0; font-size: 12px; color: var(--muted); }
+.name-apps .titles div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.name-apps .row { margin-top: 6px; flex-wrap: wrap; }
+.name-form { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 6px; }
+.name-form input { width: 180px; }
 .image-pair { display: flex; gap: 12px; flex-wrap: wrap; margin: 6px 0 10px; white-space: normal; }
 .image-side { margin: 0; flex: 1 1 220px; min-width: 0; }
 .image-side img { display: block; max-width: 100%; max-height: 320px; border: 1px solid var(--line);

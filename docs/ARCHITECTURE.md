@@ -53,7 +53,8 @@ ai_service.py – settings, consent, run log, saved reports; a report in several
 service.py    – timeline, search, notes, projects
 dashboard.py  – day/week dashboard: time by kind of activity, the day strip, time per work
                 folder (work.py), file changes per work folder; the day before / last week to compare
-categories.py – kind of activity from the app name (rules, no AI)
+categories.py – kind of activity from the app name (rules, no AI), or the user's kind for an app they named
+naming.py     – 앱 이름과 분류: the user's names and kinds for apps, applied when activity is read; names suggested from title endings
    ▼
 server.py     – JSON API + static UI, bound to 127.0.0.1 only
    ▼
@@ -100,7 +101,7 @@ per kind, `bucket_id` `workhistory-window` / `workhistory-afk`, `bucket_created`
   long event that started before the cursor is still extended.
 - Privacy rules apply here (pause/deleted ranges, exclusions, "업무 앱만 기록").
 
-## 5. Data model (schema v14)
+## 5. Data model (schema v15)
 
 ```
 sources        id, bucket_id, bucket_created, kind('window'|'afk'), hostname,
@@ -155,6 +156,12 @@ the AI 업무일지 covers it.
 
 v13: `collector_events.path` and `window_events.path` (browser address). v14: both columns
 dropped, the recorded addresses with them (see §4).
+
+v15: `app_names` (app, contains, label, category; unique per app and title condition): the
+user's name and kind for an app, for every window or only those whose title contains some
+text (javaw + "Eclipse IDE" -> Eclipse, 개발). Applied when activity is read
+(`naming.apply` from `store.day_activities`), so every view and the AI's data use it, past
+days included; `window_events` keep the executable's name.
 
 v4 (AI): `reports` (saved daily/weekly drafts), `ai_runs` (token/latency log,
 no content).

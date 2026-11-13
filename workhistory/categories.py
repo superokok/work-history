@@ -17,6 +17,7 @@ CATEGORIES = [
     ("offwork", "업무 외", "#d8d6cf"),
 ]
 KEYS = [key for key, _, _ in CATEGORIES]
+CATEGORIES_LABELS = [(key, label) for key, label, _ in CATEGORIES]
 WORK = set(KEYS) - {"offwork"}  # 업무 외 = apps the user does not record as work (기록 대상)
 
 DEV_APPS = CODE_APPS | {"claude", "cursor", "windsurf", "sublime_text", "vim", "gvim", "nvim-qt",
@@ -31,8 +32,24 @@ COMM_APPS = CHAT_APPS | MEETING_APPS | {"discord", "telegram", "line", "whatsapp
                                         "skype", "lync", "nateon", "mattermost", "jandi", "dooray", "flow"}
 
 
+# Apps the user named (naming.py): their name -> kind. Set from the user's rules when activity is read.
+_RENAMED: dict[str, str] = {}
+
+
+def set_renamed(kinds: dict[str, str]) -> None:
+    global _RENAMED
+    _RENAMED = dict(kinds)
+
+
 def category(app: str, title: str = "") -> str:
-    """Category key for one window (see CATEGORIES)."""
+    """Category key for one window (see CATEGORIES): the user's kind for an app they named, else by app."""
+    if app == OFFWORK_APP:
+        return "offwork"
+    return _RENAMED.get(app_key(app)) or default_category(app)
+
+
+def default_category(app: str) -> str:
+    """The kind of an app by its name alone (the lists above)."""
     if app == OFFWORK_APP:
         return "offwork"
     key = app_key(app)

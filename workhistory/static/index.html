@@ -207,6 +207,17 @@
         </div>
       </div>
       <div class="card">
+        <h2>앱 이름과 분류</h2>
+        <p class="muted small-text">Windows는 실행 파일 이름으로 앱을 알려 줍니다. 이클립스가 <b>javaw</b>로 나오는 것처럼 실제 프로그램과
+          다르게 보이면 여기서 보일 이름과 분류를 정하세요. 한 실행 파일이 여러 프로그램이면 "창 제목에 이 글자가 있을 때만"으로 나눕니다.
+          대시보드·타임라인·AI 보고서 자료에 모두 쓰이고 지난 기록에도 적용됩니다. 원래 기록(실행 파일 이름)은 바뀌지 않습니다.</p>
+        <ul id="name-rules" class="plain"></ul>
+        <details id="name-apps-box" open>
+          <summary>최근 7일 동안 쓴 앱</summary>
+          <ul id="name-apps" class="plain name-apps"></ul>
+        </details>
+      </div>
+      <div class="card">
         <h2>수집 정보</h2>
         <p><b>앱 이름, 창 제목, 시간, 유휴 상태</b>만 기록합니다. 키 입력, 클립보드, 화면, 문서 내용은 수집하지 않습니다. 모든 데이터는 이 컴퓨터에만 저장됩니다.</p>
         <p class="muted">DB 위치: <code id="db-path"></code></p>

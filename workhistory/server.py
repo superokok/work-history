@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterable, Optional
 from urllib.parse import parse_qs, urlparse
 
-from . import ai_agent, ai_service, dashboard, service, snapshots
+from . import ai_agent, ai_service, dashboard, naming, service, snapshots
 from .ai_client import AIError
 from .autostart import Launch
 from .autostart import default as default_launch
@@ -322,6 +322,19 @@ class App:
         @r("GET", r"/api/change-files/(\d+)/image")
         def change_file_image(conn, query, body, fid):
             return Raw(*snapshots.file_blob(self.repos_dir, conn, int(fid), query.get("side", "")))
+
+        @r("GET", "/api/app-names")
+        def app_names(conn, query, body):
+            return naming.list_names(conn)
+
+        @r("POST", "/api/app-names")
+        def save_app_name(conn, query, body):
+            return naming.save_name(conn, body)
+
+        @r("DELETE", r"/api/app-names/(\d+)")
+        def delete_app_name(conn, query, body, rid):
+            naming.delete_name(conn, int(rid))
+            return {"ok": True}
 
         @r("GET", "/api/exclusions")
         def exclusions(conn, query, body):
