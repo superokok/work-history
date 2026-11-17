@@ -39,7 +39,7 @@ work-history/
 ├─ tools/seed_demo.py      시연 준비: 앱 끄기 → DB 백업 → 데모(오늘 07~09시까지, 작업 폴더 없음) → Claude Sonnet·모든 앱 → 앱 켜기
 ├─ llm/                    (git 제외) 로컬 AI: bin/llama-server.exe + DLL, models/*.gguf, 라이선스 전문
 ├─ ppt/                    사용자의 발표 파일(.pptx), 시연 시나리오·심사용 설명자료(.md), git 포함. 작업 중 만든 초안 덱은 docs/presentation/(git 제외)
-├─ banner/                 행사용 X배너 800×1600: banner.html(원본) → render.sh(헤드리스 Edge)로 PNG(1배·3배)·PDF
+├─ banner/                 행사용 X배너 800×1600: banner.html(원본) → render.sh(헤드리스 Edge)로 banner-800x1600.png
 └─ docs/
    ├─ PROJECT_STRUCTURE.md 이 문서
    └─ ARCHITECTURE / PRODUCT / IMPLEMENTATION_PLAN / AI / PRIVACY / RESULTS_TRACKING
