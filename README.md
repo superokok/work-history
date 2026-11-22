@@ -195,6 +195,11 @@ python tools/build_portable.py               # 인터넷용, 모델 없음 (배�
 07:00–09:00** 업무를 넣고(작업 폴더는 넣지 않음: 설정에서 실제 폴더를 추가), AI 모델을 Claude Code · Sonnet, 기록 대상을 모든 앱으로 맞춰 앱을 다시 켭니다.
 데모 표시가 없고 실제로 기록하므로 시연 중 작업이 09:00 이후로 이어집니다. 날짜가 실행한 날 기준이라 시연 당일에
 실행합니다. Claude 데스크톱 앱 안이 아니라 탐색기에서 실행하세요 (그 안에서는 데이터 폴더가 따로 잡힐 수 있음).
+
+**날짜를 고정한 데모 (`tools/demo_week.py`)**: 같은 가상 시나리오를 정한 한 주(월–금, 기본 2026-11-16–20)에만 넣은
+별도 데모 DB를 만듭니다(작업 폴더와 파일 변경 포함, AI 모델 Claude Code · Sonnet). `--demo`의 `demo.db`처럼 날짜가 바뀌지 않아
+시연 날과 상관없이 같은 화면이 나옵니다. `.venv\Scripts\python.exe tools\demo_week.py` 후
+`start-workhistory.cmd --demo --db "%LOCALAPPDATA%\WorkHistory\demo-1116.db"`로 띄웁니다. 다른 주는 `--week 그 주의 월요일`.
 | `--window` | `pywebview`가 설치되어 있으면 자체 창, 없으면 브라우저 |
 | `--no-browser` | 브라우저를 열지 않음 (자동 실행이 씀) |
 | `--verbose` | 디버그 로그 |
