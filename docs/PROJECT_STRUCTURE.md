@@ -3,7 +3,7 @@
 새 세션에서 가장 먼저 읽는 문서. 상세 설계는 [ARCHITECTURE.md](ARCHITECTURE.md)를 본다.
 구조가 바뀌면 이 문서를 함께 고친다.
 
-_마지막 갱신: 2026-11-10_
+_마지막 갱신: 2026-11-22_
 
 ## 무엇인가
 
@@ -55,7 +55,7 @@ work-history/
 | | `instance.py` | DB당 앱 하나 (이름 있는 뮤텍스), 두 번째 실행은 실행 중인 앱의 포트를 찾아 브라우저로 연다 |
 | 설정 | `config.py` | 상수 (작업 기록 시간대 간격 등), 데이터 폴더 경로 |
 | 수집 | `collector.py` | 창·유휴 수집기 (앱 안 스레드, ctypes, 2초마다) → 원본 `collector_events` (35일) |
-| | `locate.py` | 창 제목의 파일 이름 → 작업 폴더의 전체 경로 |
+| | `locate.py` | 창 제목의 파일 이름 → 작업 폴더의 전체 경로 (이클립스 상대 경로, 확장자 없는 Office 제목, 띄어쓰기 있는 이름) |
 | | `sync.py` | 원본을 1분마다 가져오기, 중복 제거, 개인정보 규칙 적용 |
 | | `snapshots.py` | 작업 폴더 스냅샷 (dulwich), 변경 기록, 하위 폴더별 프로젝트 (앱은 추천만, 사람이 확인) |
 | | `extract.py` | 코드/텍스트, HWP, DOCX/XLSX/PPTX 텍스트 추출 |
@@ -95,7 +95,7 @@ uv pip install --python .venv/Scripts/python.exe -e .[claude] pip   # pip: 빌�
 .venv/Scripts/python.exe -m workhistory --demo     # 데모 데이터 (별도 demo.db)
 seed-demo.cmd                                      # 시연: 실제 앱 DB를 데모 데이터로 (기존 DB는 %LOCALAPPDATA%\WorkHistory\backup\)
 
-# 테스트 (2026-11-13 기준 238개)
+# 테스트 (2026-11-22 기준 244개)
 .venv/Scripts/python.exe -m unittest discover -s tests -t .
 
 # AI 보고서 품질 평가 (기본: llm/의 가장 큰 로컬 모델. Claude Code 기준값은 --model claude-code:sonnet, 로그인 필요)
@@ -155,7 +155,10 @@ python tools/build_portable.py                 # 인터넷용(Claude Code 포함
 - 세션을 없애고 작업 폴더별 하루 기록으로 바꿨다 (2026-11-10): 시간을 덩어리로 자르지 않고, 창마다 작업 폴더를
   붙여(창의 경로가 작업 폴더 밑에 있을 때만: 제목의 파일이 작업 폴더 안의 파일이거나 제목에 작업 폴더 경로가 있을 때,
   폴더 이름·상대 경로는 인정하지 않음) 같은 폴더끼리 하루 단위로 더한다.
-  폴더를 모르는 창은 앞뒤 일에 붙이지 않고 앱 종류로 웹(브라우저)·소통(메신저·메일)·기타로 둔다. 기록은 필요할 때
+  폴더를 모르는 창은 앞뒤 일에 붙이지 않고 앱 종류로 웹(브라우저)·소통(메신저·메일)·기타로 둔다.
+  제목의 파일 찾기를 넓혔다 (2026-11-22, 실제 PC 4대의 창 제목으로 확인): 띄어쓰기 있는 파일 이름, 확장자 없는
+  Office 제목("교육 자료 - PowerPoint" → .pptx 등), 이클립스 상대 경로("project-a/src/App.java", 파일 전체 경로의 끝과
+  같아야 함)로 같은 이름 파일 좁히기. 여전히 작업 폴더 안의 파일 하나로 정해질 때만 붙인다. 기록은 필요할 때
   활동에서 바로 계산하고 저장하지 않는다(재묶기·편집 보존 로직 없음). 보고서 근거는 W(작업 기록), 묶음 시간은
   인용한 작업 폴더 기록의 합(여러 묶음이 같은 기록을 인용하면 나눠 셈, 웹·소통·기타는 시간에 넣지 않고 따로 표시),
   "완료"는 쓰지 않는다. 세션 편집 API, `sessions.py`·`sessionstore.py`·`stats.py`,

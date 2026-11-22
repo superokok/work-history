@@ -46,5 +46,71 @@ class TimelinePathTests(unittest.TestCase):
         self.assertTrue(util.endswith("Util.java") and "other" in util, util)
 
 
+class FilePathTests(unittest.TestCase):
+    """Title shapes seen on real PCs: Eclipse relative paths, Office titles, names with spaces."""
+
+    ROOT = r"C:\work\project-a"
+    FILES = ["app-web/build.gradle", "app-batch/build.gradle",
+             "app-web/src/main/java/com/example/UserController.java",
+             "app-batch/src/main/java/com/example/UserController.java",
+             "docs/교육 자료 v1.3.pptx", "docs/테이블 명세서_v0.4.xlsx", "docs/업무 규칙.hwp",
+             "docs/회의록.docx", "docs/회의록.hwp"]
+
+    def setUp(self):
+        self._tmp = TempDB()
+        self.db = self._tmp.__enter__()
+        with self.db.connect() as conn:
+            fid = conn.execute("INSERT INTO watched_folders (path, label, created_at) VALUES (?, 'x', 0)",
+                               (self.ROOT,)).lastrowid
+            conn.executemany("INSERT INTO file_state (folder_id, path, size, mtime_ns, blob_id) "
+                             "VALUES (?, ?, 1, 0, 'b')", [(fid, f) for f in self.FILES])
+
+    def tearDown(self):
+        self._tmp.__exit__(None, None, None)
+
+    def paths(self, *titles):
+        with self.db.connect() as conn:
+            return locate.file_paths(conn, list(titles))
+
+    def full(self, rel):
+        return self.ROOT + "\\" + rel.replace("/", "\\")
+
+    def test_eclipse_relative_path_picks_the_file(self):
+        t1 = "workspace - app-batch/build.gradle - Eclipse IDE"
+        t2 = "workspace - app-web/src/main/java/com/example/UserController.java - Eclipse IDE"
+        got = self.paths(t1, t2)
+        self.assertEqual(got[t1], self.full("app-batch/build.gradle"))
+        self.assertEqual(got[t2], self.full("app-web/src/main/java/com/example/UserController.java"))
+
+    def test_copies_of_the_project_are_told_apart_by_the_workspace_name(self):
+        with self.db.connect() as conn:
+            fid = conn.execute("INSERT INTO watched_folders (path, label, created_at) VALUES (?, 'y', 0)",
+                               (r"D:\deploy",)).lastrowid
+            conn.execute("INSERT INTO file_state (folder_id, path, size, mtime_ns, blob_id) "
+                         "VALUES (?, 'copy/app-batch/build.gradle', 1, 0, 'b')", (fid,))
+        t = "project-a - app-batch/build.gradle - Eclipse IDE"  # both paths end in app-batch\build.gradle
+        self.assertEqual(self.paths(t)[t], self.full("app-batch/build.gradle"))
+        # Without a word that tells them apart, nothing is guessed.
+        self.assertEqual(self.paths("workspace - app-batch/build.gradle - Eclipse IDE"), {})
+
+    def test_relative_path_must_match_the_end_of_the_path(self):
+        # "other/build.gradle" is not the end of either path, and no title word narrows it: no guess.
+        self.assertEqual(self.paths("workspace - other/build.gradle - Eclipse IDE"), {})
+
+    def test_names_with_spaces(self):
+        t1 = "테이블 명세서_v0.4.xlsx - Excel"
+        t2 = r"업무 규칙.hwp [Z:\shared\docs\] - 한글"
+        got = self.paths(t1, t2)
+        self.assertEqual(got[t1], self.full("docs/테이블 명세서_v0.4.xlsx"))
+        self.assertEqual(got[t2], self.full("docs/업무 규칙.hwp"))
+
+    def test_office_title_without_extension(self):
+        t1, t2 = "교육 자료 v1.3 - PowerPoint", "회의록 - Word"
+        got = self.paths(t1, t2)
+        self.assertEqual(got[t1], self.full("docs/교육 자료 v1.3.pptx"))
+        self.assertEqual(got[t2], self.full("docs/회의록.docx"))  # Word's extensions only, not 회의록.hwp
+        self.assertEqual(self.paths("없는 문서 - PowerPoint", "교육 자료 v1.3 - 메모장"), {})
+
+
 if __name__ == "__main__":
     unittest.main()

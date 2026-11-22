@@ -208,7 +208,8 @@ local timezone.
      itself (terminals: `PS C:\app\project-a>`);
   2. with nested work folders the deepest one wins;
   3. names alone never count (a folder called "api" in some title, a relative
-     path such as "./chart" whose base is unknown);
+     path such as "./chart" whose base is unknown). A relative path that ends in
+     a file name only helps find that file (2026-11-22, below);
   4. anything else: browsers → 웹, messengers/mail/meetings → 소통, the rest →
      기타 (`categories.py`). Browsers and messengers are never put with a folder.
   Demo scenario, last week: gov24-minwon-api 12시간 33분, poc-k8s 1시간 19분,
@@ -288,8 +289,18 @@ ActivityWatch (MPL-2.0; its Windows tray bundle contains GPL PyQt6) is no longer
 
 - Window titles and app names only (no browser addresses since 2026-11-10). Editors and
   IDEs don't expose the open file, so its path is resolved at query time from the title's
-  file name and the work folders' file list (`locate.file_paths`, unique matches only; the
-  title's project name breaks ties). Explorer folders are not read.
+  file name and the work folders' file list (`locate.file_paths`, unique matches only).
+  Title shapes it reads (2026-11-22, from titles on real PCs):
+  - file names with spaces when they are a whole title part (`테이블 명세서 v0.4.xlsx - Excel`,
+    `업무 규칙.hwp [Z:\docs\] - 한글`), else the name-like words of the title;
+  - Office titles without the extension (`교육 자료 - PowerPoint`): that app's usual extensions
+    (pptx/ppt/pptm, docx/doc/docm, xlsx/xls/xlsm) are tried;
+  - a name found in several places is narrowed first by a relative path in the title that
+    ends in it (Eclipse: `workspace - project-a/src/main/App.java`, which must be the end of
+    the file's full path), then by the title's other words (the workspace or project name).
+    Copies of a project in another work folder end the same way; with no word that tells
+    them apart nothing is guessed.
+  Explorer folders are not read.
 - Away = 3 minutes without keyboard/mouse input; reading without input counts as idle.
 - Protected processes show as `unknown` (their exe name can't be read); elevated (admin)
   windows are read.
