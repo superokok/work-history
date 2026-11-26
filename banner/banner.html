@@ -65,36 +65,25 @@
   .sec-h { display: flex; align-items: baseline; gap: 14px; }
   .sec-h h2 { font-size: 34px; font-weight: 700; letter-spacing: -1.2px; }
   .sec-h span { font-size: 18px; color: var(--muted); letter-spacing: -.3px; }
-  .numbers { top: 784px; }
-  .big { margin-top: 16px; border-radius: 20px; padding: 22px 30px 20px; color: #fff;
-         background: linear-gradient(120deg, #2f57e0 0%, var(--accent) 60%, #6f8fff 100%); display: grid; grid-template-columns: 1fr auto; align-items: center; }
-  .big .what { font-size: 25px; font-weight: 700; letter-spacing: -.8px; }
-  .big .note { font-size: 15px; color: rgba(255,255,255,.75); margin-top: 6px; }
-  .big .val { display: flex; align-items: baseline; gap: 12px; white-space: nowrap; }
-  .big .from { font-size: 30px; font-weight: 700; color: rgba(255,255,255,.62); text-decoration: line-through; text-decoration-thickness: 3px; }
-  .big .arrow { font-size: 30px; color: rgba(255,255,255,.8); }
-  .big .to { font-size: 76px; font-weight: 700; letter-spacing: -3px; line-height: 1; color: #fff; }
-  .big .to small { font-size: 34px; letter-spacing: -1px; margin-left: 2px; }
-  .tiles { margin-top: 14px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
-  .tile { background: #fff; border: 1px solid var(--line); border-radius: 18px; padding: 18px 18px 16px; }
-  .tile .n { font-size: 56px; font-weight: 700; letter-spacing: -2.5px; line-height: 1; color: var(--accent); }
-  .tile .n small { font-size: 26px; letter-spacing: -.5px; margin-left: 2px; }
-  .tile .d { font-size: 19px; font-weight: 700; margin-top: 10px; letter-spacing: -.6px; }
-  .tile .s { font-size: 14px; color: var(--muted); margin-top: 4px; letter-spacing: -.3px; }
-  .field { margin-top: 14px; display: grid; grid-template-columns: repeat(4, 1fr); background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 13px 6px; }
-  .field div { text-align: center; border-left: 1px solid var(--line); }
-  .field div:first-child { border-left: none; }
-  .field b { display: block; font-size: 27px; font-weight: 700; letter-spacing: -1px; color: var(--text); }
-  .field span { font-size: 14px; color: var(--muted); letter-spacing: -.3px; }
+  .numbers { top: 790px; }
+  .big { margin-top: 20px; border-radius: 24px; padding: 32px 36px 26px; color: #fff;
+         background: linear-gradient(120deg, #2f57e0 0%, var(--accent) 60%, #6f8fff 100%); display: grid; grid-template-columns: 1fr; }
+  .big .what { font-size: 34px; font-weight: 700; letter-spacing: -.8px; }
+  .big .note { font-size: 19px; color: rgba(255,255,255,.75); margin-top: 10px; }
+  .big .val { display: flex; align-items: baseline; justify-content: flex-end; gap: 18px; white-space: nowrap; margin-top: -28px; }
+  .big .from { font-size: 44px; font-weight: 700; color: rgba(255,255,255,.62); text-decoration: line-through; text-decoration-thickness: 3px; }
+  .big .arrow { font-size: 44px; color: rgba(255,255,255,.8); }
+  .big .to { font-size: 128px; font-weight: 700; letter-spacing: -3px; line-height: 1; color: #fff; }
+  .big .to small { font-size: 52px; letter-spacing: -1px; margin-left: 2px; }
 
   /* ---------- strengths ---------- */
-  .strengths { top: 1250px; }
-  .grid { margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 18px 20px; }
-  .f { display: grid; grid-template-columns: 54px 1fr; gap: 14px; align-items: start; }
-  .icon { width: 54px; height: 54px; border-radius: 16px; background: #e8eeff; display: grid; place-items: center; }
-  .icon svg { width: 30px; height: 30px; stroke: var(--accent); fill: none; stroke-width: 2.3; stroke-linecap: round; stroke-linejoin: round; }
-  .f h3 { font-size: 21px; font-weight: 700; letter-spacing: -.9px; line-height: 1.25; }
-  .f p { font-size: 15px; color: var(--muted); line-height: 1.42; margin-top: 4px; letter-spacing: -.4px; }
+  .strengths { top: 1160px; }
+  .grid { margin-top: 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 36px 20px; }
+  .f { display: grid; grid-template-columns: 62px 1fr; gap: 16px; align-items: start; }
+  .icon { width: 62px; height: 62px; border-radius: 18px; background: #e8eeff; display: grid; place-items: center; }
+  .icon svg { width: 34px; height: 34px; stroke: var(--accent); fill: none; stroke-width: 2.3; stroke-linecap: round; stroke-linejoin: round; }
+  .f h3 { font-size: 24px; font-weight: 700; letter-spacing: -.9px; line-height: 1.25; }
+  .f p { font-size: 17px; color: var(--muted); line-height: 1.45; margin-top: 6px; letter-spacing: -.4px; }
 
   /* ---------- bottom ---------- */
   .foot { position: absolute; left: 0; right: 0; bottom: 0; height: 96px; background: var(--navy); color: #fff; padding: 0 52px; display: flex; align-items: center; justify-content: center; }
@@ -151,21 +140,10 @@
 </div>
 
 <section class="sec numbers">
-  <div class="sec-h"><h2>숫자로 보는 효과</h2><span>동료 4명이 1주 동안 실제 업무에 써 본 결과</span></div>
+  <div class="sec-h"><h2>숫자로 보는 효과</h2></div>
   <div class="big">
     <div><div class="what">주간보고 쓰는 시간</div><div class="note">기억으로 쓸 때와 비교 (작성자 경험)</div></div>
     <div class="val"><span class="from">15–20분</span><span class="arrow">→</span><span class="to">5<small>분</small></span></div>
-  </div>
-  <div class="tiles">
-    <div class="tile"><div class="n">10<small>초</small></div><div class="d">AI 보고서 초안</div><div class="s">Claude 실측 7–18초</div></div>
-    <div class="tile"><div class="n">0<small>개</small></div><div class="d">AI가 지어낸 출처</div><div class="s">Claude 실측 보고서 8편 전체</div></div>
-    <div class="tile"><div class="n">8/8</div><div class="d">보고서 생성 성공</div><div class="s">동료 4명 실제 기록 · Claude</div></div>
-  </div>
-  <div class="field">
-    <div><b>0번</b><span>기록용 직접 입력</span></div>
-    <div><b>204회</b><span>파일 변경 자동 기록</span></div>
-    <div><b>9시간</b><span>출근부터 퇴근까지</span></div>
-    <div><b>1GB 미만</b><span>1인 저장 공간</span></div>
   </div>
 </section>
 
