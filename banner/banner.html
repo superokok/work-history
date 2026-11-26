@@ -17,10 +17,10 @@
          -webkit-print-color-adjust: exact; print-color-adjust: exact; position: relative; }
 
   /* ---------- hero ---------- */
-  .hero { position: absolute; inset: 0 0 auto 0; height: 540px; padding: 54px 60px 0;
+  .hero { position: absolute; inset: 0 0 auto 0; height: 606px; padding: 34px 60px 0;
           background: radial-gradient(circle at 88% 10%, rgba(123,156,255,.38), transparent 44%),
                       linear-gradient(160deg, var(--navy2) 0%, var(--navy) 72%); color: #fff; overflow: hidden; }
-  .hero::after { content: ""; position: absolute; right: -130px; top: 210px; width: 420px; height: 420px; border-radius: 50%;
+  .hero::after { content: ""; position: absolute; right: -130px; top: 276px; width: 420px; height: 420px; border-radius: 50%;
                  border: 2px solid rgba(255,255,255,.07); box-shadow: 0 0 0 60px rgba(255,255,255,.025); }
   .eyebrow { display: inline-block; font-size: 21px; font-weight: 700; letter-spacing: .5px; color: var(--accent2);
              padding: 7px 18px; border: 2px solid rgba(138,168,255,.55); border-radius: 999px; }
@@ -30,7 +30,7 @@
   .tagline em { font-style: normal; color: var(--accent2); }
 
   /* ---------- mock screen ---------- */
-  .screen { position: absolute; left: 52px; right: 52px; top: 438px; background: #fff; border-radius: 20px; overflow: hidden;
+  .screen { position: absolute; left: 52px; right: 52px; top: 504px; background: #fff; border-radius: 20px; overflow: hidden;
             box-shadow: 0 0 0 1px rgba(18,26,51,.08), 0 14px 0 -6px rgba(18,26,51,.10), 0 26px 0 -14px rgba(18,26,51,.06); }
   .bar { height: 40px; background: #f0f2f6; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 8px; padding: 0 18px; }
   .bar i { width: 12px; height: 12px; border-radius: 50%; background: #d5d9e2; }
@@ -65,7 +65,7 @@
   .sec-h { display: flex; align-items: baseline; gap: 14px; }
   .sec-h h2 { font-size: 34px; font-weight: 700; letter-spacing: -1.2px; }
   .sec-h span { font-size: 18px; color: var(--muted); letter-spacing: -.3px; }
-  .numbers { top: 724px; }
+  .numbers { top: 784px; }
   .big { margin-top: 16px; border-radius: 20px; padding: 22px 30px 20px; color: #fff;
          background: linear-gradient(120deg, #2f57e0 0%, var(--accent) 60%, #6f8fff 100%); display: grid; grid-template-columns: 1fr auto; align-items: center; }
   .big .what { font-size: 25px; font-weight: 700; letter-spacing: -.8px; }
@@ -88,7 +88,7 @@
   .field span { font-size: 14px; color: var(--muted); letter-spacing: -.3px; }
 
   /* ---------- strengths ---------- */
-  .strengths { top: 1196px; }
+  .strengths { top: 1250px; }
   .grid { margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 18px 20px; }
   .f { display: grid; grid-template-columns: 54px 1fr; gap: 14px; align-items: start; }
   .icon { width: 54px; height: 54px; border-radius: 16px; background: #e8eeff; display: grid; place-items: center; }
@@ -97,17 +97,23 @@
   .f p { font-size: 15px; color: var(--muted); line-height: 1.42; margin-top: 4px; letter-spacing: -.4px; }
 
   /* ---------- bottom ---------- */
-  .foot { position: absolute; left: 0; right: 0; bottom: 0; height: 132px; background: var(--navy); color: #fff; padding: 0 52px; display: flex; align-items: center; }
-  .team { display: flex; align-items: baseline; gap: 22px; }
-  .team .name { font-size: 30px; font-weight: 700; color: var(--hot); letter-spacing: -.5px; }
-  .team .who { font-size: 25px; letter-spacing: -.4px; color: rgba(255,255,255,.92); }
+  .foot { position: absolute; left: 0; right: 0; bottom: 0; height: 96px; background: var(--navy); color: #fff; padding: 0 52px; display: flex; align-items: center; justify-content: center; }
+  .foot .k { font-size: 32px; font-weight: 700; letter-spacing: -1px; }
+  .foot .k em { font-style: normal; color: var(--accent2); }
+  .team { display: flex; align-items: baseline; gap: 18px; white-space: nowrap; padding-bottom: 18px; margin-bottom: 26px; border-bottom: 1px solid rgba(255,255,255,.16); }
+  .team .name { font-size: 27px; font-weight: 700; color: var(--hot); letter-spacing: -.5px; }
+  .team .who { font-size: 23px; letter-spacing: -.4px; color: rgba(255,255,255,.85); }
   .team .who b { font-weight: 700; color: #fff; }
-  .team .who i { font-style: normal; color: rgba(255,255,255,.35); margin: 0 14px; }
+  .team .who i { font-style: normal; color: rgba(255,255,255,.35); margin: 0 12px; }
 </style>
 </head>
 <body>
 
 <section class="hero">
+  <div class="team">
+    <span class="name">팀 대인배</span>
+    <span class="who">공공1본부 <b>오가온 책임</b><i>|</i>공공2본부 <b>신상옥 책임</b></span>
+  </div>
   <span class="eyebrow">업무 자동 기록 · AI 보고서</span>
   <h1>작업 기록</h1>
   <div class="en">WORKHISTORY</div>
@@ -186,10 +192,7 @@
 </section>
 
 <section class="foot">
-  <div class="team">
-    <span class="name">팀 대인배</span>
-    <span class="who">공공1본부 <b>오가온 책임</b><i>|</i>공공2본부 <b>신상옥 책임</b></span>
-  </div>
+  <div class="k">기억 말고 <em>기록</em>으로 보고합니다</div>
 </section>
 
 </body>
