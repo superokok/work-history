@@ -4,10 +4,11 @@
 <meta charset="utf-8">
 <title>작업 기록 X배너</title>
 <style>
+  /* 800x1600 layout. Print files are made from this page: shadows have no blur so everything stays vector. */
   @page { size: 800px 1600px; margin: 0; }
   :root {
-    --navy: #121a33; --navy2: #1c2a55; --accent: #4f7cff; --accent2: #7b9cff;
-    --text: #1d2330; --muted: #6b7385; --line: #e3e6ec; --bg: #f6f7f9;
+    --navy: #121a33; --navy2: #1c2a55; --accent: #4f7cff; --accent2: #8aa8ff; --hot: #ffb547;
+    --text: #1d2330; --muted: #5f6778; --line: #e3e6ec; --bg: #f6f7f9;
     --dev: #4f7cff; --doc: #2fae74; --talk: #f08c3a; --web: #9b6cf0; --etc: #b8bfcc;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -16,64 +17,92 @@
          -webkit-print-color-adjust: exact; print-color-adjust: exact; position: relative; }
 
   /* ---------- hero ---------- */
-  .hero { position: absolute; inset: 0 0 auto 0; height: 620px; padding: 64px 64px 0;
-          background: radial-gradient(circle at 85% 12%, rgba(123,156,255,.35), transparent 42%),
-                      linear-gradient(160deg, var(--navy2) 0%, var(--navy) 70%); color: #fff; overflow: hidden; }
-  .hero::after { content: ""; position: absolute; right: -120px; top: 250px; width: 420px; height: 420px; border-radius: 50%;
+  .hero { position: absolute; inset: 0 0 auto 0; height: 540px; padding: 54px 60px 0;
+          background: radial-gradient(circle at 88% 10%, rgba(123,156,255,.38), transparent 44%),
+                      linear-gradient(160deg, var(--navy2) 0%, var(--navy) 72%); color: #fff; overflow: hidden; }
+  .hero::after { content: ""; position: absolute; right: -130px; top: 210px; width: 420px; height: 420px; border-radius: 50%;
                  border: 2px solid rgba(255,255,255,.07); box-shadow: 0 0 0 60px rgba(255,255,255,.025); }
-  .eyebrow { display: inline-block; font-size: 22px; font-weight: 700; letter-spacing: .5px; color: var(--accent2);
-             padding: 8px 18px; border: 2px solid rgba(123,156,255,.55); border-radius: 999px; }
-  h1 { font-size: 112px; font-weight: 700; letter-spacing: -4px; line-height: 1; margin-top: 34px; }
-  .en { font-family: "Segoe UI", sans-serif; font-size: 34px; font-weight: 600; letter-spacing: 2px; color: rgba(255,255,255,.55); margin-top: 14px; }
-  .tagline { font-size: 40px; font-weight: 700; line-height: 1.38; letter-spacing: -1px; margin-top: 38px; }
+  .eyebrow { display: inline-block; font-size: 21px; font-weight: 700; letter-spacing: .5px; color: var(--accent2);
+             padding: 7px 18px; border: 2px solid rgba(138,168,255,.55); border-radius: 999px; }
+  h1 { font-size: 104px; font-weight: 700; letter-spacing: -4px; line-height: 1; margin-top: 28px; }
+  .en { font-family: "Segoe UI", sans-serif; font-size: 30px; font-weight: 600; letter-spacing: 2px; color: rgba(255,255,255,.55); margin-top: 12px; }
+  .tagline { font-size: 38px; font-weight: 700; line-height: 1.36; letter-spacing: -1px; margin-top: 30px; }
   .tagline em { font-style: normal; color: var(--accent2); }
 
   /* ---------- mock screen ---------- */
-  .screen { position: absolute; left: 56px; right: 56px; top: 476px; background: #fff; border-radius: 22px;
-            box-shadow: 0 30px 60px rgba(18,26,51,.28), 0 4px 12px rgba(18,26,51,.12); overflow: hidden; }
-  .bar { height: 46px; background: #f0f2f6; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 9px; padding: 0 20px; }
-  .bar i { width: 13px; height: 13px; border-radius: 50%; background: #d5d9e2; }
-  .bar .tabs { margin-left: 22px; display: flex; gap: 6px; font-size: 15px; color: var(--muted); }
-  .bar .tabs span { padding: 4px 12px; border-radius: 6px; }
+  .screen { position: absolute; left: 52px; right: 52px; top: 438px; background: #fff; border-radius: 20px; overflow: hidden;
+            box-shadow: 0 0 0 1px rgba(18,26,51,.08), 0 14px 0 -6px rgba(18,26,51,.10), 0 26px 0 -14px rgba(18,26,51,.06); }
+  .bar { height: 40px; background: #f0f2f6; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 8px; padding: 0 18px; }
+  .bar i { width: 12px; height: 12px; border-radius: 50%; background: #d5d9e2; }
+  .bar .tabs { margin-left: 20px; display: flex; gap: 6px; font-size: 14px; color: var(--muted); }
+  .bar .tabs span { padding: 3px 11px; border-radius: 6px; }
   .bar .tabs .on { background: var(--accent); color: #fff; font-weight: 700; }
-  .body { padding: 22px 26px 26px; display: grid; grid-template-columns: 1.15fr 1fr; gap: 22px; }
-  .lbl { font-size: 15px; font-weight: 700; color: var(--muted); margin-bottom: 10px; }
-  .strip { display: flex; height: 30px; border-radius: 7px; overflow: hidden; }
+  .body { padding: 18px 22px 20px; display: grid; grid-template-columns: 1.1fr 1fr; gap: 20px; }
+  .lbl { font-size: 14px; font-weight: 700; color: var(--muted); margin-bottom: 8px; }
+  .strip { display: flex; height: 26px; border-radius: 6px; overflow: hidden; }
   .strip b { display: block; height: 100%; }
-  .hours { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-top: 5px; }
-  .legend { display: flex; gap: 14px; font-size: 13px; color: var(--muted); margin-top: 10px; }
+  .hours { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--muted); margin-top: 4px; }
+  .legend { display: flex; gap: 12px; font-size: 12.5px; color: var(--muted); margin-top: 8px; }
   .legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; background: var(--c); }
-  .rows { margin-top: 4px; display: grid; gap: 11px; }
-  .row { display: grid; grid-template-columns: 82px 1fr 74px; align-items: center; gap: 10px; font-size: 15px; }
+  .rows { display: grid; gap: 10px; }
+  .row { display: grid; grid-template-columns: 78px 1fr 70px; align-items: center; gap: 9px; font-size: 14px; }
   .row .name { font-weight: 700; }
-  .row .track { height: 12px; background: #eef1f6; border-radius: 6px; overflow: hidden; }
+  .row .track { height: 11px; background: #eef1f6; border-radius: 6px; overflow: hidden; }
   .row .track b { display: block; height: 100%; background: var(--accent); border-radius: 6px; }
-  .row .t { text-align: right; color: var(--muted); font-size: 13.5px; white-space: nowrap; }
-  .report { background: var(--bg); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; }
-  .report .head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-  .report .head strong { font-size: 17px; }
-  .ai { font-size: 12px; font-weight: 700; color: #fff; background: var(--accent); padding: 2px 8px; border-radius: 5px; }
-  .item { font-size: 14.5px; line-height: 1.5; padding: 7px 0; border-top: 1px dashed var(--line); }
+  .row .t { text-align: right; color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+  .report { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 13px 16px; }
+  .report .head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+  .report .head strong { font-size: 16px; }
+  .ai { font-size: 11.5px; font-weight: 700; color: #fff; background: var(--accent); padding: 2px 8px; border-radius: 5px; }
+  .item { font-size: 13.5px; line-height: 1.45; padding: 6px 0; border-top: 1px dashed var(--line); }
   .head + .item, .sub + .item { border-top: none; }
-  .ref { display: inline-block; font-size: 11.5px; font-weight: 700; color: var(--accent); background: #eef2ff; padding: 0 6px; border-radius: 4px; margin-left: 4px; }
-  .sug { display: inline-block; font-size: 11.5px; font-weight: 700; color: #a06400; background: #fff6df; border: 1px solid #f0d48a; padding: 0 6px; border-radius: 4px; margin-left: 4px; }
-  .sub { font-size: 13px; font-weight: 700; color: var(--muted); margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--line); }
+  .ref { display: inline-block; font-size: 11px; font-weight: 700; color: var(--accent); background: #eef2ff; padding: 0 6px; border-radius: 4px; margin-left: 4px; }
+  .sug { display: inline-block; font-size: 11px; font-weight: 700; color: #a06400; background: #fff6df; border: 1px solid #f0d48a; padding: 0 6px; border-radius: 4px; margin-left: 4px; }
+  .sub { font-size: 12.5px; font-weight: 700; color: var(--muted); margin-top: 4px; padding-top: 6px; border-top: 1px solid var(--line); }
 
-  /* ---------- features ---------- */
-  .features { position: absolute; left: 64px; right: 64px; top: 878px; display: grid; gap: 24px; }
-  .f { display: grid; grid-template-columns: 78px 1fr; gap: 24px; align-items: start; }
-  .icon { width: 78px; height: 78px; border-radius: 22px; background: #eef2ff; display: grid; place-items: center; }
-  .icon svg { width: 42px; height: 42px; stroke: var(--accent); fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
-  .f h3 { font-size: 31px; font-weight: 700; letter-spacing: -1px; line-height: 1.2; margin-top: 2px; }
-  .f p { font-size: 20px; color: var(--muted); line-height: 1.45; margin-top: 7px; letter-spacing: -.3px; }
+  /* ---------- numbers ---------- */
+  .sec { position: absolute; left: 52px; right: 52px; }
+  .sec-h { display: flex; align-items: baseline; gap: 14px; }
+  .sec-h h2 { font-size: 34px; font-weight: 700; letter-spacing: -1.2px; }
+  .sec-h span { font-size: 18px; color: var(--muted); letter-spacing: -.3px; }
+  .numbers { top: 724px; }
+  .big { margin-top: 16px; border-radius: 20px; padding: 22px 30px 20px; color: #fff;
+         background: linear-gradient(120deg, #2f57e0 0%, var(--accent) 60%, #6f8fff 100%); display: grid; grid-template-columns: 1fr auto; align-items: center; }
+  .big .what { font-size: 25px; font-weight: 700; letter-spacing: -.8px; }
+  .big .note { font-size: 15px; color: rgba(255,255,255,.75); margin-top: 6px; }
+  .big .val { display: flex; align-items: baseline; gap: 12px; white-space: nowrap; }
+  .big .from { font-size: 30px; font-weight: 700; color: rgba(255,255,255,.62); text-decoration: line-through; text-decoration-thickness: 3px; }
+  .big .arrow { font-size: 30px; color: rgba(255,255,255,.8); }
+  .big .to { font-size: 76px; font-weight: 700; letter-spacing: -3px; line-height: 1; color: #fff; }
+  .big .to small { font-size: 34px; letter-spacing: -1px; margin-left: 2px; }
+  .tiles { margin-top: 14px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .tile { background: #fff; border: 1px solid var(--line); border-radius: 18px; padding: 18px 18px 16px; }
+  .tile .n { font-size: 56px; font-weight: 700; letter-spacing: -2.5px; line-height: 1; color: var(--accent); }
+  .tile .n small { font-size: 26px; letter-spacing: -.5px; margin-left: 2px; }
+  .tile .d { font-size: 19px; font-weight: 700; margin-top: 10px; letter-spacing: -.6px; }
+  .tile .s { font-size: 14px; color: var(--muted); margin-top: 4px; letter-spacing: -.3px; }
+  .field { margin-top: 14px; display: grid; grid-template-columns: repeat(4, 1fr); background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 13px 6px; }
+  .field div { text-align: center; border-left: 1px solid var(--line); }
+  .field div:first-child { border-left: none; }
+  .field b { display: block; font-size: 27px; font-weight: 700; letter-spacing: -1px; color: var(--text); }
+  .field span { font-size: 14px; color: var(--muted); letter-spacing: -.3px; }
+
+  /* ---------- strengths ---------- */
+  .strengths { top: 1196px; }
+  .grid { margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 18px 20px; }
+  .f { display: grid; grid-template-columns: 54px 1fr; gap: 14px; align-items: start; }
+  .icon { width: 54px; height: 54px; border-radius: 16px; background: #e8eeff; display: grid; place-items: center; }
+  .icon svg { width: 30px; height: 30px; stroke: var(--accent); fill: none; stroke-width: 2.3; stroke-linecap: round; stroke-linejoin: round; }
+  .f h3 { font-size: 21px; font-weight: 700; letter-spacing: -.9px; line-height: 1.25; }
+  .f p { font-size: 15px; color: var(--muted); line-height: 1.42; margin-top: 4px; letter-spacing: -.4px; }
 
   /* ---------- bottom ---------- */
-  .foot { position: absolute; left: 0; right: 0; bottom: 0; height: 216px; background: var(--navy); color: #fff; padding: 32px 64px 0; }
-  .foot .k { font-size: 30px; font-weight: 700; letter-spacing: -.8px; }
-  .foot .k em { font-style: normal; color: var(--accent2); }
-  .chips { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 18px; }
-  .chips span { font-size: 19px; padding: 8px 16px; border-radius: 999px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.16); }
-  .chips svg { width: 18px; height: 18px; vertical-align: -3px; margin-right: 6px; stroke: var(--accent2); fill: none; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+  .foot { position: absolute; left: 0; right: 0; bottom: 0; height: 132px; background: var(--navy); color: #fff; padding: 0 52px; display: flex; align-items: center; }
+  .team { display: flex; align-items: baseline; gap: 22px; }
+  .team .name { font-size: 30px; font-weight: 700; color: var(--hot); letter-spacing: -.5px; }
+  .team .who { font-size: 25px; letter-spacing: -.4px; color: rgba(255,255,255,.92); }
+  .team .who b { font-weight: 700; color: #fff; }
+  .team .who i { font-style: normal; color: rgba(255,255,255,.35); margin: 0 14px; }
 </style>
 </head>
 <body>
@@ -101,50 +130,65 @@
       </div>
       <div class="hours"><span>9시</span><span>12시</span><span>15시</span><span>18시</span></div>
       <div class="legend"><span style="--c:var(--dev)">개발</span><span style="--c:var(--doc)">문서</span><span style="--c:var(--talk)">소통</span><span style="--c:var(--web)">웹</span></div>
-      <div class="lbl" style="margin-top:22px">작업 폴더별 시간</div>
+      <div class="lbl" style="margin-top:14px">작업 폴더별 시간</div>
       <div class="rows">
         <div class="row"><span class="name">project-a</span><span class="track"><b style="width:88%"></b></span><span class="t">3시간 20분</span></div>
-        <div class="row"><span class="name">제안서</span><span class="track"><b style="width:56%;background:var(--doc)"></b></span><span class="t">2시간 5분</span></div>
-        <div class="row"><span class="name">project-b</span><span class="track"><b style="width:30%"></b></span><span class="t">1시간 10분</span></div>
       </div>
     </div>
     <div class="report">
       <div class="head"><strong>일일 보고 초안</strong><span class="ai">AI</span></div>
       <div class="item">로그인 오류 수정과 테스트 보완<span class="ref">W3</span></div>
-      <div class="item">제안서 일정·예산 표 갱신<span class="ref">C15</span></div>
-      <div class="item">배포 절차 문서 검토 회의<span class="ref">W8</span></div>
       <div class="sub">차주 계획</div>
       <div class="item">통합 테스트 마무리<span class="sug">제안</span></div>
     </div>
   </div>
 </div>
 
-<section class="features">
-  <div class="f">
-    <div class="icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
-    <div><h3>켜 두기만 하면 저절로 기록</h3><p>쓰는 프로그램과 창, 작업 시간을 알아서 남깁니다.<br>따로 입력하거나 타이머를 누를 필요가 없습니다.</p></div>
+<section class="sec numbers">
+  <div class="sec-h"><h2>숫자로 보는 효과</h2><span>동료 4명이 1주 동안 실제 업무에 써 본 결과</span></div>
+  <div class="big">
+    <div><div class="what">주간보고 쓰는 시간</div><div class="note">기억으로 쓸 때와 비교 (작성자 경험)</div></div>
+    <div class="val"><span class="from">15–20분</span><span class="arrow">→</span><span class="to">5<small>분</small></span></div>
   </div>
-  <div class="f">
-    <div class="icon"><svg viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M9 14h6M9 17.5h4"/></svg></div>
-    <div><h3>바뀐 파일, 바뀐 줄까지</h3><p>작업 폴더의 문서 변경을 기록합니다.<br>한글·워드·엑셀·파워포인트도 바뀐 내용을 보여 줍니다.</p></div>
+  <div class="tiles">
+    <div class="tile"><div class="n">10<small>초</small></div><div class="d">AI 보고서 초안</div><div class="s">Claude 실측 7–18초</div></div>
+    <div class="tile"><div class="n">0<small>개</small></div><div class="d">AI가 지어낸 출처</div><div class="s">Claude 실측 보고서 8편 전체</div></div>
+    <div class="tile"><div class="n">8/8</div><div class="d">보고서 생성 성공</div><div class="s">동료 4명 실제 기록 · Claude</div></div>
   </div>
-  <div class="f">
-    <div class="icon"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.6L18.5 9l-4.7 1.6L12 15l-1.8-4.4L5.5 9l4.7-1.4z"/><path d="M18 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg></div>
-    <div><h3>일일·주간 보고서 초안</h3><p>기록을 바탕으로 AI가 보고서와 차주 계획을 제안하고,<br>문장마다 근거가 된 기록을 함께 보여 줍니다.</p></div>
+  <div class="field">
+    <div><b>0번</b><span>기록용 직접 입력</span></div>
+    <div><b>204회</b><span>파일 변경 자동 기록</span></div>
+    <div><b>9시간</b><span>출근부터 퇴근까지</span></div>
+    <div><b>1GB 미만</b><span>1인 저장 공간</span></div>
   </div>
-  <div class="f">
-    <div class="icon"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg></div>
-    <div><h3>검색하고 AI에게 묻기</h3><p>지난 일을 언제, 어떻게 했는지 물으면<br>기록을 찾아 근거와 함께 답합니다.</p></div>
+</section>
+
+<section class="sec strengths">
+  <div class="sec-h"><h2>왜 작업 기록인가</h2></div>
+  <div class="grid">
+    <div class="f">
+      <div class="icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
+      <div><h3>켜 두면 저절로 기록</h3><p>쓴 프로그램·창·시간을 알아서 남겨<br>입력도 타이머도 필요 없습니다</p></div>
+    </div>
+    <div class="f">
+      <div class="icon"><svg viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M9 14h6M9 17.5h4"/></svg></div>
+      <div><h3>바뀐 파일, 바뀐 줄까지</h3><p>코드는 물론 한글·워드·엑셀의<br>바뀐 내용까지 보여 줍니다</p></div>
+    </div>
+    <div class="f">
+      <div class="icon"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.6L18.5 9l-4.7 1.6L12 15l-1.8-4.4L5.5 9l4.7-1.4z"/><path d="M18 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg></div>
+      <div><h3>문장마다 근거 표시</h3><p>일일·주간보고와 차주 계획 초안,<br>출처를 누르면 실제 기록으로</p></div>
+    </div>
+    <div class="f">
+      <div class="icon"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg></div>
+      <div><h3>“어디까지 했지?”에 답</h3><p>기록에서 찾아 근거와 함께 답하고<br>없으면 모른다고 말합니다</p></div>
+    </div>
   </div>
 </section>
 
 <section class="foot">
-  <div class="k">모든 기록은 <em>내 PC 안에서만</em></div>
-  <div class="chips">
-    <span><svg viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></svg>인터넷 없이 동작</span>
-    <span><svg viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></svg>로컬 AI 내장</span>
-    <span><svg viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></svg>행망·폐쇄망 설치</span>
-    <span><svg viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></svg>Windows 10/11</span>
+  <div class="team">
+    <span class="name">팀 대인배</span>
+    <span class="who">공공1본부 <b>오가온 책임</b><i>|</i>공공2본부 <b>신상옥 책임</b></span>
   </div>
 </section>
 

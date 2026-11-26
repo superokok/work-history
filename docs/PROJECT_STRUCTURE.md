@@ -40,7 +40,8 @@ work-history/
 ├─ tools/demo_week.py      시연용 날짜 고정 데모 DB: 정한 한 주(월–금, 기본 2026-11-16)만, 작업 폴더·파일 변경 포함 → --demo --db 로 띄움
 ├─ llm/                    (git 제외) 로컬 AI: bin/llama-server.exe + DLL, models/*.gguf, 라이선스 전문
 ├─ ppt/                    사용자의 발표 파일(.pptx), 발표·시연 대본, 시연 시나리오, 심사용 설명자료(.md), git 포함. 작업 중 만든 초안 덱은 docs/presentation/(git 제외)
-├─ banner/                 행사용 X배너 800×1600: banner.html(원본) → render.sh(헤드리스 Edge)로 banner-800x1600.png
+├─ banner/                 행사용 X배너 800×1600: banner.html(원본) → render.sh(헤드리스 Edge)로 banner-800x1600.png(화면용 px)와
+│                          banner-print.pdf/.ai(인쇄용 800×1600 mm, outline_pdf.py가 글자를 윤곽선으로 바꿈; fontTools·pypdf 필요, 앱 의존성 아님)
 └─ docs/
    ├─ PROJECT_STRUCTURE.md 이 문서
    └─ ARCHITECTURE / PRODUCT / IMPLEMENTATION_PLAN / AI / PRIVACY / RESULTS_TRACKING
